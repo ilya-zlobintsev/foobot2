@@ -16,6 +16,8 @@ impl Database {
     pub fn connect(database_url: String) -> Result<Self, ConnectionError> {
         let manager = ConnectionManager::<MysqlConnection>::new(database_url);
         let conn_pool = r2d2::Pool::new(manager).expect("Failed to set up DB connection pool");
+        
+        diesel_migrations::run_pending_migrations(&conn_pool.get().unwrap()).expect("Failed to run DB migrations");
 
         Ok(Self { conn_pool })
     }

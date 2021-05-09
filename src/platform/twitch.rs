@@ -1,12 +1,6 @@
-use std::env;
-
 use async_trait::async_trait;
-use tokio::task::{self, JoinHandle};
-use twitch_irc::{
-    login::StaticLoginCredentials,
-    message::{PrivmsgMessage, ServerMessage},
-    ClientConfig, TCPTransport, TwitchIRCClient,
-};
+use tokio::task;
+use twitch_irc::{ClientConfig, SecureTCPTransport, TwitchIRCClient, login::StaticLoginCredentials, message::{PrivmsgMessage, ServerMessage}};
 
 use crate::{command_handler::{CommandHandler, CommandMessage, twitch_api::TwitchApi}, platform::{ChannelIdentifier, ExecutionContext}};
 
@@ -51,7 +45,7 @@ impl ChatPlatform for Twitch {
         let config = ClientConfig::new_simple(self.credentials.clone());
 
         let (mut incoming_messages, client) =
-            TwitchIRCClient::<TCPTransport, StaticLoginCredentials>::new(config);
+            TwitchIRCClient::<SecureTCPTransport, StaticLoginCredentials>::new(config);
 
         tracing::info!("Connected to Twitch");
 
