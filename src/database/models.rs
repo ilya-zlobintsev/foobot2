@@ -1,4 +1,5 @@
 use super::schema::*;
+use serde::Serialize;
 
 #[derive(Queryable, Debug)]
 pub struct User {
@@ -14,7 +15,7 @@ pub struct NewUser<'a> {
     pub discord_id: Option<&'a str>,
 }
 
-#[derive(Queryable, Debug, PartialEq, Eq)]
+#[derive(Queryable, Debug, PartialEq, Eq, Serialize)]
 pub struct Channel {
     pub id: u64,
     pub platform: String,
@@ -28,7 +29,7 @@ pub struct NewChannel<'a> {
     pub channel: &'a str,
 }
 
-#[derive(Queryable, Debug, PartialEq, Eq)]
+#[derive(Queryable, Debug, PartialEq, Eq, Serialize)]
 pub struct Command {
     pub name: String,
     pub action: String,

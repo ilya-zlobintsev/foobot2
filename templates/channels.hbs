@@ -1,0 +1,36 @@
+{{#*inline "page"}}
+
+<style>
+    h1 {
+        text-align: center;
+    }
+    td {
+        padding: 8px;
+    }
+</style>
+
+<section>
+    <h1>Channel list</h1>
+    <table border=1>
+        <thead>
+            <th>ID</th>
+            <th>Platform</th>
+            <th>Name/Channel ID</th>
+            <th>Command list</th>
+        </thead>
+        <tbody>
+            {{#each channels}}
+            <tr>
+                <td>{{ this.id }}</td>
+                <td>{{ this.platform }}</td>
+                <td>{{ this.channel }}</td>
+                <td> <a href="/channels/{{ this.id }}/commands">Here</a> </td>
+            </tr>
+            {{/each}}
+        </tbody>
+
+    </table>
+</section>
+
+{{/inline}}
+{{~>(parent)~}}

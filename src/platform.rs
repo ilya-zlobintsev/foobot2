@@ -1,24 +1,23 @@
-pub mod twitch;
 pub mod discord;
+pub mod twitch;
 
 use std::env::{self, VarError};
 
+use crate::command_handler::CommandHandler;
 use async_trait::async_trait;
 use tokio::task::JoinHandle;
-use crate::command_handler::CommandHandler;
 
 use serenity::prelude::SerenityError;
 
 #[async_trait]
 pub trait ChatPlatform {
     async fn init(command_handler: CommandHandler) -> Result<Box<Self>, ChatPlatformError>;
-    
+
     async fn run(self) -> JoinHandle<()>;
-    
+
     fn get_prefix() -> String {
         env::var("COMMAND_PREFIX").unwrap_or_else(|_| "!".to_string())
     }
-    
 }
 
 #[derive(Debug)]
@@ -73,12 +72,12 @@ impl ChannelIdentifier {
             ChannelIdentifier::DiscordChannelID(_) => "discord_channel",
         }
     }
-    
-    pub fn get_channel(&self) -> &str {
+
+    pub fn get_channel(&self) -> String {
         match self {
-            ChannelIdentifier::TwitchChannelName(name) => name,
-            ChannelIdentifier::DiscordGuildID(id) => id,
-            ChannelIdentifier::DiscordChannelID(id) => id,
+            ChannelIdentifier::TwitchChannelName(name) => name.to_string(),
+            ChannelIdentifier::DiscordGuildID(id) => id.to_string(),
+            ChannelIdentifier::DiscordChannelID(id) => id.to_string(),
         }
     }
 }

@@ -14,6 +14,8 @@ use diesel::ConnectionError;
 use diesel::{EqAll, QueryDsl};
 use diesel::{ExpressionMethods, RunQueryDsl};
 
+embed_migrations!();
+
 #[derive(Clone)]
 pub struct Database {
     conn_pool: Pool<ConnectionManager<MysqlConnection>>,
@@ -24,16 +26,15 @@ impl Database {
         let manager = ConnectionManager::<MysqlConnection>::new(database_url);
         let conn_pool = r2d2::Pool::new(manager).expect("Failed to set up DB connection pool");
 
-        diesel_migrations::run_pending_migrations(&conn_pool.get().unwrap())
-            .expect("Failed to run DB migrations");
+        embedded_migrations::run(&conn_pool.get().unwrap()).expect("Failed to run migrations");
 
         Ok(Self { conn_pool })
     }
 
-    pub fn get_channels(&self) -> Vec<Channel> {
+    pub fn get_channels(&self) -> Result<Vec<Channel>, diesel::result::Error> {
         let conn = self.conn_pool.get().unwrap();
 
-        channels::table.load(&conn).expect("Failed to get channels")
+        channels::table.order(channels::id).load(&conn)
     }
 
     pub fn get_channel(
@@ -44,24 +45,18 @@ impl Database {
 
         let query = channels::table.into_boxed();
 
-        let query = match &channel_identifier {
-            ChannelIdentifier::TwitchChannelName(channel_name) => query
-                .filter(channels::platform.eq_all(channel_identifier.get_platform_name()))
-                .filter(channels::channel.eq_all(channel_name)),
-            ChannelIdentifier::DiscordGuildID(guild_id) => query
-                .filter(channels::platform.eq_all(channel_identifier.get_platform_name()))
-                .filter(channels::channel.eq_all(guild_id)),
-            ChannelIdentifier::DiscordChannelID(ch_id) => query
-                .filter(channels::platform.eq_all(channel_identifier.get_platform_name()))
-                .filter(channels::channel.eq_all(ch_id)),
-        };
-
-        match query.load(&conn)?.into_iter().next() {
+        match query
+            .filter(channels::platform.eq_all(channel_identifier.get_platform_name()))
+            .filter(channels::channel.eq_all(channel_identifier.get_channel()))
+            .load(&conn)?
+            .into_iter()
+            .next()
+        {
             Some(channel) => Ok(channel),
             None => {
                 let new_channel = NewChannel {
                     platform: channel_identifier.get_platform_name(),
-                    channel: channel_identifier.get_channel(),
+                    channel: &channel_identifier.get_channel(),
                 };
 
                 diesel::insert_into(channels::table)
@@ -96,6 +91,14 @@ impl Database {
             .next())
     }
 
+    pub fn get_commands(&self, channel_id: u64) -> Result<Vec<Command>, diesel::result::Error> {
+        let conn = self.conn_pool.get().unwrap();
+
+        commands::table
+            .filter(commands::channel_id.eq_all(channel_id))
+            .load::<Command>(&conn)
+    }
+
     pub fn add_command(
         &self,
         channel_identifier: ChannelIdentifier,
@@ -104,23 +107,16 @@ impl Database {
     ) -> Result<(), diesel::result::Error> {
         let conn = self.conn_pool.get().unwrap();
 
+        // I couldn't figure out how to do this as a subquery
+        let channel_id = self.get_channel(channel_identifier)?.id;
+
         diesel::insert_into(commands::table)
-            .values(
-                &NewCommand {
-                    name: command_name,
-                    action: command_action,
-                    permissions: None,
-                    channel_id:
-                        channels::table // I couldn't figure out how to do this as a subquery
-                            .filter(
-                                channels::platform.eq_all(channel_identifier.get_platform_name()),
-                            )
-                            .filter(channels::channel.eq_all(channel_identifier.get_channel()))
-                            .select(channels::id)
-                            .first(&conn)
-                            .unwrap(),
-                },
-            )
+            .values(&NewCommand {
+                name: command_name,
+                action: command_action,
+                permissions: None,
+                channel_id,
+            })
             .execute(&conn)?;
 
         Ok(())
@@ -145,8 +141,9 @@ impl Database {
                             .select(channels::id),
                     ),
                 )
-                .filter(commands::name.eq_all(command_name))
-        ).execute(&conn)?;
+                .filter(commands::name.eq_all(command_name)),
+        )
+        .execute(&conn)?;
 
         Ok(())
     }

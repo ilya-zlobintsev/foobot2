@@ -1,11 +1,12 @@
 #[macro_use]
 extern crate diesel;
-extern crate dotenv;
-extern crate serde;
+#[macro_use]
+extern crate diesel_migrations;
 
 mod command_handler;
 mod database;
 mod platform;
+mod web;
 
 use std::env;
 
@@ -31,7 +32,9 @@ async fn main() {
     let db = Database::connect(env::var("DATABASE_URL").expect("DATABASE_URL missing"))
         .expect("Failed to connect to DB");
 
-    let channels = db.get_channels();
+    let web_handle = web::run(db.clone()).await;
+
+    let channels = db.get_channels().unwrap();
 
     let command_handler = CommandHandler::init(db).await;
 
@@ -75,5 +78,5 @@ async fn main() {
         }
     };
 
-    tokio::try_join!(twitch_handle, discord_handle).unwrap();
+    tokio::try_join!(twitch_handle, discord_handle, web_handle).unwrap();
 }

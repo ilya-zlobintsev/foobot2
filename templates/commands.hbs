@@ -1,0 +1,35 @@
+{{#*inline "page"}}
+
+<style>
+    h1 {
+        text-align: center;
+    }
+
+    td {
+        padding: 8px;
+    }
+</style>
+
+<section>
+    <h1>Command list for {{ channel }}</h1>
+    <table border=1>
+        <thead>
+            <th>Name</th>
+            <th>Action</th>
+            <th>Permissions</th>
+        </thead>
+        <tbody>
+            {{#each commands }}
+            <tr>
+                <td>{{ this.name }}</td>
+                <td>{{ this.action }}</td>
+                <td>{{ this.permissions }}</td>
+            </tr>
+            {{/each}}
+        </tbody>
+
+    </table>
+</section>
+
+{{/inline}}
+{{~>(parent)~}}
