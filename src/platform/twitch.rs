@@ -1,16 +1,34 @@
-use async_trait::async_trait;
-use tokio::task;
-use twitch_irc::{ClientConfig, SecureTCPTransport, TwitchIRCClient, login::StaticLoginCredentials, message::{PrivmsgMessage, ServerMessage}};
+use std::sync::{Arc, RwLock};
 
-use crate::{command_handler::{CommandHandler, CommandMessage, twitch_api::TwitchApi}, platform::{ChannelIdentifier, ExecutionContext}};
+use async_trait::async_trait;
+use tokio::task::{self, JoinHandle};
+use twitch_irc::{
+    login::StaticLoginCredentials,
+    message::{PrivmsgMessage, ServerMessage},
+    ClientConfig, SecureTCPTransport, TwitchIRCClient,
+};
+
+use crate::{
+    command_handler::{twitch_api::TwitchApi, CommandHandler, CommandMessage},
+    platform::{ChannelIdentifier, ExecutionContext, Permissions},
+};
 
 use super::{ChatPlatform, UserIdentifier};
 
 #[derive(Clone)]
 pub struct Twitch {
-    // client: Option<TwitchIRCClient<TCPTransport, StaticLoginCredentials>>,
-    credentials: StaticLoginCredentials,
+    client: Arc<RwLock<Option<TwitchIRCClient<SecureTCPTransport, StaticLoginCredentials>>>>,
     command_handler: CommandHandler,
+    credentials: StaticLoginCredentials,
+}
+
+impl Twitch {
+    pub fn join_channel(&self, channel: String) {
+        let client = self.client.read().unwrap();
+        let client = client.as_ref().unwrap();
+
+        client.join(channel);
+    }
 }
 
 #[async_trait]
@@ -33,25 +51,24 @@ impl ChatPlatform for Twitch {
             }
         };
 
-
         Ok(Box::new(Self {
-            // client: None,
-            credentials,
+            client: Arc::new(RwLock::new(None)),
             command_handler,
+            credentials,
         }))
     }
 
-    async fn run(mut self) -> () {
+    async fn run(self) -> JoinHandle<()> {
+        tracing::info!("Connected to Twitch");
+
         let config = ClientConfig::new_simple(self.credentials.clone());
 
         let (mut incoming_messages, client) =
             TwitchIRCClient::<SecureTCPTransport, StaticLoginCredentials>::new(config);
 
-        tracing::info!("Connected to Twitch");
+        *self.client.write().unwrap() = Some(client.clone());
 
-        client.join("boring_nick".to_owned());
-
-        async move {
+        tokio::spawn(async move {
             let command_prefix = Self::get_prefix();
 
             while let Some(message) = incoming_messages.recv().await {
@@ -63,14 +80,24 @@ impl ChatPlatform for Twitch {
                             pm.message_text = message_text.to_string();
 
                             let context = ExecutionContext {
-                                channel: ChannelIdentifier::TwitchChannelID(pm.channel_id.clone()),
+                                channel: ChannelIdentifier::TwitchChannelName(pm.channel_login.clone()),
+                                permissions: {
+                                    if pm.badges.iter().any(|badge| badge.name == "moderator")
+                                        | pm.badges.iter().any(|badge| badge.name == "broadcaster")
+                                    {
+                                        Permissions::ChannelMod
+                                    } else {
+                                        Permissions::Default
+                                    }
+                                },
                             };
 
                             let cclient = client.clone();
                             let command_handler = self.command_handler.clone();
 
                             task::spawn(async move {
-                                let response = command_handler.handle_command_message(&pm, context).await;
+                                let response =
+                                    command_handler.handle_command_message(&pm, context).await;
 
                                 if let Some(response) = response {
                                     tracing::info!("Replying with {}", response);
@@ -87,7 +114,7 @@ impl ChatPlatform for Twitch {
                     _ => (),
                 }
             }
-        }.await
+        })
     }
 }
 

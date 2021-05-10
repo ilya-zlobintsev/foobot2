@@ -1,7 +1,17 @@
 table! {
-    channels (platform, channel) {
+    channels (id) {
+        id -> Unsigned<Bigint>,
         platform -> Varchar,
         channel -> Varchar,
+    }
+}
+
+table! {
+    commands (channel_id, name) {
+        name -> Varchar,
+        action -> Text,
+        permissions -> Nullable<Text>,
+        channel_id -> Unsigned<Bigint>,
     }
 }
 
@@ -13,7 +23,10 @@ table! {
     }
 }
 
+joinable!(commands -> channels (channel_id));
+
 allow_tables_to_appear_in_same_query!(
     channels,
+    commands,
     users,
 );

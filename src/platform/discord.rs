@@ -1,6 +1,6 @@
 use std::env;
 
-use super::{ChannelIdentifier, ChatPlatform, ExecutionContext, UserIdentifier};
+use super::{ChannelIdentifier, ChatPlatform, ExecutionContext, Permissions, UserIdentifier};
 
 use crate::command_handler::{CommandHandler, CommandMessage};
 
@@ -11,6 +11,7 @@ use serenity::{
     prelude::TypeMapKey,
     Client,
 };
+use tokio::task::JoinHandle;
 
 struct Handler {
     prefix: String,
@@ -21,8 +22,14 @@ impl EventHandler for Handler {
     // Event handlers are dispatched through a threadpool, and so multiple
     // events can be dispatched simultaneously.
     async fn message(&self, ctx: Context, mut message: Message) {
+        tracing::debug!("{:?}", message);
+
         if message.content.starts_with(&self.prefix) {
-            message.content = message.content.strip_prefix(&self.prefix).unwrap().to_string();
+            message.content = message
+                .content
+                .strip_prefix(&self.prefix)
+                .unwrap()
+                .to_string();
 
             let data = ctx.data.read().await;
 
@@ -31,7 +38,31 @@ impl EventHandler for Handler {
                 .expect("CommandHandler not found in client");
 
             let command_context = ExecutionContext {
-                channel: ChannelIdentifier::DiscordGuildID(message.guild_id.unwrap().to_string()), // TODO
+                channel: match message.guild_id {
+                    Some(guild_id) => {
+                        ChannelIdentifier::DiscordGuildID(guild_id.as_u64().to_string())
+                    }
+                    None => {
+                        ChannelIdentifier::DiscordChannelID(message.channel_id.as_u64().to_string())
+                    }
+                },
+                permissions: {
+                    match message.guild_id {
+                        Some(_guild_id) => {
+                            // let guild = ctx.http.get_guild(guild_id.0).await.expect("Failed to get guild ID");
+
+                            // let channel = guild.channels(ctx.http).await.unwrap().get(&message.channel_id).unwrap();
+                            // let member = guild.member(ctx.http, message.author.id).await.unwrap();
+
+                            // let permissions = guild.user_permissions_in(channel, &member).unwrap();
+
+                            // TODO
+
+                            Permissions::ChannelMod
+                        }
+                        None => Permissions::ChannelMod, // in direct messages
+                    }
+                },
             };
 
             if let Some(response) = command_handler
@@ -55,7 +86,8 @@ impl EventHandler for Handler {
 }
 
 pub struct Discord {
-    client: Client,
+    token: String,
+    command_handler: CommandHandler,
 }
 
 #[async_trait]
@@ -65,23 +97,24 @@ impl ChatPlatform for Discord {
 
         validate_token(&token)?;
 
-        let client = Client::builder(token)
+        Ok(Box::new(Self { token, command_handler }))
+    }
+
+    async fn run(self) -> JoinHandle<()> {
+
+        let mut client = Client::builder(self.token.clone())
             .event_handler(Handler {
                 prefix: Self::get_prefix(),
             })
-            .await?;
+            .await.expect("Failed to start Discord");
 
         {
             let mut data = client.data.write().await;
 
-            data.insert::<CommandHandler>(command_handler);
+            data.insert::<CommandHandler>(self.command_handler.clone());
         }
 
-        Ok(Box::new(Self { client }))
-    }
-
-    async fn run(mut self) -> () {
-        self.client.start().await.expect("discord error")
+        tokio::spawn(async move {client.start().await.expect("Discord error") })
     }
 }
 

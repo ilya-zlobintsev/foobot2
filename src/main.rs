@@ -16,7 +16,8 @@ use platform::ChatPlatform;
 
 use platform::discord::Discord;
 use platform::twitch::Twitch;
-use tokio::task;
+
+use crate::platform::ChannelIdentifier;
 
 #[tokio::main]
 async fn main() {
@@ -30,31 +31,49 @@ async fn main() {
     let db = Database::connect(env::var("DATABASE_URL").expect("DATABASE_URL missing"))
         .expect("Failed to connect to DB");
 
+    let channels = db.get_channels();
+
     let command_handler = CommandHandler::init(db).await;
 
     let twitch_handle = {
         let command_handler = command_handler.clone();
 
-        task::spawn(async move {
-            match Twitch::init(command_handler.clone()).await {
-                Ok(twitch) => twitch.run().await,
-                Err(e) => {
-                    tracing::info!("Error loading Twitch: {:?}", e);
-                    return;
-                }
-            }
-        })
-    };
+        match Twitch::init(command_handler.clone()).await {
+            Ok(twitch) => {
+                let handle = twitch.clone().run().await;
 
-    let discord_handle = task::spawn(async move {
-        match Discord::init(command_handler).await {
-            Ok(discord) => discord.run().await,
+                channels
+                    .iter()
+                    .filter_map(|channel| {
+                        if channel.platform
+                            == ChannelIdentifier::TwitchChannelName("".to_string())
+                                .get_platform_name()
+                        {
+                            Some(channel.channel.clone())
+                        } else {
+                            None
+                        }
+                    })
+                    .for_each(|channel| {
+                        twitch.join_channel(channel);
+                    });
+
+                handle
+            }
             Err(e) => {
-                tracing::info!("Error loading Discord: {:?}", e);
+                tracing::info!("Error loading Twitch: {:?}", e);
                 return;
             }
         }
-    });
+    };
+
+    let discord_handle = match Discord::init(command_handler).await {
+        Ok(discord) => discord.run().await,
+        Err(e) => {
+            tracing::info!("Error loading Discord: {:?}", e);
+            return;
+        }
+    };
 
     tokio::try_join!(twitch_handle, discord_handle).unwrap();
 }

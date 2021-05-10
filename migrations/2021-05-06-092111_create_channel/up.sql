@@ -1,5 +1,6 @@
 CREATE TABLE channels (
-    platform VARCHAR(255), 
-    channel VARCHAR(255),
-    CONSTRAINT unique_channel PRIMARY KEY (platform, channel)
+    id SERIAL PRIMARY KEY,
+    platform VARCHAR(255) NOT NULL, 
+    channel VARCHAR(255) NOT NULL,
+    CONSTRAINT unique_channel UNIQUE (platform, channel)
 )
