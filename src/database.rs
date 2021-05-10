@@ -8,9 +8,9 @@ use crate::{
     database::schema::users,
     platform::{ChannelIdentifier, UserIdentifier},
 };
-use diesel::ConnectionError;
 use diesel::mysql::MysqlConnection;
 use diesel::r2d2::{self, ConnectionManager, Pool};
+use diesel::ConnectionError;
 use diesel::{EqAll, QueryDsl};
 use diesel::{ExpressionMethods, RunQueryDsl};
 
@@ -122,6 +122,31 @@ impl Database {
                 },
             )
             .execute(&conn)?;
+
+        Ok(())
+    }
+
+    pub fn delete_command(
+        &self,
+        channel_identifier: ChannelIdentifier,
+        command_name: &str,
+    ) -> Result<(), diesel::result::Error> {
+        let conn = self.conn_pool.get().unwrap();
+
+        diesel::delete(
+            commands::table
+                .filter(
+                    commands::channel_id.eq_any(
+                        channels::table
+                            .filter(
+                                channels::platform.eq_all(channel_identifier.get_platform_name()),
+                            )
+                            .filter(channels::channel.eq_all(channel_identifier.get_channel()))
+                            .select(channels::id),
+                    ),
+                )
+                .filter(commands::name.eq_all(command_name))
+        ).execute(&conn)?;
 
         Ok(())
     }

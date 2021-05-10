@@ -86,53 +86,31 @@ impl CommandHandler {
                 self.db.get_user(user_identifier),
                 execution_context.permissions
             ))),
-            "cmd" | "command" | "commands" => {
-                let mut arguments = arguments.into_iter();
-
-                if arguments.len() == 0 {
-                    // TODO show command list
-                    Ok(Some("Command list".to_string()))
-                } else {
-                    match execution_context.permissions {
-                        Permissions::ChannelMod => {
-                            match arguments.next().ok_or_else(|| {
-                                CommandError::MissingArgument(
-                                    "must be either add or delete".to_string(),
-                                )
-                            })? {
-                                "add" | "create" => {
-                                    let command_name = arguments.next().ok_or_else(|| {
-                                        CommandError::MissingArgument("command name".to_string())
-                                    })?;
-
-                                    let command_action = arguments.collect::<Vec<&str>>().join(" ");
-                                    
-                                    if command_action.is_empty() {
-                                        return Err(CommandError::MissingArgument("command action".to_string()))
-                                    }
-
-                                    match self.db.add_command(
-                                        execution_context.channel,
-                                        command_name,
-                                        &command_action,
-                                    ) {
-                                        Ok(()) => Ok(Some(format!("Command successfully added"))),
-                                        Err(diesel::result::Error::DatabaseError(
-                                            diesel::result::DatabaseErrorKind::UniqueViolation,
-                                            _,
-                                        )) => Ok(Some("Command already exists".to_string())),
-                                        Err(e) => Err(CommandError::DatabaseError(e)),
-                                    }
-                                }
-                                "del" | "delete" | "remove" => {
-                                    Ok(Some("Unimplemented".to_string()))
-                                }
-                                _ => Err(CommandError::InvalidArgument(command.to_string())),
-                            }
-                        }
-                        Permissions::Default => Err(CommandError::NoPermissions),
-                    }
-                }
+            "cmd" | "command" | "commands" => self.cmd(command, arguments, execution_context).await,
+            // Old commands for convenience
+            "addcmd" | "cmdadd" => {
+                self.cmd(
+                    "command",
+                    {
+                        let mut arguments = arguments;
+                        arguments.insert(0, "add");
+                        arguments
+                    },
+                    execution_context,
+                )
+                .await
+            },
+            "delcmd" | "cmddel" => {
+                self.cmd(
+                    "command",
+                    {
+                        let mut arguments = arguments;
+                        arguments.insert(0, "remove");
+                        arguments
+                    },
+                    execution_context,
+                )
+                .await
             }
             _ => match self.db.get_command(execution_context.channel, command)? {
                 Some(cmd) => Ok(Some(cmd.action)),
@@ -166,6 +144,67 @@ impl CommandHandler {
         };
 
         format!("Pong! Uptime {}", uptime)
+    }
+
+    async fn cmd(
+        &self,
+        command: &str,
+        arguments: Vec<&str>,
+        execution_context: ExecutionContext,
+    ) -> Result<Option<String>, CommandError> {
+        let mut arguments = arguments.into_iter();
+
+        if arguments.len() == 0 {
+            // TODO show command list
+            Ok(Some("Command list".to_string()))
+        } else {
+            match execution_context.permissions {
+                Permissions::ChannelMod => {
+                    match arguments.next().ok_or_else(|| {
+                        CommandError::MissingArgument("must be either add or delete".to_string())
+                    })? {
+                        "add" | "create" => {
+                            let command_name = arguments.next().ok_or_else(|| {
+                                CommandError::MissingArgument("command name".to_string())
+                            })?;
+
+                            let command_action = arguments.collect::<Vec<&str>>().join(" ");
+
+                            if command_action.is_empty() {
+                                return Err(CommandError::MissingArgument(
+                                    "command action".to_string(),
+                                ));
+                            }
+
+                            match self.db.add_command(
+                                execution_context.channel,
+                                command_name,
+                                &command_action,
+                            ) {
+                                Ok(()) => Ok(Some("Command successfully added".to_string())),
+                                Err(diesel::result::Error::DatabaseError(
+                                    diesel::result::DatabaseErrorKind::UniqueViolation,
+                                    _,
+                                )) => Ok(Some("Command already exists".to_string())),
+                                Err(e) => Err(CommandError::DatabaseError(e)),
+                            }
+                        }
+                        "del" | "delete" | "remove" => {
+                            let command_name = arguments.next().ok_or_else(|| {
+                                CommandError::MissingArgument("command name".to_string())
+                            })?;
+
+                            match self.db.delete_command(execution_context.channel, command_name) {
+                                Ok(()) => Ok(Some("Command succesfully removed".to_string())),
+                                Err(e) => Err(CommandError::DatabaseError(e)),
+                            }
+                        }
+                        _ => Err(CommandError::InvalidArgument(command.to_string())),
+                    }
+                }
+                Permissions::Default => Err(CommandError::NoPermissions),
+            }
+        }
     }
 }
 
