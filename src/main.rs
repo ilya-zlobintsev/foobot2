@@ -22,10 +22,7 @@ use crate::platform::ChannelIdentifier;
 
 #[tokio::main]
 async fn main() {
-    if let Err(e) = dotenv() {
-        println!("{:?}", e);
-        println!(".env file missing, using env variables")
-    }
+    dotenv().unwrap_or_default();
 
     tracing_subscriber::fmt::init();
 

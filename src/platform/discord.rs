@@ -58,7 +58,7 @@ impl EventHandler for Handler {
 
                             // TODO
 
-                            Permissions::ChannelMod
+                            Permissions::Default
                         }
                         None => Permissions::ChannelMod, // in direct messages
                     }

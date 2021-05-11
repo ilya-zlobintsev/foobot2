@@ -27,4 +27,4 @@ twitch-irc = { git = "https://github.com/robotty/twitch-irc-rs.git", default-fea
 serenity = { version = "0.10", default-features = false, features = ["client", "gateway", "rustls_backend", "model"] }
 
 rocket = {git = "https://github.com/SergioBenitez/Rocket.git"}
-rocket_contrib = {git = "https://github.com/SergioBenitez/Rocket.git", features = ["handlebars_templates"] }
+rocket_contrib = { git = "https://github.com/SergioBenitez/Rocket.git", features = ["handlebars_templates"] }

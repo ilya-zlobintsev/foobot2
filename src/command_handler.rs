@@ -1,7 +1,7 @@
 pub mod twitch_api;
 
 use core::fmt;
-use std::{env, time::Instant};
+use std::{env, fmt::Pointer, time::Instant};
 
 use crate::{
     database::Database,
@@ -99,7 +99,7 @@ impl CommandHandler {
                     execution_context,
                 )
                 .await
-            },
+            }
             "delcmd" | "cmddel" => {
                 self.cmd(
                     "command",
@@ -112,10 +112,71 @@ impl CommandHandler {
                 )
                 .await
             }
-            _ => match self.db.get_command(execution_context.channel, command)? {
-                Some(cmd) => Ok(Some(cmd.action)),
+            _ => match self.db.get_command(&execution_context.channel, command)? {
+                Some(cmd) => self.execute_command_action(&cmd.action, execution_context),
                 None => Ok(None),
             },
+        }
+    }
+
+    fn execute_command_action(
+        &self,
+        action: &str,
+        execution_context: ExecutionContext,
+    ) -> Result<Option<String>, CommandError> {
+        tracing::info!("Parsing action {}", action);
+
+        let mut response = String::new();
+
+        let mut iter = action.chars();
+
+        while let Some(ch) = iter.next() {
+            match ch {
+                '$' => {
+                    let mut inquiry = String::new();
+
+                    while let Some(ch) = iter.next() {
+                        if ch == ' ' {
+                            break;
+                        }
+
+                        inquiry.push(ch);
+                    }
+
+                    response.push_str(
+                        &self.make_inquiry(&inquiry, &execution_context)?
+                            .unwrap_or_default(),
+                    );
+
+                    response.push(' '); // To simulate the missing space after the inquiry
+                }
+                _ => response.push(ch),
+            }
+        }
+
+        if !response.is_empty() {
+            Ok(Some(response))
+        } else {
+            Ok(None)
+        }
+    }
+
+    fn make_inquiry(
+        &self,
+        inquiry: &str,
+        execution_context: &ExecutionContext,
+    ) -> Result<Option<String>, InquiryError> {
+        let mut split = inquiry.split(":");
+
+        let inquiry = split
+            .next()
+            .ok_or_else(|| InquiryError::MissingArgument("inquiry".to_string()))?;
+
+        let args = split.collect::<Vec<&str>>();
+
+        match inquiry {
+            "DO_SOMETHING" => Ok(Some(format!("did something with {:?}", args))),
+            _ => Ok(None),
         }
     }
 
@@ -194,7 +255,10 @@ impl CommandHandler {
                                 CommandError::MissingArgument("command name".to_string())
                             })?;
 
-                            match self.db.delete_command(execution_context.channel, command_name) {
+                            match self
+                                .db
+                                .delete_command(execution_context.channel, command_name)
+                            {
                                 Ok(()) => Ok(Some("Command succesfully removed".to_string())),
                                 Err(e) => Err(CommandError::DatabaseError(e)),
                             }
@@ -214,6 +278,7 @@ pub enum CommandError {
     InvalidArgument(String),
     NoPermissions,
     DatabaseError(diesel::result::Error),
+    InquiryError(InquiryError),
 }
 
 impl fmt::Display for CommandError {
@@ -229,6 +294,7 @@ impl fmt::Display for CommandError {
                 f.write_str("you don't have the permissions to use this command")
             }
             CommandError::DatabaseError(e) => f.write_str(&format!("database error: {}", e)),
+            CommandError::InquiryError(e) => f.write_str(&format!("inquiry error: {}", e)),
         }
     }
 }
@@ -239,8 +305,27 @@ impl From<diesel::result::Error> for CommandError {
     }
 }
 
+impl From<InquiryError> for CommandError {
+    fn from(e: InquiryError) -> Self {
+        Self::InquiryError(e)
+    }
+}
+
 pub trait CommandMessage {
     fn get_user_identifier(&self) -> UserIdentifier;
 
     fn get_text(&self) -> String;
+}
+
+#[derive(Clone, Debug)]
+pub enum InquiryError {
+    MissingArgument(String),
+}
+
+impl fmt::Display for InquiryError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            InquiryError::MissingArgument(arg) => f.write_str(&format!("missing argument {}", arg)),
+        }
+    }
 }

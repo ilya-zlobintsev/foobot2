@@ -68,10 +68,16 @@ impl Database {
             }
         }
     }
+    
+    pub fn get_channels_amount(&self) -> Result<i64, diesel::result::Error> {
+        let conn = self.conn_pool.get().unwrap();
+
+        channels::table.count().get_result(&conn)
+    }
 
     pub fn get_command(
         &self,
-        channel_identifier: ChannelIdentifier,
+        channel_identifier: &ChannelIdentifier,
         command: &str,
     ) -> Result<Option<Command>, diesel::result::Error> {
         let conn = self.conn_pool.get().unwrap();

@@ -96,6 +96,7 @@ impl TwitchApi {
         self.headers.get("Client-Id").unwrap().to_str().unwrap()
     }
 
+    // TODO: merge into get_users that accepts both ids and logins
     pub async fn get_users_by_login(
         &self,
         logins: &Vec<String>,

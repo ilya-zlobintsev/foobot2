@@ -1,5 +1,3 @@
-use crate::platform::ChannelIdentifier;
-
 use super::*;
 use rocket::{catch, get, response::Redirect, Request, State};
 use rocket_contrib::templates::Template;
