@@ -1,20 +1,24 @@
+mod inquiry_helper;
 pub mod twitch_api;
 
 use core::fmt;
-use std::{env, fmt::Pointer, time::Instant};
+use std::{env::{self, VarError}, sync::Arc, time::Instant};
 
 use crate::{
-    database::Database,
+    database::{models::User, Database},
     platform::{ExecutionContext, Permissions, UserIdentifier},
 };
 
+use inquiry_helper::*;
+use rocket_contrib::templates::handlebars::{Handlebars, TemplateRenderError};
 use twitch_api::TwitchApi;
 
 #[derive(Clone)]
 pub struct CommandHandler {
-    db: Database,
+    pub db: Database,
     pub twitch_api: Option<TwitchApi>,
     startup_time: Instant,
+    template_registry: Arc<Handlebars<'static>>,
 }
 
 impl CommandHandler {
@@ -32,10 +36,15 @@ impl CommandHandler {
 
         let startup_time = Instant::now();
 
+        let mut template_registry = Handlebars::new();
+
+        template_registry.register_helper("context", Box::new(ContextHelper));
+
         Self {
             db,
             twitch_api,
             startup_time,
+            template_registry: Arc::new(template_registry),
         }
     }
 
@@ -44,6 +53,7 @@ impl CommandHandler {
         &self,
         message: &T,
         context: ExecutionContext,
+        user_identifier: UserIdentifier,
     ) -> Option<String>
     where
         T: Sync + CommandMessage,
@@ -60,7 +70,7 @@ impl CommandHandler {
             let arguments: Vec<&str> = split.collect();
 
             match self
-                .run_command(&command, arguments, message.get_user_identifier(), context)
+                .run_command(&command, arguments, context, user_identifier)
                 .await
             {
                 Ok(result) => result,
@@ -74,17 +84,18 @@ impl CommandHandler {
         &self,
         command: &str,
         arguments: Vec<&str>,
-        user_identifier: UserIdentifier,
         execution_context: ExecutionContext,
+        user_identifier: UserIdentifier,
     ) -> Result<Option<String>, CommandError> {
         tracing::info!("Processing command {} with {:?}", command, arguments);
+
+        let user = self.db.get_user(user_identifier)?;
 
         match command {
             "ping" => Ok(Some(self.ping())),
             "whoami" | "id" => Ok(Some(format!(
                 "{:?}, permissions: {:?}",
-                self.db.get_user(user_identifier),
-                execution_context.permissions
+                user, execution_context.permissions
             ))),
             "cmd" | "command" | "commands" => self.cmd(command, arguments, execution_context).await,
             // Old commands for convenience
@@ -112,8 +123,25 @@ impl CommandHandler {
                 )
                 .await
             }
+            "showcmd" | "checkcmd" => {
+                self.cmd(
+                    "command",
+                    {
+                        let mut arguments = arguments;
+                        arguments.insert(0, "show");
+                        arguments
+                    },
+                    execution_context,
+                )
+                .await
+            }
+            "debug" | "check" | "test" => {
+                let action = arguments.join(" ");
+
+                self.execute_command_action(&action, execution_context, user)
+            }
             _ => match self.db.get_command(&execution_context.channel, command)? {
-                Some(cmd) => self.execute_command_action(&cmd.action, execution_context),
+                Some(cmd) => self.execute_command_action(&cmd.action, execution_context, user),
                 None => Ok(None),
             },
         }
@@ -123,60 +151,23 @@ impl CommandHandler {
         &self,
         action: &str,
         execution_context: ExecutionContext,
+        user: User,
     ) -> Result<Option<String>, CommandError> {
         tracing::info!("Parsing action {}", action);
 
-        let mut response = String::new();
+        let inquiry_context = InquiryContext {
+            execution_context,
+            user,
+        };
 
-        let mut iter = action.chars();
-
-        while let Some(ch) = iter.next() {
-            match ch {
-                '$' => {
-                    let mut inquiry = String::new();
-
-                    while let Some(ch) = iter.next() {
-                        if ch == ' ' {
-                            break;
-                        }
-
-                        inquiry.push(ch);
-                    }
-
-                    response.push_str(
-                        &self.make_inquiry(&inquiry, &execution_context)?
-                            .unwrap_or_default(),
-                    );
-
-                    response.push(' '); // To simulate the missing space after the inquiry
-                }
-                _ => response.push(ch),
-            }
-        }
+        let response = self
+            .template_registry
+            .render_template(action, &inquiry_context)?;
 
         if !response.is_empty() {
             Ok(Some(response))
         } else {
             Ok(None)
-        }
-    }
-
-    fn make_inquiry(
-        &self,
-        inquiry: &str,
-        execution_context: &ExecutionContext,
-    ) -> Result<Option<String>, InquiryError> {
-        let mut split = inquiry.split(":");
-
-        let inquiry = split
-            .next()
-            .ok_or_else(|| InquiryError::MissingArgument("inquiry".to_string()))?;
-
-        let args = split.collect::<Vec<&str>>();
-
-        match inquiry {
-            "DO_SOMETHING" => Ok(Some(format!("did something with {:?}", args))),
-            _ => Ok(None),
         }
     }
 
@@ -216,8 +207,7 @@ impl CommandHandler {
         let mut arguments = arguments.into_iter();
 
         if arguments.len() == 0 {
-            // TODO show command list
-            Ok(Some("Command list".to_string()))
+            Ok(Some(format!("{}/channels/{}/commands", env::var("BASE_URL")?, self.db.get_channel(execution_context.channel)?.id)))
         } else {
             match execution_context.permissions {
                 Permissions::ChannelMod => {
@@ -263,6 +253,19 @@ impl CommandHandler {
                                 Err(e) => Err(CommandError::DatabaseError(e)),
                             }
                         }
+                        "show" | "check" => {
+                            let command_name = arguments.next().ok_or_else(|| {
+                                CommandError::MissingArgument("command name".to_string())
+                            })?;
+
+                            match self
+                                .db
+                                .get_command(&execution_context.channel, command_name)?
+                            {
+                                Some(command) => Ok(Some(command.action)),
+                                None => Ok(Some(format!("command {} doesn't exist", command_name))),
+                            }
+                        }
                         _ => Err(CommandError::InvalidArgument(command.to_string())),
                     }
                 }
@@ -278,7 +281,8 @@ pub enum CommandError {
     InvalidArgument(String),
     NoPermissions,
     DatabaseError(diesel::result::Error),
-    InquiryError(InquiryError),
+    TemplateError(TemplateRenderError),
+    ConfigurationError(VarError),
 }
 
 impl fmt::Display for CommandError {
@@ -294,7 +298,8 @@ impl fmt::Display for CommandError {
                 f.write_str("you don't have the permissions to use this command")
             }
             CommandError::DatabaseError(e) => f.write_str(&format!("database error: {}", e)),
-            CommandError::InquiryError(e) => f.write_str(&format!("inquiry error: {}", e)),
+            CommandError::TemplateError(e) => f.write_str(&format!("inquiry error: {}", e)),
+            CommandError::ConfigurationError(e) => f.write_str(&format!("configuration error: {}", e)),
         }
     }
 }
@@ -305,9 +310,15 @@ impl From<diesel::result::Error> for CommandError {
     }
 }
 
-impl From<InquiryError> for CommandError {
-    fn from(e: InquiryError) -> Self {
-        Self::InquiryError(e)
+impl From<TemplateRenderError> for CommandError {
+    fn from(e: TemplateRenderError) -> Self {
+        Self::TemplateError(e)
+    }
+}
+
+impl From<VarError> for CommandError {
+    fn from(e: VarError) -> Self {
+        Self::ConfigurationError(e)
     }
 }
 
@@ -315,17 +326,4 @@ pub trait CommandMessage {
     fn get_user_identifier(&self) -> UserIdentifier;
 
     fn get_text(&self) -> String;
-}
-
-#[derive(Clone, Debug)]
-pub enum InquiryError {
-    MissingArgument(String),
-}
-
-impl fmt::Display for InquiryError {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            InquiryError::MissingArgument(arg) => f.write_str(&format!("missing argument {}", arg)),
-        }
-    }
 }

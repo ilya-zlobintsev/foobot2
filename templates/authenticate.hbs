@@ -1,0 +1,38 @@
+{{#*inline "page"}}
+
+<style>
+    .authentication {
+        text-align: center;
+        width: 60%;
+        margin-left: auto;
+        margin-right: auto;
+    }
+
+    .authentication a {
+        color: white;
+        margin: 10px;
+        padding: 20px;
+        display: block;
+        text-decoration: none;
+    }
+    
+    .platformlist {
+        width: 70%;
+        margin-left: auto;
+        margin-right: auto;
+        overflow-x: auto;
+    }
+</style>
+
+<section>
+    <div class="authentication">
+        <h1>Choose a platform to authenticate with:</h1>
+        <div class="platformlist">
+            <a href="/authenticate/twitch" style="background-color: rgb(92, 51, 155);"><b>Twitch</b></a>
+            <a href="/authenticate/discord" style="background-color: rgb(115, 138, 219);"><b>Discord</b></a>
+        </div>
+    </div>
+</section>
+
+{{/inline}}
+{{~>(parent)~}}

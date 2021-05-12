@@ -29,11 +29,11 @@ async fn main() {
     let db = Database::connect(env::var("DATABASE_URL").expect("DATABASE_URL missing"))
         .expect("Failed to connect to DB");
 
-    let web_handle = web::run(db.clone()).await;
-
     let channels = db.get_channels().unwrap();
 
     let command_handler = CommandHandler::init(db).await;
+
+    let web_handle = web::run(command_handler.clone()).await;
 
     let twitch_handle = {
         let command_handler = command_handler.clone();

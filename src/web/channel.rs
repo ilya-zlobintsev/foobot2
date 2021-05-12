@@ -3,7 +3,7 @@ use rocket::{catch, get, response::Redirect, Request, State};
 use rocket_contrib::templates::Template;
 
 #[get("/")]
-pub fn index(db: State<Database>) -> Template {
+pub async fn index(db: State<'_, Database>) -> Template {
     Template::render(
         "channels",
         &ChannelsContext {
@@ -14,7 +14,7 @@ pub fn index(db: State<Database>) -> Template {
 }
 
 #[get("/<channel_id>/commands")]
-pub fn commands_page(db: State<Database>, channel_id: String) -> Template {
+pub async fn commands_page(db: State<'_, Database>, channel_id: String) -> Template {
     Template::render(
         "commands",
         &CommandsContext {
@@ -28,6 +28,6 @@ pub fn commands_page(db: State<Database>, channel_id: String) -> Template {
 }
 
 #[catch(404)]
-pub fn not_found(_: &Request<'_>) -> Redirect {
+pub async fn not_found(_: &Request<'_>) -> Redirect {
     Redirect::to("/channels")
 }

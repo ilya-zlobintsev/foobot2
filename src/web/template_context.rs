@@ -20,3 +20,9 @@ pub struct CommandsContext {
     pub channel: String,
     pub commands: Vec<Command>,
 }
+
+#[derive(Serialize)]
+pub struct AuthenticateContext {
+    pub parent: &'static str,
+    pub logged_in: bool,
+}

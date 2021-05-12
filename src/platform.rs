@@ -1,13 +1,18 @@
 pub mod discord;
 pub mod twitch;
 
-use std::env::{self, VarError};
+use std::{
+    env::{self, VarError},
+    fmt,
+};
 
 use crate::command_handler::CommandHandler;
 use async_trait::async_trait;
 use tokio::task::JoinHandle;
 
 use serenity::prelude::SerenityError;
+
+use serde::{Deserialize, Serialize};
 
 #[async_trait]
 pub trait ChatPlatform {
@@ -20,7 +25,7 @@ pub trait ChatPlatform {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Serialize, Deserialize)]
 pub struct ExecutionContext {
     pub channel: ChannelIdentifier,
     pub permissions: Permissions,
@@ -51,13 +56,22 @@ impl From<SerenityError> for ChatPlatformError {
     }
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub enum UserIdentifier {
     TwitchID(String),
     DiscordID(String),
 }
 
-#[derive(Debug, Clone)]
+impl fmt::Display for UserIdentifier {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            UserIdentifier::TwitchID(id) => f.write_str(id),
+            UserIdentifier::DiscordID(id) => f.write_str(id),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum ChannelIdentifier {
     TwitchChannelName(String),
     DiscordGuildID(String),
@@ -82,11 +96,20 @@ impl ChannelIdentifier {
     }
 }
 
-#[derive(Debug, Eq)]
+#[derive(Debug, Eq, Serialize, Deserialize)]
 pub enum Permissions {
     Default,
     ChannelMod,
     // BotAdmin,
+}
+
+impl Permissions {
+    pub fn to_string(&self) -> String {
+        match self {
+            Permissions::Default => "default".to_string(),
+            Permissions::ChannelMod => "channel_mod".to_string(),
+        }
+    }
 }
 
 impl PartialEq for Permissions {

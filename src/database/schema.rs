@@ -23,10 +23,30 @@ table! {
     }
 }
 
+table! {
+    user_data (name, value) {
+        name -> Varchar,
+        value -> Varchar,
+        public -> Bool,
+        user_id -> Unsigned<Bigint>,
+    }
+}
+
+table! {
+    web_sessions (session_id) {
+        session_id -> Varchar,
+        user_id -> Unsigned<Bigint>,
+    }
+}
+
 joinable!(commands -> channels (channel_id));
+joinable!(user_data -> users (user_id));
+joinable!(web_sessions -> users (user_id));
 
 allow_tables_to_appear_in_same_query!(
     channels,
     commands,
     users,
+    user_data,
+    web_sessions,
 );

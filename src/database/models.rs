@@ -1,7 +1,7 @@
 use super::schema::*;
-use serde::Serialize;
+use serde::{Serialize, Deserialize};
 
-#[derive(Queryable, Debug)]
+#[derive(Queryable, Debug, Serialize, Deserialize)]
 pub struct User {
     pub id: u64,
     pub twitch_id: Option<String>,
@@ -44,4 +44,19 @@ pub struct NewCommand<'a> {
     pub action: &'a str,
     pub permissions: Option<&'a str>,
     pub channel_id: u64, 
+}
+
+#[derive(Queryable, Debug, PartialEq, Eq)]
+pub struct UserData {
+    pub name: String,
+    pub value: String,
+    pub public: bool,
+    user_id: u64,
+}
+
+#[derive(Queryable, Insertable)]
+#[table_name="web_sessions"]
+pub struct WebSession {
+    pub session_id: String,
+    pub user_id: u64,
 }

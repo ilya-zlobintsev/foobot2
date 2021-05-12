@@ -1,3 +1,7 @@
+[default]
+address = "0.0.0.0"
+secret_key = "a0PiawSQzlXWYuzBbdSJlkBnEzWHtiLeq/8iq3DaFFg="
+
 [default.shutdown]
 ctrlc = false
 signals = []

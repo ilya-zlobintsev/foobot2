@@ -58,7 +58,7 @@ impl EventHandler for Handler {
 
                             // TODO
 
-                            Permissions::Default
+                            Permissions::ChannelMod
                         }
                         None => Permissions::ChannelMod, // in direct messages
                     }
@@ -66,7 +66,7 @@ impl EventHandler for Handler {
             };
 
             if let Some(response) = command_handler
-                .handle_command_message(&message, command_context)
+                .handle_command_message(&message, command_context, message.get_user_identifier())
                 .await
             {
                 tracing::info!("Replying with {}", response);
@@ -97,16 +97,19 @@ impl ChatPlatform for Discord {
 
         validate_token(&token)?;
 
-        Ok(Box::new(Self { token, command_handler }))
+        Ok(Box::new(Self {
+            token,
+            command_handler,
+        }))
     }
 
     async fn run(self) -> JoinHandle<()> {
-
         let mut client = Client::builder(self.token.clone())
             .event_handler(Handler {
                 prefix: Self::get_prefix(),
             })
-            .await.expect("Failed to start Discord");
+            .await
+            .expect("Failed to start Discord");
 
         {
             let mut data = client.data.write().await;
@@ -114,7 +117,7 @@ impl ChatPlatform for Discord {
             data.insert::<CommandHandler>(self.command_handler.clone());
         }
 
-        tokio::spawn(async move {client.start().await.expect("Discord error") })
+        tokio::spawn(async move { client.start().await.expect("Discord error") })
     }
 }
 

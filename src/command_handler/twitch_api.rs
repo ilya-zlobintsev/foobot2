@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 
 use reqwest::{header::HeaderMap, Client};
-use serde::{Serialize, Deserialize};
+use serde::{Deserialize, Serialize};
 
 #[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -50,10 +50,10 @@ pub struct TwitchApi {
 }
 
 impl TwitchApi {
-    pub async fn init(oauth: &str) -> Result<Self, reqwest::Error> {
-        let oauth = match oauth.strip_prefix("oauth:") {
+    pub async fn init(access_token: &str) -> Result<Self, reqwest::Error> {
+        let oauth = match access_token.strip_prefix("oauth:") {
             Some(res) => res,
-            None => oauth,
+            None => access_token,
         };
 
         let validation = Self::validate_oauth(oauth).await?;
@@ -92,18 +92,27 @@ impl TwitchApi {
             .unwrap()
     }
 
-    fn get_client_id(&self) -> &str {
+    pub fn get_client_id(&self) -> &str {
         self.headers.get("Client-Id").unwrap().to_str().unwrap()
     }
 
     // TODO: merge into get_users that accepts both ids and logins
-    pub async fn get_users_by_login(
+    pub async fn get_users(
         &self,
-        logins: &Vec<String>,
+        logins: Option<&Vec<String>>,
+        ids: Option<&Vec<String>>,
     ) -> Result<UsersResponse, reqwest::Error> {
         let mut params: Vec<(&str, &str)> = Vec::new();
-        for login in logins {
-            params.push(("login", login));
+
+        if let Some(logins) = logins {
+            for login in logins {
+                params.push(("login", login));
+            }
+        }
+        if let Some(ids) = ids {
+            for id in ids {
+                params.push(("id", id));
+            }
         }
 
         Ok(self
@@ -117,24 +126,8 @@ impl TwitchApi {
             .await?)
     }
 
-    pub async fn get_users_by_id(
-        &self,
-        ids: &Vec<String>,
-    ) -> Result<UsersResponse, reqwest::Error> {
-        let mut params: Vec<(&str, &str)> = Vec::new();
-        for id in ids {
-            params.push(("id", id));
-        }
-
-        Ok(self
-            .client
-            .get("https://api.twitch.tv/helix/users")
-            .headers(self.headers.clone())
-            .query(&params)
-            .send()
-            .await?
-            .json()
-            .await?)
+    pub async fn get_self_user(&self) -> Result<User, reqwest::Error> {
+        Ok(self.get_users(None, None).await?.data.into_iter().next().unwrap())
     }
 
     pub async fn run_ad(
@@ -143,7 +136,7 @@ impl TwitchApi {
         duration: u8,
     ) -> Result<String, reqwest::Error> {
         let users = self
-            .get_users_by_login(&vec![channel_login.to_string()])
+            .get_users(Some(&vec![channel_login.to_string()]), None)
             .await?;
         let channel_id = &users.data.first().unwrap().id;
 

@@ -97,7 +97,7 @@ impl ChatPlatform for Twitch {
 
                             task::spawn(async move {
                                 let response =
-                                    command_handler.handle_command_message(&pm, context).await;
+                                    command_handler.handle_command_message(&pm, context, pm.get_user_identifier()).await;
 
                                 if let Some(response) = response {
                                     tracing::info!("Replying with {}", response);

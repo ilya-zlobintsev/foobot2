@@ -1,21 +1,81 @@
 <!DOCTYPE html>
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
 <html>
 
 <head>
-    <title>Foobot 2</title>
+    <title>Foobot 2 </title>
     <style>
         * {
+            font-family: "Comic Sans MS", "Comic Sans", "Times New Roman";
+        }
+
+        body {
             background-color: rgb(33, 32, 51);
             color: white;
         }
 
-        *:link {
-            color: rgb(30, 30, 66);
-        }
-
-        *:visited {
+        a:link {
             color: rgb(153, 153, 229);
         }
+
+        a:visited {
+            color: rgb(106, 106, 238);
+        }
+
+        header {
+            background-color: rgb(81, 78, 124);
+            display: flex;
+        }
+
+        ul {
+            width: 100%;
+            list-style-type: none;
+            margin: 0;
+            padding: 0;
+            overflow: hidden;
+        }
+
+        li {
+            float: left;
+        }
+
+        li a {
+            display: block;
+            text-align: center;
+            padding: 16px;
+            text-decoration: none;
+        }
+
+        li a:link,
+        li a:visited {
+            color: white;
+        }
+
+        .user {
+            white-space: nowrap;
+            text-decoration: none;
+            padding: 16px;
+        }
+        
+        .user a {
+            display: block;
+        }
+
+        .user,
+        li a {
+            font-size: 20px;
+        }
+
+        .user:link,
+        .user:visited {
+            color: white;
+        }
+
+        li a:hover,
+        .user:hover a {
+            background-color: rgb(53, 51, 85);
+        }
+
 
         footer {
             position: fixed;
@@ -35,6 +95,17 @@
 </head>
 
 <body>
+    <header>
+        <ul>
+            <li><a href="/">Home</a></lia>
+            <li><a href="/channels">Channels</a></lia>
+        </ul>
+        {{ #if logged_in }}
+        <p class="user">Logged in</p>
+        {{ else }}
+        <a class="user" href="/authenticate">Log in</a>
+        {{ /if }}
+    </header>
     {{~> page}}
     <footer>
         <a href="https://github.com/ilyazzz/foobot2">source code</a>

@@ -3,16 +3,15 @@ mod schema;
 
 use self::models::*;
 use crate::{
-    database::schema::channels,
-    database::schema::commands,
-    database::schema::users,
+    database::schema::*,
     platform::{ChannelIdentifier, UserIdentifier},
 };
-use diesel::mysql::MysqlConnection;
+use diesel::{Insertable, mysql::MysqlConnection};
 use diesel::r2d2::{self, ConnectionManager, Pool};
 use diesel::ConnectionError;
 use diesel::{EqAll, QueryDsl};
 use diesel::{ExpressionMethods, RunQueryDsl};
+use passwords::PasswordGenerator;
 
 embed_migrations!();
 
@@ -45,6 +44,7 @@ impl Database {
 
         let query = channels::table.into_boxed();
 
+        // Doing .load().iter().next() looks nicer than doing .first() and then mapping NotFoundError to None
         match query
             .filter(channels::platform.eq_all(channel_identifier.get_platform_name()))
             .filter(channels::channel.eq_all(channel_identifier.get_channel()))
@@ -68,7 +68,7 @@ impl Database {
             }
         }
     }
-    
+
     pub fn get_channels_amount(&self) -> Result<i64, diesel::result::Error> {
         let conn = self.conn_pool.get().unwrap();
 
@@ -193,5 +193,60 @@ impl Database {
                 _ => Err(e),
             },
         }
+    }
+
+    pub fn get_user_data_value(
+        &self,
+        user_id: u64,
+        key: &str,
+    ) -> Result<Option<String>, diesel::result::Error> {
+        let conn = self.conn_pool.get().unwrap();
+
+        Ok(user_data::table
+            .filter(user_data::user_id.eq_all(user_id))
+            .filter(user_data::name.eq_all(key))
+            .select(user_data::value)
+            .load(&conn)?
+            .into_iter()
+            .next())
+    }
+
+    pub fn get_web_session(
+        &self,
+        session_id: &str,
+    ) -> Result<Option<WebSession>, diesel::result::Error> {
+        let conn = self.conn_pool.get().unwrap();
+
+        Ok(web_sessions::table
+            .filter(web_sessions::session_id.eq_all(session_id))
+            .load(&conn)?
+            .into_iter()
+            .next())
+    }
+
+    /// Returns the session id
+    pub fn create_web_session(
+        &self,
+        user_id: u64
+    ) -> Result<String, diesel::result::Error> {
+        let conn = self.conn_pool.get().unwrap();
+
+        let session = WebSession {
+            session_id: PasswordGenerator {
+                length: 24,
+                numbers: true,
+                lowercase_letters: true,
+                uppercase_letters: true,
+                symbols: true,
+                spaces: true,
+                exclude_similar_characters: false,
+                strict: true,
+            }.generate_one().unwrap(),
+            user_id,
+        };
+        
+        diesel::insert_into(web_sessions::table).values(&session).execute(&conn)?;
+
+        Ok(session.session_id)
     }
 }

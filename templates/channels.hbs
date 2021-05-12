@@ -16,25 +16,31 @@
 
 <section>
     <h1>Channel list</h1>
-    <table border=1>
-        <thead>
-            <th>ID</th>
-            <th>Platform</th>
-            <th>Name/Channel ID</th>
-            <th>Command list</th>
-        </thead>
-        <tbody>
-            {{#each channels}}
-            <tr>
-                <td>{{ this.id }}</td>
-                <td>{{ this.platform }}</td>
-                <td>{{ this.channel }}</td>
-                <td> <a href="/channels/{{ this.id }}/commands">Here</a> </td>
-            </tr>
-            {{/each}}
-        </tbody>
+    <div style="overflow-x:auto">
+        <table border=1>
+            <col style="width:15%">
+            <col style="width:50%">
+            <col style="width:20%">
+            <col style="width:15%">
+            <thead>
+                <th>ID</th>
+                <th>Platform</th>
+                <th>Name/Channel ID</th>
+                <th>Command list</th>
+            </thead>
+            <tbody>
+                {{#each channels}}
+                <tr>
+                    <td>{{ this.id }}</td>
+                    <td>{{ this.platform }}</td>
+                    <td>{{ this.channel }}</td>
+                    <td> <a href="/channels/{{ this.id }}/commands">Here</a> </td>
+                </tr>
+                {{/each}}
+            </tbody>
 
-    </table>
+        </table>
+    </div>
 </section>
 
 {{/inline}}
