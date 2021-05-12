@@ -12,7 +12,7 @@ use template_context::*;
 use crate::{command_handler::CommandHandler, database::Database};
 
 #[get("/")]
-async fn index(db: State<'_, Database>) -> Template {
+async fn index(db: &State<Database>) -> Template {
     Template::render(
         "index",
         &IndexContext {

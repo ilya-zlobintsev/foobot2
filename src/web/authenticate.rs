@@ -18,16 +18,22 @@ pub async fn index(jar: &CookieJar<'_>) -> Template {
         Some(_) => true,
         None => false,
     };
-    
+
     tracing::info!("{:?}", jar.iter().collect::<Vec<&Cookie<'static>>>());
 
-    Template::render("authenticate", &AuthenticateContext { parent: "layout", logged_in })
+    Template::render(
+        "authenticate",
+        &AuthenticateContext {
+            parent: "layout",
+            logged_in,
+        },
+    )
 }
 
 const SCOPES: &[&'static str] = &["user:read:email"];
 
 #[get("/twitch")]
-pub async fn authenticate_twitch(twitch_api: State<'_, TwitchApi>) -> Redirect {
+pub async fn authenticate_twitch(twitch_api: &State<TwitchApi>) -> Redirect {
     tracing::info!("Authenticating with Twitch...");
 
     let client_id = twitch_api.get_client_id();
@@ -44,8 +50,8 @@ pub async fn authenticate_twitch(twitch_api: State<'_, TwitchApi>) -> Redirect {
 
 #[get("/twitch/redirect?<code>")]
 pub async fn twitch_redirect(
-    db: State<'_, Database>,
-    twitch_api: State<'_, TwitchApi>,
+    db: &State<Database>,
+    twitch_api: &State<TwitchApi>,
     code: &str,
     jar: &CookieJar<'_>,
 ) -> Redirect {
@@ -92,7 +98,7 @@ pub async fn twitch_redirect(
         .expect("DB error");
 
     let session_id = db.create_web_session(user.id).expect("DB error");
-    
+
     let mut cookie = Cookie::new("session_id", session_id);
 
     cookie.set_secure(true);
