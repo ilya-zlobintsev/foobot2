@@ -36,6 +36,7 @@ table! {
     web_sessions (session_id) {
         session_id -> Varchar,
         user_id -> Unsigned<Bigint>,
+        username -> Text,
     }
 }
 

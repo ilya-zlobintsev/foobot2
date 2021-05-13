@@ -1,14 +1,19 @@
 pub mod models;
 mod schema;
 
+use std::{
+    collections::HashMap,
+    sync::{Arc, RwLock},
+};
+
 use self::models::*;
 use crate::{
     database::schema::*,
     platform::{ChannelIdentifier, UserIdentifier},
 };
-use diesel::{Insertable, mysql::MysqlConnection};
 use diesel::r2d2::{self, ConnectionManager, Pool};
 use diesel::ConnectionError;
+use diesel::{mysql::MysqlConnection, Insertable};
 use diesel::{EqAll, QueryDsl};
 use diesel::{ExpressionMethods, RunQueryDsl};
 use passwords::PasswordGenerator;
@@ -18,6 +23,7 @@ embed_migrations!();
 #[derive(Clone)]
 pub struct Database {
     conn_pool: Pool<ConnectionManager<MysqlConnection>>,
+    web_sessions_cache: Arc<RwLock<HashMap<String, WebSession>>>,
 }
 
 impl Database {
@@ -27,7 +33,10 @@ impl Database {
 
         embedded_migrations::run(&conn_pool.get().unwrap()).expect("Failed to run migrations");
 
-        Ok(Self { conn_pool })
+        Ok(Self {
+            conn_pool,
+            web_sessions_cache: Arc::new(RwLock::new(HashMap::new())),
+        })
     }
 
     pub fn get_channels(&self) -> Result<Vec<Channel>, diesel::result::Error> {
@@ -215,19 +224,47 @@ impl Database {
         &self,
         session_id: &str,
     ) -> Result<Option<WebSession>, diesel::result::Error> {
-        let conn = self.conn_pool.get().unwrap();
+        let cache = self
+            .web_sessions_cache
+            .read()
+            .expect("Failed to lock cache");
 
-        Ok(web_sessions::table
-            .filter(web_sessions::session_id.eq_all(session_id))
-            .load(&conn)?
-            .into_iter()
-            .next())
+        match &cache.get(session_id) {
+            Some(session) => Ok(Some(session.clone().clone())),
+            None => {
+                drop(cache);
+
+                let conn = self.conn_pool.get().unwrap();
+
+                match web_sessions::table
+                    .filter(web_sessions::session_id.eq_all(session_id))
+                    .load::<WebSession>(&conn)?
+                    .into_iter()
+                    .next()
+                {
+                    Some(session) => {
+                        let mut cache = self
+                            .web_sessions_cache
+                            .write()
+                            .expect("Failed to lock cache");
+
+                        cache.insert(session_id.to_owned(), session.clone());
+                        
+                        tracing::debug!("Inserted session {} into cache", session_id);
+
+                        Ok(Some(session))
+                    }
+                    None => Ok(None),
+                }
+            }
+        }
     }
 
     /// Returns the session id
     pub fn create_web_session(
         &self,
-        user_id: u64
+        user_id: u64,
+        username: String,
     ) -> Result<String, diesel::result::Error> {
         let conn = self.conn_pool.get().unwrap();
 
@@ -241,11 +278,16 @@ impl Database {
                 spaces: true,
                 exclude_similar_characters: false,
                 strict: true,
-            }.generate_one().unwrap(),
+            }
+            .generate_one()
+            .unwrap(),
             user_id,
+            username,
         };
-        
-        diesel::insert_into(web_sessions::table).values(&session).execute(&conn)?;
+
+        diesel::insert_into(web_sessions::table)
+            .values(&session)
+            .execute(&conn)?;
 
         Ok(session.session_id)
     }

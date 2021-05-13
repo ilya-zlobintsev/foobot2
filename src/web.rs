@@ -3,7 +3,7 @@ mod channel;
 mod errors;
 mod template_context;
 
-use rocket::{catchers, get, routes, State};
+use rocket::{State, catchers, get, http::CookieJar, routes};
 use rocket_contrib::templates::Template;
 use tokio::task::{self, JoinHandle};
 
@@ -12,11 +12,11 @@ use template_context::*;
 use crate::{command_handler::CommandHandler, database::Database};
 
 #[get("/")]
-async fn index(db: &State<Database>) -> Template {
+async fn index(db: &State<Database>, jar: &CookieJar<'_>) -> Template {
     Template::render(
         "index",
         &IndexContext {
-            parent: "layout",
+            parent_context: LayoutContext::new(db, jar),
             channel_amount: db.get_channels_amount().expect("Failed to get channels"),
         },
     )
@@ -24,7 +24,9 @@ async fn index(db: &State<Database>) -> Template {
 
 pub async fn run(command_handler: CommandHandler) -> JoinHandle<()> {
     let mut rocket = rocket::build()
-        .attach(Template::fairing())
+        .attach(Template::custom(|engines| {
+            engines.handlebars.set_strict_mode(true)
+        }))
         .mount("/", routes![index])
         .mount("/channels", routes![channel::index, channel::commands_page])
         .mount(

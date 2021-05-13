@@ -54,9 +54,10 @@ pub struct UserData {
     user_id: u64,
 }
 
-#[derive(Queryable, Insertable)]
+#[derive(Queryable, Insertable, Clone)]
 #[table_name="web_sessions"]
 pub struct WebSession {
     pub session_id: String,
     pub user_id: u64,
+    pub username: String,
 }

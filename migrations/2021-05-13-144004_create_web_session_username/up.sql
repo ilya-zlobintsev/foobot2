@@ -1,0 +1,1 @@
+ALTER TABLE web_sessions ADD username TEXT NOT NULL

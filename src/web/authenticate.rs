@@ -8,24 +8,16 @@ use rocket::{
 };
 use rocket_contrib::templates::Template;
 
-use crate::{command_handler::twitch_api::TwitchApi, database::Database, platform::UserIdentifier};
+use crate::{command_handler::twitch_api::TwitchApi, database::Database, platform::UserIdentifier, web::template_context::LayoutContext};
 
 use super::template_context::AuthenticateContext;
 
 #[get("/")]
-pub async fn index(jar: &CookieJar<'_>) -> Template {
-    let logged_in = match jar.get_private("session_id") {
-        Some(_) => true,
-        None => false,
-    };
-
-    tracing::info!("{:?}", jar.iter().collect::<Vec<&Cookie<'static>>>());
-
+pub async fn index(db: &State<Database>, jar: &CookieJar<'_>) -> Template {
     Template::render(
         "authenticate",
         &AuthenticateContext {
-            parent: "layout",
-            logged_in,
+            parent_context: LayoutContext::new(db, jar),
         },
     )
 }
@@ -91,13 +83,13 @@ pub async fn twitch_redirect(
         .await
         .expect("Failed to initialize Twitch API");
 
-    let twitch_user_id = twitch_api.get_self_user().await.unwrap().id;
+    let twitch_user = twitch_api.get_self_user().await.unwrap();
 
     let user = db
-        .get_user(UserIdentifier::TwitchID(twitch_user_id))
+        .get_user(UserIdentifier::TwitchID(twitch_user.id))
         .expect("DB error");
 
-    let session_id = db.create_web_session(user.id).expect("DB error");
+    let session_id = db.create_web_session(user.id, twitch_user.display_name).expect("DB error");
 
     let mut cookie = Cookie::new("session_id", session_id);
 

@@ -5,8 +5,11 @@
 <head>
     <title>Foobot 2 </title>
     <style>
-        * {
+        {{!-- * {
             font-family: "Comic Sans MS", "Comic Sans", "Times New Roman";
+        } --}}
+        * {
+            font-family:'Times New Roman', Times, serif
         }
 
         body {
@@ -55,11 +58,10 @@
             white-space: nowrap;
             text-decoration: none;
             padding: 16px;
-        }
-        
-        .user a {
+            margin: 0px;
             display: block;
         }
+        
 
         .user,
         li a {
@@ -100,8 +102,8 @@
             <li><a href="/">Home</a></lia>
             <li><a href="/channels">Channels</a></lia>
         </ul>
-        {{ #if logged_in }}
-        <p class="user">Logged in</p>
+        {{ #if parent_context.username }}
+        <p class="user">Logged in as <b>{{ parent_context.username }}</b> </p>
         {{ else }}
         <a class="user" href="/authenticate">Log in</a>
         {{ /if }}
