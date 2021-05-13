@@ -17,6 +17,7 @@ use platform::ChatPlatform;
 
 use platform::discord::Discord;
 use platform::twitch::Twitch;
+use rocket::futures::future::join_all;
 
 use crate::platform::ChannelIdentifier;
 
@@ -33,47 +34,48 @@ async fn main() {
 
     let command_handler = CommandHandler::init(db).await;
 
+    let mut handles = Vec::new();
+
     let web_handle = web::run(command_handler.clone()).await;
 
-    let twitch_handle = {
-        let command_handler = command_handler.clone();
+    handles.push(web_handle);
 
-        match Twitch::init(command_handler.clone()).await {
-            Ok(twitch) => {
-                let handle = twitch.clone().run().await;
+    let command_handler = command_handler.clone();
 
-                channels
-                    .iter()
-                    .filter_map(|channel| {
-                        if channel.platform
-                            == ChannelIdentifier::TwitchChannelName("".to_string())
-                                .get_platform_name()
-                        {
-                            Some(channel.channel.clone())
-                        } else {
-                            None
-                        }
-                    })
-                    .for_each(|channel| {
-                        twitch.join_channel(channel);
-                    });
+    match Twitch::init(command_handler.clone()).await {
+        Ok(twitch) => {
+            let handle = twitch.clone().run().await;
 
-                handle
-            }
-            Err(e) => {
-                tracing::info!("Error loading Twitch: {:?}", e);
-                return;
-            }
+            channels
+                .iter()
+                .filter_map(|channel| {
+                    if channel.platform
+                        == ChannelIdentifier::TwitchChannelName("".to_string()).get_platform_name()
+                    {
+                        Some(channel.channel.clone())
+                    } else {
+                        None
+                    }
+                })
+                .for_each(|channel| {
+                    twitch.join_channel(channel);
+                });
+
+            handles.push(handle);
         }
-    };
-
-    let discord_handle = match Discord::init(command_handler).await {
-        Ok(discord) => discord.run().await,
         Err(e) => {
-            tracing::info!("Error loading Discord: {:?}", e);
-            return;
+            tracing::error!("Error loading Twitch: {:?}", e);
+        }
+    }
+
+    match Discord::init(command_handler).await {
+        Ok(discord) => {
+            handles.push(discord.run().await);
+        }
+        Err(e) => {
+            tracing::error!("Error loading Discord: {:?}", e);
         }
     };
 
-    tokio::try_join!(twitch_handle, discord_handle, web_handle).unwrap();
+    join_all(handles).await;
 }
