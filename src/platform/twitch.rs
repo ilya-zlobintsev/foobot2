@@ -80,9 +80,7 @@ impl ChatPlatform for Twitch {
                             pm.message_text = message_text.to_string();
 
                             let context = TwitchExecutionContext {
-                                channel: ChannelIdentifier::TwitchChannelName(
-                                    pm.channel_login.clone(),
-                                ),
+                                channel_name: pm.channel_login.clone(),
                                 permissions: {
                                     if pm.badges.iter().any(|badge| badge.name == "moderator")
                                         | pm.badges.iter().any(|badge| badge.name == "broadcaster")
@@ -132,16 +130,17 @@ impl CommandMessage for PrivmsgMessage {
 }
 
 pub struct TwitchExecutionContext {
-    channel: ChannelIdentifier,
+    channel_name: String,
     permissions: Permissions,
 }
 
+#[async_trait]
 impl ExecutionContext for TwitchExecutionContext {
-    fn get_channel(&self) -> &ChannelIdentifier {
-        &self.channel
+    fn get_channel(&self) -> ChannelIdentifier {
+        ChannelIdentifier::TwitchChannelName(&self.channel_name)
     }
 
-    fn get_permissions(&self) -> &Permissions {
+    async fn get_permissions(&self) -> &Permissions {
         &self.permissions
     }
 }

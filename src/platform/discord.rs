@@ -5,9 +5,14 @@ use super::{ChannelIdentifier, ChatPlatform, ExecutionContext, Permissions, User
 use crate::command_handler::{CommandHandler, CommandMessage};
 
 use async_trait::async_trait;
+use rocket::futures::channel::oneshot::channel;
 use serenity::{
     client::{validate_token, Context, EventHandler},
-    model::{channel::Message, prelude::Ready},
+    model::{
+        channel::Message,
+        id::{ChannelId, GuildId, UserId},
+        prelude::Ready,
+    },
     prelude::TypeMapKey,
     Client,
 };
@@ -40,42 +45,12 @@ impl EventHandler for Handler {
             let context = DiscordExecutionContext {
                 channel: match message.guild_id {
                     Some(guild_id) => {
-                        ChannelIdentifier::DiscordGuildID(guild_id.as_u64().to_string())
+                        DiscordExecutionLocation::Server((guild_id, message.channel_id))
                     }
-                    None => {
-                        ChannelIdentifier::DiscordChannelID(message.channel_id.as_u64().to_string())
-                    }
+                    None => DiscordExecutionLocation::DM(message.channel_id),
                 },
-                permissions: {
-                    match message.guild_id {
-                        Some(guild_id) => {
-                            let guild = ctx
-                                .http
-                                .get_guild(guild_id.0)
-                                .await
-                                .expect("Failed to get guild ID");
-
-                            let guild_channels = guild
-                                .channels(&ctx.http)
-                                .await
-                                .expect("Failed to get guild channels");
-
-                            let channel = guild_channels
-                                .get(&message.channel_id)
-                                .expect("Channel not found");
-
-                            let member = guild.member(&ctx.http, message.author.id).await.unwrap();
-
-                            let permissions = guild.user_permissions_in(channel, &member).unwrap();
-
-                            match permissions.administrator() {
-                                true => Permissions::ChannelMod,
-                                false => Permissions::Default,
-                            }
-                        }
-                        None => Permissions::ChannelMod, // in direct messages
-                    }
-                },
+                user_id: message.author.id,
+                ctx: ctx.clone(),
             };
 
             if let Some(response) = command_handler
@@ -149,16 +124,60 @@ impl CommandMessage for Message {
 }
 
 pub struct DiscordExecutionContext {
-    channel: ChannelIdentifier,
-    permissions: Permissions,
+    channel: DiscordExecutionLocation,
+    user_id: UserId,
+    ctx: Context,
 }
 
+pub enum DiscordExecutionLocation {
+    Server((GuildId, ChannelId)),
+    DM(ChannelId),
+}
+
+#[async_trait]
 impl ExecutionContext for DiscordExecutionContext {
-    fn get_channel(&self) -> &ChannelIdentifier {
-        &self.channel
+    fn get_channel(&self) -> ChannelIdentifier {
+        match &self.channel {
+            DiscordExecutionLocation::Server((guild_id, _)) => {
+                ChannelIdentifier::DiscordGuildID(*guild_id.as_u64())
+            }
+            DiscordExecutionLocation::DM(channel_id) => {
+                ChannelIdentifier::DiscordChannelID(*channel_id.as_u64())
+            }
+        }
     }
 
-    fn get_permissions(&self) -> &Permissions {
-        &self.permissions
+    async fn get_permissions(&self) -> &Permissions {
+        match self.channel {
+            DiscordExecutionLocation::Server((guild_id, channel_id)) => {
+                tracing::info!("Getting Discord user permissions in channel");
+
+                let guild = guild_id
+                    .to_partial_guild(&self.ctx.http)
+                    .await
+                    .expect("Failed to get guild");
+
+                let guild_channels = guild
+                    .channels(&self.ctx.http)
+                    .await
+                    .expect("Failed to get guild channels");
+
+                let channel = guild_channels
+                    .get(&channel_id)
+                    .expect("Failed to get channel");
+
+                let member = guild.member(&self.ctx.http, self.user_id).await.unwrap();
+
+                match guild
+                    .user_permissions_in(channel, &member)
+                    .unwrap()
+                    .administrator()
+                {
+                    true => &Permissions::ChannelMod,
+                    false => &Permissions::Default,
+                }
+            }
+            DiscordExecutionLocation::DM(_) => &Permissions::ChannelMod,
+        }
     }
 }

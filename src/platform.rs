@@ -25,10 +25,11 @@ pub trait ChatPlatform {
     }
 }
 
+#[async_trait]
 pub trait ExecutionContext {
-    fn get_channel(&self) -> &ChannelIdentifier;
+    fn get_channel(&self) -> ChannelIdentifier;
 
-    fn get_permissions(&self) -> &Permissions;
+    async fn get_permissions(&self) -> &Permissions;
 }
 
 #[derive(Debug)]
@@ -72,13 +73,13 @@ impl fmt::Display for UserIdentifier {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub enum ChannelIdentifier {
-    TwitchChannelName(String),
-    DiscordGuildID(String),
-    DiscordChannelID(String), // Mainly for DMs
+pub enum ChannelIdentifier<'a> {
+    TwitchChannelName(&'a str),
+    DiscordGuildID(u64),
+    DiscordChannelID(u64), // Mainly for DMs
 }
 
-impl ChannelIdentifier {
+impl<'a> ChannelIdentifier<'a> {
     pub fn get_platform_name(&self) -> &str {
         match self {
             ChannelIdentifier::TwitchChannelName(_) => "twitch",

@@ -50,7 +50,7 @@ async fn main() {
                 .iter()
                 .filter_map(|channel| {
                     if channel.platform
-                        == ChannelIdentifier::TwitchChannelName("".to_string()).get_platform_name()
+                        == ChannelIdentifier::TwitchChannelName("").get_platform_name()
                     {
                         Some(channel.channel.clone())
                     } else {

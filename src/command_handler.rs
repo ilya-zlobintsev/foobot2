@@ -25,7 +25,7 @@ pub struct CommandHandler {
     template_registry: Arc<Handlebars<'static>>,
 }
 
-impl CommandHandler {
+impl<'a> CommandHandler {
     pub async fn init(db: Database) -> Self {
         let twitch_api = match env::var("TWITCH_OAUTH") {
             Ok(oauth) => match TwitchApi::init(&oauth).await {
@@ -103,7 +103,7 @@ impl CommandHandler {
             "whoami" | "id" => Ok(Some(format!(
                 "{:?}, permissions: {:?}",
                 user,
-                execution_context.get_permissions()
+                execution_context.get_permissions().await
             ))),
             "cmd" | "command" | "commands" => {
                 self.edit_cmds(command, arguments, execution_context).await
@@ -219,10 +219,10 @@ impl CommandHandler {
             Ok(Some(format!(
                 "{}/channels/{}/commands",
                 env::var("BASE_URL")?,
-                self.db.get_channel(execution_context.get_channel())?.id
+                self.db.get_channel(&execution_context.get_channel())?.id
             )))
         } else {
-            match execution_context.get_permissions() {
+            match execution_context.get_permissions().await {
                 Permissions::ChannelMod => {
                     match arguments.next().ok_or_else(|| {
                         CommandError::MissingArgument("must be either add or delete".to_string())
@@ -241,7 +241,7 @@ impl CommandHandler {
                             }
 
                             match self.db.add_command(
-                                execution_context.get_channel(),
+                                &execution_context.get_channel(),
                                 command_name,
                                 &command_action,
                             ) {
@@ -260,7 +260,7 @@ impl CommandHandler {
 
                             match self
                                 .db
-                                .delete_command(execution_context.get_channel(), command_name)
+                                .delete_command(&execution_context.get_channel(), command_name)
                             {
                                 Ok(()) => Ok(Some("Command succesfully removed".to_string())),
                                 Err(e) => Err(CommandError::DatabaseError(e)),
