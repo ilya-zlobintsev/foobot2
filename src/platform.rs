@@ -25,10 +25,10 @@ pub trait ChatPlatform {
     }
 }
 
-#[derive(Debug, Serialize, Deserialize)]
-pub struct ExecutionContext {
-    pub channel: ChannelIdentifier,
-    pub permissions: Permissions,
+pub trait ExecutionContext {
+    fn get_channel(&self) -> &ChannelIdentifier;
+
+    fn get_permissions(&self) -> &Permissions;
 }
 
 #[derive(Debug)]

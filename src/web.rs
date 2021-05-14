@@ -3,7 +3,7 @@ mod channel;
 mod errors;
 mod template_context;
 
-use rocket::{State, catchers, get, http::CookieJar, routes};
+use rocket::{catchers, get, http::CookieJar, routes, State};
 use rocket_contrib::templates::Template;
 use tokio::task::{self, JoinHandle};
 
@@ -25,7 +25,7 @@ async fn index(db: &State<Database>, jar: &CookieJar<'_>) -> Template {
 pub async fn run(command_handler: CommandHandler) -> JoinHandle<()> {
     let mut rocket = rocket::build()
         .attach(Template::custom(|engines| {
-            engines.handlebars.set_strict_mode(true)
+            engines.handlebars.set_strict_mode(true);
         }))
         .mount("/", routes![index])
         .mount("/channels", routes![channel::index, channel::commands_page])

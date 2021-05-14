@@ -127,7 +127,13 @@ impl TwitchApi {
     }
 
     pub async fn get_self_user(&self) -> Result<User, reqwest::Error> {
-        Ok(self.get_users(None, None).await?.data.into_iter().next().unwrap())
+        Ok(self
+            .get_users(None, None)
+            .await?
+            .data
+            .into_iter()
+            .next()
+            .unwrap())
     }
 
     pub async fn run_ad(

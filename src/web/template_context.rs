@@ -1,7 +1,10 @@
 use rocket::http::CookieJar;
 use serde::Serialize;
 
-use crate::database::{Database, models::{Channel, Command}};
+use crate::database::{
+    models::{Channel, Command},
+    Database,
+};
 
 #[derive(Serialize)]
 pub struct IndexContext {

@@ -1,5 +1,5 @@
 use super::schema::*;
-use serde::{Serialize, Deserialize};
+use serde::{Deserialize, Serialize};
 
 #[derive(Queryable, Debug, Serialize, Deserialize)]
 pub struct User {
@@ -9,7 +9,7 @@ pub struct User {
 }
 
 #[derive(Insertable, Default)]
-#[table_name="users"]
+#[table_name = "users"]
 pub struct NewUser<'a> {
     pub twitch_id: Option<&'a str>,
     pub discord_id: Option<&'a str>,
@@ -23,7 +23,7 @@ pub struct Channel {
 }
 
 #[derive(Insertable)]
-#[table_name="channels"]
+#[table_name = "channels"]
 pub struct NewChannel<'a> {
     pub platform: &'a str,
     pub channel: &'a str,
@@ -34,16 +34,16 @@ pub struct Command {
     pub name: String,
     pub action: String,
     pub permissions: Option<String>,
-    pub channel_id: u64, 
+    pub channel_id: u64,
 }
 
 #[derive(Insertable, Debug, PartialEq, Eq)]
-#[table_name="commands"]
+#[table_name = "commands"]
 pub struct NewCommand<'a> {
     pub name: &'a str,
     pub action: &'a str,
     pub permissions: Option<&'a str>,
-    pub channel_id: u64, 
+    pub channel_id: u64,
 }
 
 #[derive(Queryable, Debug, PartialEq, Eq)]
@@ -55,7 +55,7 @@ pub struct UserData {
 }
 
 #[derive(Queryable, Insertable, Clone)]
-#[table_name="web_sessions"]
+#[table_name = "web_sessions"]
 pub struct WebSession {
     pub session_id: String,
     pub user_id: u64,

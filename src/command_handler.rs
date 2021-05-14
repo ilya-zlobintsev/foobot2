@@ -1,8 +1,12 @@
-mod inquiry_helper;
+pub mod inquiry_helper;
 pub mod twitch_api;
 
 use core::fmt;
-use std::{env::{self, VarError}, sync::Arc, time::Instant};
+use std::{
+    env::{self, VarError},
+    sync::Arc,
+    time::Instant,
+};
 
 use crate::{
     database::{models::User, Database},
@@ -40,6 +44,8 @@ impl CommandHandler {
 
         template_registry.register_helper("context", Box::new(ContextHelper));
 
+        template_registry.set_strict_mode(true);
+
         Self {
             db,
             twitch_api,
@@ -49,14 +55,15 @@ impl CommandHandler {
     }
 
     /// This function expects a raw message that appears to be a command without the leading command prefix.
-    pub async fn handle_command_message<T>(
+    pub async fn handle_command_message<T, X>(
         &self,
         message: &T,
-        context: ExecutionContext,
+        context: X,
         user_identifier: UserIdentifier,
     ) -> Option<String>
     where
         T: Sync + CommandMessage,
+        X: ExecutionContext,
     {
         let message_text = message.get_text();
 
@@ -80,11 +87,11 @@ impl CommandHandler {
     }
 
     // #[async_recursion]
-    async fn run_command(
+    async fn run_command<X: ExecutionContext>(
         &self,
         command: &str,
         arguments: Vec<&str>,
-        execution_context: ExecutionContext,
+        execution_context: X,
         user_identifier: UserIdentifier,
     ) -> Result<Option<String>, CommandError> {
         tracing::info!("Processing command {} with {:?}", command, arguments);
@@ -95,12 +102,15 @@ impl CommandHandler {
             "ping" => Ok(Some(self.ping())),
             "whoami" | "id" => Ok(Some(format!(
                 "{:?}, permissions: {:?}",
-                user, execution_context.permissions
+                user,
+                execution_context.get_permissions()
             ))),
-            "cmd" | "command" | "commands" => self.cmd(command, arguments, execution_context).await,
+            "cmd" | "command" | "commands" => {
+                self.edit_cmds(command, arguments, execution_context).await
+            }
             // Old commands for convenience
             "addcmd" | "cmdadd" => {
-                self.cmd(
+                self.edit_cmds(
                     "command",
                     {
                         let mut arguments = arguments;
@@ -112,7 +122,7 @@ impl CommandHandler {
                 .await
             }
             "delcmd" | "cmddel" => {
-                self.cmd(
+                self.edit_cmds(
                     "command",
                     {
                         let mut arguments = arguments;
@@ -124,7 +134,7 @@ impl CommandHandler {
                 .await
             }
             "showcmd" | "checkcmd" => {
-                self.cmd(
+                self.edit_cmds(
                     "command",
                     {
                         let mut arguments = arguments;
@@ -138,10 +148,13 @@ impl CommandHandler {
             "debug" | "check" | "test" => {
                 let action = arguments.join(" ");
 
-                self.execute_command_action(&action, execution_context, user)
+                self.execute_command_action(&action, user)
             }
-            _ => match self.db.get_command(&execution_context.channel, command)? {
-                Some(cmd) => self.execute_command_action(&cmd.action, execution_context, user),
+            _ => match self
+                .db
+                .get_command(&execution_context.get_channel(), command)?
+            {
+                Some(cmd) => self.execute_command_action(&cmd.action, user),
                 None => Ok(None),
             },
         }
@@ -150,15 +163,11 @@ impl CommandHandler {
     fn execute_command_action(
         &self,
         action: &str,
-        execution_context: ExecutionContext,
         user: User,
     ) -> Result<Option<String>, CommandError> {
         tracing::info!("Parsing action {}", action);
 
-        let inquiry_context = InquiryContext {
-            execution_context,
-            user,
-        };
+        let inquiry_context = InquiryContext { user };
 
         let response = self
             .template_registry
@@ -198,18 +207,22 @@ impl CommandHandler {
         format!("Pong! Uptime {}", uptime)
     }
 
-    async fn cmd(
+    async fn edit_cmds<X: ExecutionContext>(
         &self,
         command: &str,
         arguments: Vec<&str>,
-        execution_context: ExecutionContext,
+        execution_context: X,
     ) -> Result<Option<String>, CommandError> {
         let mut arguments = arguments.into_iter();
 
         if arguments.len() == 0 {
-            Ok(Some(format!("{}/channels/{}/commands", env::var("BASE_URL")?, self.db.get_channel(execution_context.channel)?.id)))
+            Ok(Some(format!(
+                "{}/channels/{}/commands",
+                env::var("BASE_URL")?,
+                self.db.get_channel(execution_context.get_channel())?.id
+            )))
         } else {
-            match execution_context.permissions {
+            match execution_context.get_permissions() {
                 Permissions::ChannelMod => {
                     match arguments.next().ok_or_else(|| {
                         CommandError::MissingArgument("must be either add or delete".to_string())
@@ -228,7 +241,7 @@ impl CommandHandler {
                             }
 
                             match self.db.add_command(
-                                execution_context.channel,
+                                execution_context.get_channel(),
                                 command_name,
                                 &command_action,
                             ) {
@@ -247,7 +260,7 @@ impl CommandHandler {
 
                             match self
                                 .db
-                                .delete_command(execution_context.channel, command_name)
+                                .delete_command(execution_context.get_channel(), command_name)
                             {
                                 Ok(()) => Ok(Some("Command succesfully removed".to_string())),
                                 Err(e) => Err(CommandError::DatabaseError(e)),
@@ -260,7 +273,7 @@ impl CommandHandler {
 
                             match self
                                 .db
-                                .get_command(&execution_context.channel, command_name)?
+                                .get_command(&execution_context.get_channel(), command_name)?
                             {
                                 Some(command) => Ok(Some(command.action)),
                                 None => Ok(Some(format!("command {} doesn't exist", command_name))),
@@ -299,7 +312,9 @@ impl fmt::Display for CommandError {
             }
             CommandError::DatabaseError(e) => f.write_str(&format!("database error: {}", e)),
             CommandError::TemplateError(e) => f.write_str(&format!("inquiry error: {}", e)),
-            CommandError::ConfigurationError(e) => f.write_str(&format!("configuration error: {}", e)),
+            CommandError::ConfigurationError(e) => {
+                f.write_str(&format!("configuration error: {}", e))
+            }
         }
     }
 }

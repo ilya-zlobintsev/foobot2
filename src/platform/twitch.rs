@@ -79,8 +79,10 @@ impl ChatPlatform for Twitch {
                         if let Some(message_text) = pm.message_text.strip_prefix(&command_prefix) {
                             pm.message_text = message_text.to_string();
 
-                            let context = ExecutionContext {
-                                channel: ChannelIdentifier::TwitchChannelName(pm.channel_login.clone()),
+                            let context = TwitchExecutionContext {
+                                channel: ChannelIdentifier::TwitchChannelName(
+                                    pm.channel_login.clone(),
+                                ),
                                 permissions: {
                                     if pm.badges.iter().any(|badge| badge.name == "moderator")
                                         | pm.badges.iter().any(|badge| badge.name == "broadcaster")
@@ -96,8 +98,9 @@ impl ChatPlatform for Twitch {
                             let command_handler = self.command_handler.clone();
 
                             task::spawn(async move {
-                                let response =
-                                    command_handler.handle_command_message(&pm, context, pm.get_user_identifier()).await;
+                                let response = command_handler
+                                    .handle_command_message(&pm, context, pm.get_user_identifier())
+                                    .await;
 
                                 if let Some(response) = response {
                                     tracing::info!("Replying with {}", response);
@@ -125,5 +128,20 @@ impl CommandMessage for PrivmsgMessage {
 
     fn get_text(&self) -> String {
         self.message_text.clone()
+    }
+}
+
+pub struct TwitchExecutionContext {
+    channel: ChannelIdentifier,
+    permissions: Permissions,
+}
+
+impl ExecutionContext for TwitchExecutionContext {
+    fn get_channel(&self) -> &ChannelIdentifier {
+        &self.channel
+    }
+
+    fn get_permissions(&self) -> &Permissions {
+        &self.permissions
     }
 }

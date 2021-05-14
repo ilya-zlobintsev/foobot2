@@ -4,6 +4,7 @@ mod schema;
 use std::{
     collections::HashMap,
     sync::{Arc, RwLock},
+    time::Duration,
 };
 
 use self::models::*;
@@ -11,12 +12,13 @@ use crate::{
     database::schema::*,
     platform::{ChannelIdentifier, UserIdentifier},
 };
+use diesel::mysql::MysqlConnection;
 use diesel::r2d2::{self, ConnectionManager, Pool};
 use diesel::ConnectionError;
-use diesel::{mysql::MysqlConnection, Insertable};
 use diesel::{EqAll, QueryDsl};
 use diesel::{ExpressionMethods, RunQueryDsl};
 use passwords::PasswordGenerator;
+use tokio::time;
 
 embed_migrations!();
 
@@ -33,9 +35,28 @@ impl Database {
 
         embedded_migrations::run(&conn_pool.get().unwrap()).expect("Failed to run migrations");
 
+        let web_sessions_cache = Arc::new(RwLock::new(HashMap::new()));
+
+        {
+            let web_sessions_cache = web_sessions_cache.clone();
+
+            tokio::spawn(async move {
+                loop {
+                    time::sleep(Duration::from_secs(3600)).await;
+
+                    tracing::info!("Clearing web sessions cache");
+
+                    let mut web_sessions_cache =
+                        web_sessions_cache.write().expect("Failed to lock cache");
+
+                    web_sessions_cache.clear();
+                }
+            });
+        }
+
         Ok(Self {
             conn_pool,
-            web_sessions_cache: Arc::new(RwLock::new(HashMap::new())),
+            web_sessions_cache,
         })
     }
 
@@ -47,7 +68,7 @@ impl Database {
 
     pub fn get_channel(
         &self,
-        channel_identifier: ChannelIdentifier,
+        channel_identifier: &ChannelIdentifier,
     ) -> Result<Channel, diesel::result::Error> {
         let conn = self.conn_pool.get().unwrap();
 
@@ -73,7 +94,7 @@ impl Database {
                     .execute(&conn)
                     .expect("Failed to create channel");
 
-                self.get_channel(channel_identifier.clone())
+                self.get_channel(&channel_identifier)
             }
         }
     }
@@ -116,7 +137,7 @@ impl Database {
 
     pub fn add_command(
         &self,
-        channel_identifier: ChannelIdentifier,
+        channel_identifier: &ChannelIdentifier,
         command_name: &str,
         command_action: &str,
     ) -> Result<(), diesel::result::Error> {
@@ -139,7 +160,7 @@ impl Database {
 
     pub fn delete_command(
         &self,
-        channel_identifier: ChannelIdentifier,
+        channel_identifier: &ChannelIdentifier,
         command_name: &str,
     ) -> Result<(), diesel::result::Error> {
         let conn = self.conn_pool.get().unwrap();
@@ -249,7 +270,7 @@ impl Database {
                             .expect("Failed to lock cache");
 
                         cache.insert(session_id.to_owned(), session.clone());
-                        
+
                         tracing::debug!("Inserted session {} into cache", session_id);
 
                         Ok(Some(session))

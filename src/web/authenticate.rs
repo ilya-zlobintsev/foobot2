@@ -8,7 +8,10 @@ use rocket::{
 };
 use rocket_contrib::templates::Template;
 
-use crate::{command_handler::twitch_api::TwitchApi, database::Database, platform::UserIdentifier, web::template_context::LayoutContext};
+use crate::{
+    command_handler::twitch_api::TwitchApi, database::Database, platform::UserIdentifier,
+    web::template_context::LayoutContext,
+};
 
 use super::template_context::AuthenticateContext;
 
@@ -79,6 +82,11 @@ pub async fn twitch_redirect(
         .await
         .expect("Failed to process twitch authentication response");
 
+    tracing::info!(
+        "User authenticated with access token {}",
+        auth_info.access_token
+    );
+
     let twitch_api = TwitchApi::init(&auth_info.access_token)
         .await
         .expect("Failed to initialize Twitch API");
@@ -89,7 +97,9 @@ pub async fn twitch_redirect(
         .get_user(UserIdentifier::TwitchID(twitch_user.id))
         .expect("DB error");
 
-    let session_id = db.create_web_session(user.id, twitch_user.display_name).expect("DB error");
+    let session_id = db
+        .create_web_session(user.id, twitch_user.display_name)
+        .expect("DB error");
 
     let mut cookie = Cookie::new("session_id", session_id);
 

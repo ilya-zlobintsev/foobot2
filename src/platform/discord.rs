@@ -37,7 +37,7 @@ impl EventHandler for Handler {
                 .get::<CommandHandler>()
                 .expect("CommandHandler not found in client");
 
-            let command_context = ExecutionContext {
+            let context = DiscordExecutionContext {
                 channel: match message.guild_id {
                     Some(guild_id) => {
                         ChannelIdentifier::DiscordGuildID(guild_id.as_u64().to_string())
@@ -48,17 +48,30 @@ impl EventHandler for Handler {
                 },
                 permissions: {
                     match message.guild_id {
-                        Some(_guild_id) => {
-                            // let guild = ctx.http.get_guild(guild_id.0).await.expect("Failed to get guild ID");
+                        Some(guild_id) => {
+                            let guild = ctx
+                                .http
+                                .get_guild(guild_id.0)
+                                .await
+                                .expect("Failed to get guild ID");
 
-                            // let channel = guild.channels(ctx.http).await.unwrap().get(&message.channel_id).unwrap();
-                            // let member = guild.member(ctx.http, message.author.id).await.unwrap();
+                            let guild_channels = guild
+                                .channels(&ctx.http)
+                                .await
+                                .expect("Failed to get guild channels");
 
-                            // let permissions = guild.user_permissions_in(channel, &member).unwrap();
+                            let channel = guild_channels
+                                .get(&message.channel_id)
+                                .expect("Channel not found");
 
-                            // TODO
+                            let member = guild.member(&ctx.http, message.author.id).await.unwrap();
 
-                            Permissions::ChannelMod
+                            let permissions = guild.user_permissions_in(channel, &member).unwrap();
+
+                            match permissions.administrator() {
+                                true => Permissions::ChannelMod,
+                                false => Permissions::Default,
+                            }
                         }
                         None => Permissions::ChannelMod, // in direct messages
                     }
@@ -66,7 +79,7 @@ impl EventHandler for Handler {
             };
 
             if let Some(response) = command_handler
-                .handle_command_message(&message, command_context, message.get_user_identifier())
+                .handle_command_message(&message, context, message.get_user_identifier())
                 .await
             {
                 tracing::info!("Replying with {}", response);
@@ -132,5 +145,20 @@ impl CommandMessage for Message {
 
     fn get_text(&self) -> String {
         self.content.clone()
+    }
+}
+
+pub struct DiscordExecutionContext {
+    channel: ChannelIdentifier,
+    permissions: Permissions,
+}
+
+impl ExecutionContext for DiscordExecutionContext {
+    fn get_channel(&self) -> &ChannelIdentifier {
+        &self.channel
+    }
+
+    fn get_permissions(&self) -> &Permissions {
+        &self.permissions
     }
 }
