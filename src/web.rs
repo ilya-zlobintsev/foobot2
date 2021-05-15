@@ -3,6 +3,7 @@ mod channel;
 mod errors;
 mod template_context;
 
+use reqwest::Client;
 use rocket::{catchers, get, http::CookieJar, routes, State};
 use rocket_contrib::templates::Template;
 use tokio::task::{self, JoinHandle};
@@ -34,11 +35,14 @@ pub async fn run(command_handler: CommandHandler) -> JoinHandle<()> {
             routes![
                 authenticate::index,
                 authenticate::authenticate_twitch,
-                authenticate::twitch_redirect
+                authenticate::twitch_redirect,
+                authenticate::authenticate_discord,
+                authenticate::discord_redirect,
             ],
         )
         .register("/", catchers![errors::not_found])
         .register("/channels", catchers![channel::not_found])
+        .manage(Client::new())
         .manage(command_handler.db);
 
     if let Some(twitch_api) = command_handler.twitch_api {

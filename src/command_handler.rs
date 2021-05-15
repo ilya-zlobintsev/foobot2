@@ -1,5 +1,6 @@
 pub mod inquiry_helper;
 pub mod twitch_api;
+pub mod discord_api;
 
 use core::fmt;
 use std::{
