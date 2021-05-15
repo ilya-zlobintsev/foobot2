@@ -2,9 +2,8 @@ use std::{collections::HashMap, env};
 
 use reqwest::Client;
 use rocket::{
-    figment::providers::Data,
     get,
-    http::{Cookie, CookieJar},
+    http::{Cookie, CookieJar, SameSite},
     response::Redirect,
     State,
 };
@@ -105,7 +104,7 @@ pub async fn twitch_redirect(
 
     jar.add_private(cookie);
 
-    Redirect::to("/")
+    Redirect::found("/")
 }
 
 #[get("/discord")]
@@ -181,10 +180,10 @@ pub async fn discord_redirect(
         .expect("DB Error");
 
     let cookie = create_user_session(db, user.id, discord_user.username);
-    
+
     jar.add_private(cookie);
 
-    Redirect::to("/")
+    Redirect::found("/")
 }
 
 fn create_user_session(
@@ -196,11 +195,12 @@ fn create_user_session(
         .create_web_session(user_id, display_name.to_string())
         .expect("DB error");
 
-    let mut cookie = Cookie::new("session_id", session_id);
-
-    cookie.set_secure(true);
-
-    cookie
+    Cookie::build("session_id", session_id)
+        .secure(true)
+        .path("/")
+        .http_only(true)
+        .same_site(SameSite::Lax)
+        .finish()
 }
 
 #[derive(serde::Deserialize)]
