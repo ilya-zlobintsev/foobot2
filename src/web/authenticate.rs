@@ -31,6 +31,15 @@ pub async fn index(db: &State<Database>, jar: &CookieJar<'_>) -> Template {
     )
 }
 
+#[get("/logout")]
+pub async fn logout(jar: &CookieJar<'_>) -> Redirect {
+    if let Some(session_cookie) = jar.get_private("session_id") {
+        jar.remove_private(session_cookie);
+    }
+    
+    Redirect::to("/")
+}
+
 #[get("/twitch")]
 pub async fn authenticate_twitch(twitch_api: &State<TwitchApi>) -> Redirect {
     tracing::info!("Authenticating with Twitch...");

@@ -104,6 +104,7 @@
         </ul>
         {{ #if parent_context.username }}
         <p class="user">Logged in as <b>{{ parent_context.username }}</b> </p>
+        <a class="user" href="/authenticate/logout">Log out</a>
         {{ else }}
         <a class="user" href="/authenticate">Log in</a>
         {{ /if }}

@@ -5,7 +5,6 @@ use super::{ChannelIdentifier, ChatPlatform, ExecutionContext, Permissions, User
 use crate::command_handler::{CommandHandler, CommandMessage};
 
 use async_trait::async_trait;
-use rocket::futures::channel::oneshot::channel;
 use serenity::{
     client::{validate_token, Context, EventHandler},
     model::{

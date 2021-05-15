@@ -4,7 +4,7 @@ use rocket_contrib::templates::handlebars::{
 use serde::{Deserialize, Serialize};
 use serde_json::json;
 
-use crate::{database::models::User, platform::ExecutionContext};
+use crate::database::models::User;
 
 #[derive(Serialize, Deserialize, Debug)]
 pub struct InquiryContext {

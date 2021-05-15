@@ -39,7 +39,7 @@ pub struct LayoutContext {
 impl LayoutContext {
     pub fn new(db: &Database, cookie_jar: &CookieJar) -> Self {
         let username = match cookie_jar.get_private("session_id") {
-            Some(session_id) => match db.get_web_session(session_id.value()).expect("DB Error") {
+            Some(session_cookie) => match db.get_web_session(session_cookie.value()).expect("DB Error") {
                 Some(session) => Some(session.username.clone()),
                 None => None, // Invalid session ID
             },
