@@ -114,7 +114,7 @@ impl SpotifyApi {
 
     /// Returns the new access token and the expiration time
     pub async fn update_token(
-        &self,
+        http_client: &Client,
         client_id: &str,
         client_secret: &str,
         refresh_token: &str,
@@ -126,16 +126,13 @@ impl SpotifyApi {
         payload.insert("client_id", client_id);
         payload.insert("client_secret", client_secret);
 
-        let response: Value = self
-            .client
+        let response = http_client
             .post("https://accounts.spotify.com/api/token")
             .form(&payload)
             .send()
             .await?
-            .json()
+            .json::<Value>()
             .await?;
-
-        // println!("{:?}", response);
 
         Ok((
             response["access_token"].as_str().unwrap().to_string(),

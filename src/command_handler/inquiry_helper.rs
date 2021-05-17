@@ -73,7 +73,7 @@ impl HelperDef for SpotifyHelper {
                     .unwrap()?
                     {
                         Some(song) => out.write(&song)?,
-                        None => out.write("no song is currently plaing")?,
+                        None => out.write("no song is currently playing")?,
                     }
                 }
                 None => {

@@ -3,21 +3,24 @@ mod schema;
 
 use std::{
     collections::HashMap,
+    env,
     sync::{Arc, RwLock},
     time::Duration,
 };
 
 use self::models::*;
 use crate::{
+    command_handler::spotify_api::SpotifyApi,
     database::schema::*,
     platform::{ChannelIdentifier, UserIdentifier},
 };
-use diesel::mysql::MysqlConnection;
 use diesel::r2d2::{self, ConnectionManager, Pool};
 use diesel::ConnectionError;
+use diesel::{mysql::MysqlConnection, Insertable};
 use diesel::{EqAll, QueryDsl};
 use diesel::{ExpressionMethods, RunQueryDsl};
 use passwords::PasswordGenerator;
+use reqwest::Client;
 use tokio::time;
 
 embed_migrations!();
@@ -44,6 +47,7 @@ impl Database {
     }
 
     pub fn start_cron(&self) {
+        let conn_pool = self.conn_pool.clone();
         let web_sessions_cache = self.web_sessions_cache.clone();
 
         tokio::spawn(async move {
@@ -56,6 +60,67 @@ impl Database {
                     web_sessions_cache.write().expect("Failed to lock cache");
 
                 web_sessions_cache.clear();
+            }
+        });
+
+        tokio::spawn(async move {
+            loop {
+                tracing::info!("Updating Spotify tokens...");
+
+                let conn = conn_pool.get().unwrap();
+
+                let refresh_tokens = user_data::table
+                    .select((user_data::user_id, user_data::value))
+                    .filter(user_data::name.eq_all("spotify_refresh_token"))
+                    .load::<(u64, String)>(&conn)
+                    .expect("DB Error");
+
+                let mut refresh_in = None;
+
+                let client = Client::new();
+
+                let client_id = env::var("SPOTIFY_CLIENT_ID").expect("SPOTIFY_CLIENT_ID missing");
+                let client_secret =
+                    env::var("SPOTIFY_CLIENT_SECRET").expect("SPOTIFY_CLIENT_SECRET missing");
+
+                for (user_id, refresh_token) in refresh_tokens {
+                    match SpotifyApi::update_token(
+                        &client,
+                        &client_id,
+                        &client_secret,
+                        &refresh_token,
+                    )
+                    .await
+                    {
+                        Ok((access_token, expiration_time)) => {
+                            tracing::info!("Refreshed Spotify token for user {}", user_id);
+
+                            diesel::update(
+                                user_data::table
+                                    .filter(user_data::name.eq_all("spotify_access_token"))
+                                    .filter(user_data::user_id.eq_all(user_id)),
+                            )
+                            .set(user_data::value.eq_all(access_token))
+                            .execute(&conn)
+                            .expect("DB Error");
+
+                            if refresh_in == None {
+                                refresh_in = Some(expiration_time);
+                            }
+                        }
+                        Err(e) => {
+                            tracing::warn!("Error refreshing Spotify token: {}", e.to_string())
+                        }
+                    }
+                }
+
+                if refresh_in == None {
+                    refresh_in = Some(3600);
+                }
+
+                tracing::info!("Completed! Next refresh in {} seconds", refresh_in.unwrap());
+
+                time::sleep(Duration::from_secs(refresh_in.unwrap())).await;
             }
         });
     }
