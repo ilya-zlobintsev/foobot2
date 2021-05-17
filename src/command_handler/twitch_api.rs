@@ -99,8 +99,8 @@ impl TwitchApi {
     // TODO: merge into get_users that accepts both ids and logins
     pub async fn get_users(
         &self,
-        logins: Option<&Vec<String>>,
-        ids: Option<&Vec<String>>,
+        logins: Option<&Vec<&str>>,
+        ids: Option<&Vec<&str>>,
     ) -> Result<UsersResponse, reqwest::Error> {
         let mut params: Vec<(&str, &str)> = Vec::new();
 
@@ -142,7 +142,7 @@ impl TwitchApi {
         duration: u8,
     ) -> Result<String, reqwest::Error> {
         let users = self
-            .get_users(Some(&vec![channel_login.to_string()]), None)
+            .get_users(Some(&vec![channel_login]), None)
             .await?;
         let channel_id = &users.data.first().unwrap().id;
 

@@ -37,27 +37,27 @@ impl Database {
 
         let web_sessions_cache = Arc::new(RwLock::new(HashMap::new()));
 
-        {
-            let web_sessions_cache = web_sessions_cache.clone();
-
-            tokio::spawn(async move {
-                loop {
-                    time::sleep(Duration::from_secs(3600)).await;
-
-                    tracing::info!("Clearing web sessions cache");
-
-                    let mut web_sessions_cache =
-                        web_sessions_cache.write().expect("Failed to lock cache");
-
-                    web_sessions_cache.clear();
-                }
-            });
-        }
-
         Ok(Self {
             conn_pool,
             web_sessions_cache,
         })
+    }
+
+    pub fn start_cron(&self) {
+        let web_sessions_cache = self.web_sessions_cache.clone();
+
+        tokio::spawn(async move {
+            loop {
+                time::sleep(Duration::from_secs(3600)).await;
+
+                tracing::info!("Clearing web sessions cache");
+
+                let mut web_sessions_cache =
+                    web_sessions_cache.write().expect("Failed to lock cache");
+
+                web_sessions_cache.clear();
+            }
+        });
     }
 
     pub fn get_channels(&self) -> Result<Vec<Channel>, diesel::result::Error> {
@@ -184,12 +184,15 @@ impl Database {
         Ok(())
     }
 
-    pub fn get_user(&self, user_identifier: UserIdentifier) -> Result<User, diesel::result::Error> {
+    pub fn get_user(
+        &self,
+        user_identifier: &UserIdentifier,
+    ) -> Result<Option<User>, diesel::result::Error> {
         let conn = self.conn_pool.get().unwrap();
 
         let query = users::table.into_boxed();
 
-        let query = match &user_identifier {
+        let query = match user_identifier {
             UserIdentifier::TwitchID(user_id) => {
                 query.filter(users::twitch_id.eq_all(Some(user_id)))
             }
@@ -198,34 +201,60 @@ impl Database {
             }
         };
 
-        match query.first(&conn) {
-            Ok(user) => Ok(user),
-            Err(e) => match e {
-                diesel::result::Error::NotFound => {
-                    let new_user = match &user_identifier {
-                        UserIdentifier::TwitchID(user_id) => NewUser {
-                            twitch_id: Some(&user_id),
-                            discord_id: None,
-                        },
-                        UserIdentifier::DiscordID(user_id) => NewUser {
-                            twitch_id: None,
-                            discord_id: Some(&user_id),
-                        },
-                    };
+        Ok(query.load(&conn)?.into_iter().next())
+    }
 
-                    diesel::insert_into(users::table)
-                        .values(new_user)
-                        .execute(&conn)
-                        .expect("Failed to save new user");
+    pub fn get_or_create_user(
+        &self,
+        user_identifier: UserIdentifier,
+    ) -> Result<User, diesel::result::Error> {
+        let conn = self.conn_pool.get().unwrap();
 
-                    self.get_user(user_identifier.clone())
-                }
-                _ => Err(e),
-            },
+        match self.get_user(&user_identifier)? {
+            Some(user) => Ok(user),
+            None => {
+                let new_user = match &user_identifier {
+                    UserIdentifier::TwitchID(user_id) => NewUser {
+                        twitch_id: Some(&user_id),
+                        discord_id: None,
+                    },
+                    UserIdentifier::DiscordID(user_id) => NewUser {
+                        twitch_id: None,
+                        discord_id: Some(&user_id),
+                    },
+                };
+
+                diesel::insert_into(users::table)
+                    .values(new_user)
+                    .execute(&conn)
+                    .expect("Failed to save new user");
+
+                Ok(self.get_user(&user_identifier)?.unwrap())
+            }
         }
     }
 
-    pub fn get_user_data_value(
+    pub fn merge_users(&self, mut user: User, other: User) -> Result<User, diesel::result::Error> {
+        let conn = self.conn_pool.get().unwrap();
+
+        diesel::update(user_data::table.filter(user_data::user_id.eq_all(other.id)))
+            .set(user_data::user_id.eq_all(user.id))
+            .execute(&conn)?;
+
+        diesel::update(web_sessions::table.filter(web_sessions::user_id.eq_all(other.id)))
+            .set(web_sessions::user_id.eq_all(user.id))
+            .execute(&conn)?;
+
+        diesel::delete(&other).execute(&conn)?;
+
+        user.merge(other);
+
+        diesel::update(users::table).set(&user).execute(&conn)?;
+
+        Ok(user)
+    }
+
+    fn get_user_data_value(
         &self,
         user_id: u64,
         key: &str,
@@ -239,6 +268,20 @@ impl Database {
             .load(&conn)?
             .into_iter()
             .next())
+    }
+
+    pub fn get_spotify_access_token(
+        &self,
+        user_id: u64,
+    ) -> Result<Option<String>, diesel::result::Error> {
+        self.get_user_data_value(user_id, "spotify_access_token")
+    }
+
+    pub fn get_spotify_refresh_token(
+        &self,
+        user_id: u64,
+    ) -> Result<Option<String>, diesel::result::Error> {
+        self.get_user_data_value(user_id, "spotify_refresh_token")
     }
 
     pub fn get_web_session(

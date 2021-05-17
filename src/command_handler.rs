@@ -1,6 +1,7 @@
-pub mod inquiry_helper;
-pub mod twitch_api;
 pub mod discord_api;
+pub mod inquiry_helper;
+pub mod spotify_api;
+pub mod twitch_api;
 
 use core::fmt;
 use std::{
@@ -11,10 +12,11 @@ use std::{
 
 use crate::{
     database::{models::User, Database},
-    platform::{ExecutionContext, Permissions, UserIdentifier},
+    platform::{ExecutionContext, Permissions, UserIdentifier, UserIdentifierError},
 };
 
 use inquiry_helper::*;
+use rocket::form::Context;
 use rocket_contrib::templates::handlebars::{Handlebars, TemplateRenderError};
 use twitch_api::TwitchApi;
 
@@ -43,7 +45,8 @@ impl<'a> CommandHandler {
 
         let mut template_registry = Handlebars::new();
 
-        template_registry.register_helper("context", Box::new(ContextHelper));
+        template_registry.register_helper("context", Box::new(ContextHelper {}));
+        template_registry.register_helper("spotify", Box::new(SpotifyHelper { db: db.clone() }));
 
         template_registry.set_strict_mode(true);
 
@@ -97,7 +100,7 @@ impl<'a> CommandHandler {
     ) -> Result<Option<String>, CommandError> {
         tracing::info!("Processing command {} with {:?}", command, arguments);
 
-        let user = self.db.get_user(user_identifier)?;
+        let user = self.db.get_or_create_user(user_identifier)?;
 
         match command {
             "ping" => Ok(Some(self.ping())),
@@ -150,6 +153,23 @@ impl<'a> CommandHandler {
                 let action = arguments.join(" ");
 
                 self.execute_command_action(&action, user)
+            }
+            "merge" => {
+                let identifier_string = arguments.first().ok_or_else(|| {
+                    CommandError::MissingArgument(
+                        "user identifier: must be in the form of `platform:id`".to_string(),
+                    )
+                })?;
+
+                let other_identifier =
+                    UserIdentifier::from_string(identifier_string, self.twitch_api.as_ref())
+                        .await?;
+                
+                let other = self.db.get_user(&other_identifier)?.ok_or_else(|| UserIdentifierError::InvalidUser)?;
+                
+                self.db.merge_users(user, other)?;
+                
+                Ok(Some("sucessfully merged users".to_string()))
             }
             _ => match self
                 .db
@@ -335,6 +355,18 @@ impl From<TemplateRenderError> for CommandError {
 impl From<VarError> for CommandError {
     fn from(e: VarError) -> Self {
         Self::ConfigurationError(e)
+    }
+}
+
+impl From<UserIdentifierError> for CommandError {
+    fn from(e: UserIdentifierError) -> Self {
+        match e {
+            UserIdentifierError::MissingDelimiter => Self::MissingArgument(
+                "separator `:`! Must be in the form of `platform:user`".to_string(),
+            ),
+            UserIdentifierError::InvalidPlatform => Self::InvalidArgument("platform".to_string()),
+            UserIdentifierError::InvalidUser => Self::InvalidArgument("cannot find user".to_string()),
+        }
     }
 }
 

@@ -1,11 +1,23 @@
 use super::schema::*;
 use serde::{Deserialize, Serialize};
 
-#[derive(Queryable, Debug, Serialize, Deserialize)]
+#[derive(Queryable, Identifiable, AsChangeset, Debug, Serialize, Deserialize)]
 pub struct User {
     pub id: u64,
     pub twitch_id: Option<String>,
     pub discord_id: Option<String>,
+}
+
+impl User {
+    pub fn merge(&mut self, other: User) {
+        if self.twitch_id == None && other.twitch_id != None {
+            self.twitch_id = other.twitch_id;
+        } 
+
+        if self.discord_id == None && other.discord_id != None {
+            self.discord_id = other.discord_id;
+        } 
+    }
 }
 
 #[derive(Insertable, Default)]

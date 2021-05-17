@@ -3,10 +3,10 @@ pub mod twitch;
 
 use std::{
     env::{self, VarError},
-    fmt,
+    fmt::{self, Error},
 };
 
-use crate::command_handler::CommandHandler;
+use crate::command_handler::{twitch_api::TwitchApi, CommandHandler};
 use async_trait::async_trait;
 use tokio::task::JoinHandle;
 
@@ -70,6 +70,42 @@ impl fmt::Display for UserIdentifier {
             UserIdentifier::DiscordID(id) => f.write_str(id),
         }
     }
+}
+
+impl UserIdentifier {
+    pub async fn from_string(
+        s: &str,
+        twitch_api: Option<&TwitchApi>,
+    ) -> Result<Self, UserIdentifierError> {
+        let (platform, user_id) = s
+            .split_once(":")
+            .ok_or_else(|| UserIdentifierError::MissingDelimiter)?;
+
+        match platform {
+            "twitch" => match twitch_api {
+                Some(twitch_api) => Ok(Self::TwitchID(
+                    twitch_api
+                        .get_users(Some(&vec![user_id]), None)
+                        .await
+                        .expect("Twitch API Error") // TODO
+                        .data
+                        .first()
+                        .ok_or_else(|| UserIdentifierError::InvalidUser)?
+                        .id
+                        .clone(),
+                )),
+                None => Ok(Self::TwitchID(user_id.to_owned())),
+            },
+            "discord" => Ok(Self::DiscordID(user_id.to_owned())),
+            _ => Err(UserIdentifierError::InvalidPlatform),
+        }
+    }
+}
+
+pub enum UserIdentifierError {
+    MissingDelimiter,
+    InvalidPlatform,
+    InvalidUser,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

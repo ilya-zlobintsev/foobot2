@@ -29,6 +29,8 @@ async fn main() {
 
     let db = Database::connect(env::var("DATABASE_URL").expect("DATABASE_URL missing"))
         .expect("Failed to connect to DB");
+    
+    db.start_cron();
 
     let channels = db.get_channels().unwrap();
 
