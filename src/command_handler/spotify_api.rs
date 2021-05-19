@@ -1,6 +1,7 @@
 use std::collections::HashMap;
 
-use reqwest::{header::HeaderMap, Client};
+use reqwest::{header::HeaderMap, Client, StatusCode};
+use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
 #[derive(Clone)]
@@ -23,7 +24,7 @@ impl SpotifyApi {
             headers,
         }
     }
-    pub async fn get_current_song(&self) -> Result<Option<String>, reqwest::Error> {
+    pub async fn get_current_song(&self) -> Result<Option<CurrentPlayback>, reqwest::Error> {
         tracing::info!("Getting current song");
 
         let response = self
@@ -35,58 +36,10 @@ impl SpotifyApi {
 
         tracing::info!("GET {}: {}", response.url(), response.status());
 
-        match response.json::<Value>().await {
-            Ok(v) => {
-                if let Some(error) = v.get("error") {
-                    Ok(Some(format!("error: {}", error.get("message").unwrap())))
-                } else {
-                    let title = v["item"]["name"].as_str().unwrap();
-
-                    let mut artists: Vec<&str> = Vec::new();
-                    for artist in v["item"]["artists"].as_array().unwrap() {
-                        artists.push(artist["name"].as_str().unwrap());
-                    }
-                    let artists = artists.join(", ");
-
-                    let position = v["progress_ms"].as_u64().unwrap() / 1000;
-                    let position = format!("{}:{:02}", position / 60, position % 60);
-
-                    let length = v["item"]["duration_ms"].as_u64().unwrap() / 1000;
-                    let length = format!("{}:{:02}", length / 60, length % 60);
-
-                    Ok(Some(format!(
-                        "{} - {} [{}/{}]",
-                        artists, title, position, length
-                    )))
-                }
-            }
-            Err(_) => {
-                //Nothing is playing
-                Ok(None)
-            }
-        }
-    }
-
-    pub async fn get_current_playlist(&self) -> Result<Option<String>, reqwest::Error> {
-        let response = self
-            .client
-            .get("https://api.spotify.com/v1/me/player")
-            .headers(self.headers.clone())
-            .send()
-            .await?;
-
-        match response.json::<Value>().await {
-            Ok(v) => Ok(Some(
-                v["context"]["external_urls"]["spotify"]
-                    .as_str()
-                    .unwrap()
-                    .to_owned(),
-            )),
-            Err(e) => {
-                println!("Error {:?} when getting the playlist", e);
-                //Nothing is playing
-                Ok(None)
-            }
+        match response.status() {
+            StatusCode::OK => Ok(response.json().await?),
+            StatusCode::NO_CONTENT => Ok(None),
+            _ => unimplemented!(),
         }
     }
 
@@ -169,7 +122,7 @@ impl SpotifyApi {
     }
 }
 
-#[derive(Default, Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
+#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct SpotifyAuthentication {
     #[serde(rename = "access_token")]
@@ -181,4 +134,68 @@ pub struct SpotifyAuthentication {
     pub expires_in: i64,
     #[serde(rename = "refresh_token")]
     pub refresh_token: String,
+}
+
+#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CurrentPlayback {
+    pub context: Context,
+    #[serde(rename = "progress_ms")]
+    pub progress_ms: i64,
+    pub item: Item,
+}
+
+#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Context {
+    #[serde(rename = "external_urls")]
+    pub external_urls: ExternalUrls,
+    pub href: String,
+    #[serde(rename = "type")]
+    pub type_field: String,
+    pub uri: String,
+}
+
+#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ExternalUrls {
+    pub spotify: String,
+}
+
+#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Item {
+    pub album: Album,
+    pub artists: Vec<Artist>,
+    #[serde(rename = "duration_ms")]
+    pub duration_ms: i64,
+    #[serde(rename = "is_local")]
+    pub is_local: bool,
+    pub name: String,
+    pub uri: String,
+}
+
+#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Album {
+    pub artists: Vec<Artist>,
+    pub href: String,
+    pub id: String,
+    pub name: String,
+    #[serde(rename = "total_tracks")]
+    pub total_tracks: i64,
+    #[serde(rename = "type")]
+    pub type_field: String,
+    pub uri: String,
+}
+
+#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Artist {
+    pub href: String,
+    pub id: String,
+    pub name: String,
+    #[serde(rename = "type")]
+    pub type_field: String,
+    pub uri: String,
 }
