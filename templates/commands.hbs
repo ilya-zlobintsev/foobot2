@@ -32,8 +32,14 @@
             <tr>
                 <td>{{ this.name }}</td>
                 <td>{{ this.action }}</td>
-                <td>{{ this.cooldown }}s</td>
-                <td>{{ this.permissions }}</td>
+                <td style="text-align: center;">{{ this.cooldown }}s</td>
+                <td style="text-align: center;">
+                {{ #if this.permissions }}
+                {{ this.permissions }}
+                {{ else }}
+                Everyone
+                {{ /if }}
+                </td>
             </tr>
             {{/each}}
         </tbody>
