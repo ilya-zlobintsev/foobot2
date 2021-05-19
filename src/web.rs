@@ -5,7 +5,7 @@ mod template_context;
 
 use reqwest::Client;
 use rocket::{catchers, get, http::CookieJar, routes, State};
-use rocket_contrib::templates::Template;
+use rocket_contrib::{serve::StaticFiles, templates::Template};
 use tokio::task::{self, JoinHandle};
 
 use template_context::*;
@@ -28,6 +28,7 @@ pub async fn run(command_handler: CommandHandler) -> JoinHandle<()> {
         .attach(Template::custom(|engines| {
             engines.handlebars.set_strict_mode(true);
         }))
+        .mount("/static", StaticFiles::from("static"))
         .mount("/", routes![index])
         .mount("/channels", routes![channel::index, channel::commands_page])
         .mount(
