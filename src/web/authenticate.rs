@@ -1,12 +1,7 @@
 use std::{collections::HashMap, env};
 
 use reqwest::Client;
-use rocket::{
-    get,
-    http::{Cookie, CookieJar, SameSite},
-    response::Redirect,
-    State,
-};
+use rocket::{State, get, http::{Cookie, CookieJar, SameSite}, response::{Redirect, content::Html}};
 use rocket_contrib::templates::Template;
 
 use crate::{
@@ -23,13 +18,13 @@ const DISCORD_SCOPES: &'static str = "identify";
 const SPOTIFY_SCOPES: &[&'static str] = &["user-read-playback-state", "user-read-recently-played"];
 
 #[get("/")]
-pub async fn index(db: &State<Database>, jar: &CookieJar<'_>) -> Template {
-    Template::render(
+pub async fn index(db: &State<Database>, jar: &CookieJar<'_>) -> Html<Template> {
+    Html(Template::render(
         "authenticate",
         &AuthenticateContext {
             parent_context: LayoutContext::new(db, jar),
         },
-    )
+    ))
 }
 
 #[get("/logout")]

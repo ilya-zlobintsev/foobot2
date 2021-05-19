@@ -5,7 +5,7 @@ mod profile;
 mod template_context;
 
 use reqwest::Client;
-use rocket::{catchers, get, http::CookieJar, routes, State};
+use rocket::{State, catchers, get, http::CookieJar, response::content::Html, routes};
 use rocket_contrib::{serve::StaticFiles, templates::Template};
 use tokio::task::{self, JoinHandle};
 
@@ -14,14 +14,14 @@ use template_context::*;
 use crate::{command_handler::CommandHandler, database::Database};
 
 #[get("/")]
-async fn index(db: &State<Database>, jar: &CookieJar<'_>) -> Template {
-    Template::render(
+async fn index(db: &State<Database>, jar: &CookieJar<'_>) -> Html<Template> {
+    Html(Template::render(
         "index",
         &IndexContext {
             parent_context: LayoutContext::new(db, jar),
             channel_amount: db.get_channels_amount().expect("Failed to get channels"),
         },
-    )
+    ))
 }
 
 pub async fn run(command_handler: CommandHandler) -> JoinHandle<()> {
