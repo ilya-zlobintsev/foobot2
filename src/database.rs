@@ -269,6 +269,16 @@ impl Database {
         Ok(query.load(&conn)?.into_iter().next())
     }
 
+    pub fn get_user_by_id(&self, user_id: u64) -> Result<Option<User>, diesel::result::Error> {
+        let conn = self.conn_pool.get().unwrap();
+
+        Ok(users::table
+            .filter(users::id.eq_all(user_id))
+            .load(&conn)?
+            .into_iter()
+            .next())
+    }
+
     pub fn get_or_create_user(
         &self,
         user_identifier: UserIdentifier,
@@ -350,6 +360,19 @@ impl Database {
                 .values(user_data)
                 .execute(&conn),
         }?;
+
+        Ok(())
+    }
+
+    pub fn remove_user_data(&self, user_id: u64, data: &str) -> Result<(), diesel::result::Error> {
+        let conn = self.conn_pool.get().unwrap();
+
+        diesel::delete(
+            user_data::table
+                .filter(user_data::user_id.eq_all(user_id))
+                .filter(user_data::name.eq_all(data)),
+        )
+        .execute(&conn)?;
 
         Ok(())
     }

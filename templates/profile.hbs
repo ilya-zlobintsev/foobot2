@@ -1,0 +1,54 @@
+{{#*inline "page"}}
+
+<style>
+    section {
+        font-size: 22px;
+        padding: 20px;
+    }
+
+    h1 {
+        text-align: center;
+    }
+
+    th, td {
+        padding: 5px;
+    }
+
+    th {
+        text-align: right;
+    }
+</style>
+
+<section>
+    <table>
+        <tr>
+            <th>Name:</th>
+            <td>{{ parent_context.auth_info.username }}</td>
+        </tr>
+        <tr>
+            <th>Foobot ID:</th>
+            <td>{{ user.id }}</td>
+        </tr>
+        <tr>
+            <th>Twitch ID:</th>
+            <td>{{ user.twitch_id }}</td>
+        </tr>
+        <tr>
+            <th>Discord ID:</th>
+            <td>{{ user.discord_id }}</td>
+        </tr>
+        <tr>
+            <th>Spotify:</th>
+            <td>
+                {{ #if spotify_connected }}
+                Connected (<a href="/authenticate/spotify/disconnect">Disconnect</a>)
+                {{ else }}
+                <a href="/authenticate/spotify">Connect</a>
+                {{ /if }}
+            </td>
+        </tr>
+    </table>
+</section>
+
+{{/inline}}
+{{~>(parent_context.name)~}}

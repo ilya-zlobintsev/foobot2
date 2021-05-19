@@ -114,7 +114,7 @@ pub async fn twitch_redirect(
 
     jar.add_private(cookie);
 
-    Redirect::found("/")
+    Redirect::found("/profile")
 }
 
 #[get("/discord")]
@@ -193,7 +193,7 @@ pub async fn discord_redirect(
 
     jar.add_private(cookie);
 
-    Redirect::found("/")
+    Redirect::found("/profile")
 }
 
 #[get("/spotify")]
@@ -251,7 +251,20 @@ pub async fn spotify_redirect(code: &str, db: &State<Database>, jar: &CookieJar<
             )
             .expect("DB Error");
 
-            Redirect::to("/")
+            Redirect::to("/profile")
+        }
+        None => Redirect::to("/authenticate"),
+    }
+}
+
+#[get("/spotify/disconnect")]
+pub fn disconnect_spotify(jar: &CookieJar<'_>, db: &State<Database>) -> Redirect {
+    match AuthInfo::new(db, jar) {
+        Some(auth_info) => {
+            db.remove_user_data(auth_info.user_id, "spotify_access_token").expect("DB Error");
+            db.remove_user_data(auth_info.user_id, "spotify_refresh_token").expect("DB Error");
+            
+            Redirect::to("/profile")
         }
         None => Redirect::to("/authenticate"),
     }
@@ -277,10 +290,10 @@ fn create_user_session(
 #[derive(serde::Deserialize)]
 struct TwitchAuthenticationResponse {
     pub access_token: String,
-    pub refresh_token: String,
-    pub scope: Vec<String>,
-    pub expires_in: i64,
-    pub token_type: String,
+    pub _refresh_token: String,
+    pub _scope: Vec<String>,
+    pub _expires_in: i64,
+    pub _token_type: String,
 }
 
 #[derive(serde::Deserialize)]

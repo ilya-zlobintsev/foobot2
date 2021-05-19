@@ -1,10 +1,7 @@
 use rocket::http::CookieJar;
 use serde::Serialize;
 
-use crate::database::{
-    models::{Channel, Command},
-    Database,
-};
+use crate::database::{Database, models::{Channel, Command, User}};
 
 #[derive(Serialize)]
 pub struct IndexContext {
@@ -31,6 +28,13 @@ pub struct AuthenticateContext {
 }
 
 #[derive(Serialize)]
+pub struct ProfileContext {
+    pub user: User,
+    pub spotify_connected: bool,
+    pub parent_context: LayoutContext,
+}
+
+#[derive(Serialize)]
 pub struct LayoutContext {
     pub name: &'static str,
     pub auth_info: Option<AuthInfo>,
@@ -38,9 +42,13 @@ pub struct LayoutContext {
 
 impl LayoutContext {
     pub fn new(db: &Database, cookie_jar: &CookieJar) -> Self {
+        Self::new_with_auth(AuthInfo::new(db, cookie_jar))
+    }
+
+    pub fn new_with_auth(auth_info: Option<AuthInfo>) -> Self {
         Self {
             name: "layout",
-            auth_info: AuthInfo::new(db, cookie_jar),
+            auth_info,
         }
     }
 }

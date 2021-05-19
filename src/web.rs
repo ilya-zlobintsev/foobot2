@@ -1,6 +1,7 @@
 mod authenticate;
 mod channel;
 mod errors;
+mod profile;
 mod template_context;
 
 use reqwest::Client;
@@ -41,9 +42,11 @@ pub async fn run(command_handler: CommandHandler) -> JoinHandle<()> {
                 authenticate::discord_redirect,
                 authenticate::authenticate_spotify,
                 authenticate::spotify_redirect,
+                authenticate::disconnect_spotify,
                 authenticate::logout,
             ],
         )
+        .mount("/profile", routes![profile::profile])
         .register("/", catchers![errors::not_found])
         .register("/channels", catchers![channel::not_found])
         .manage(Client::new())
