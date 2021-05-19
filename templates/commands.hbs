@@ -2,7 +2,7 @@
 
 <style>
     table {
-        width: 60%;
+        width: 70%;
     }
 
     h1 {
@@ -19,10 +19,12 @@
     <table border=1>
         <col style="width:15%">
         <col style="width:60%">
+        <col style="width:5%">
         <col style="width:20%">
         <thead>
             <th>Name</th>
             <th>Action</th>
+            <th>CD</th>
             <th>Permissions</th>
         </thead>
         <tbody>
@@ -30,6 +32,7 @@
             <tr>
                 <td>{{ this.name }}</td>
                 <td>{{ this.action }}</td>
+                <td>{{ this.cooldown }}s</td>
                 <td>{{ this.permissions }}</td>
             </tr>
             {{/each}}

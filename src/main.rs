@@ -51,9 +51,7 @@ async fn main() {
             channels
                 .iter()
                 .filter_map(|channel| {
-                    if channel.platform
-                        == ChannelIdentifier::TwitchChannelName("").get_platform_name()
-                    {
+                    if channel.platform == "twitch" {
                         Some(channel.channel.clone())
                     } else {
                         None

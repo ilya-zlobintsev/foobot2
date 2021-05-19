@@ -1,0 +1,1 @@
+ALTER TABLE commands ADD cooldown BIGINT UNSIGNED

@@ -6,8 +6,8 @@ pub mod twitch_api;
 use core::fmt;
 use std::{
     env::{self, VarError},
-    sync::Arc,
-    time::Instant,
+    sync::{Arc, RwLock},
+    time::{Duration, Instant},
 };
 
 use crate::{
@@ -17,6 +17,7 @@ use crate::{
 
 use inquiry_helper::*;
 use rocket_contrib::templates::handlebars::{Handlebars, TemplateRenderError};
+use tokio::task;
 use twitch_api::TwitchApi;
 
 #[derive(Clone)]
@@ -25,9 +26,10 @@ pub struct CommandHandler {
     pub twitch_api: Option<TwitchApi>,
     startup_time: Instant,
     template_registry: Arc<Handlebars<'static>>,
+    cooldowns: Arc<RwLock<Vec<(u64, String)>>>, // User id and command
 }
 
-impl<'a> CommandHandler {
+impl CommandHandler {
     pub async fn init(db: Database) -> Self {
         let twitch_api = match env::var("TWITCH_OAUTH") {
             Ok(oauth) => match TwitchApi::init(&oauth).await {
@@ -49,11 +51,14 @@ impl<'a> CommandHandler {
 
         template_registry.set_strict_mode(true);
 
+        let cooldowns = Arc::new(RwLock::new(Vec::new()));
+
         Self {
             db,
             twitch_api,
             startup_time,
             template_registry: Arc::new(template_registry),
+            cooldowns,
         }
     }
 
@@ -101,96 +106,140 @@ impl<'a> CommandHandler {
 
         let user = self.db.get_or_create_user(user_identifier)?;
 
-        match command {
-            "ping" => Ok(Some(self.ping())),
-            "whoami" | "id" => Ok(Some(format!(
-                "{:?}, permissions: {:?}",
-                user,
-                execution_context.get_permissions().await
-            ))),
-            "cmd" | "command" | "commands" => {
-                self.edit_cmds(command, arguments, execution_context).await
-            }
-            // Old commands for convenience
-            "addcmd" | "cmdadd" => {
-                self.edit_cmds(
-                    "command",
-                    {
-                        let mut arguments = arguments;
-                        arguments.insert(0, "add");
-                        arguments
-                    },
-                    execution_context,
-                )
-                .await
-            }
-            "delcmd" | "cmddel" => {
-                self.edit_cmds(
-                    "command",
-                    {
-                        let mut arguments = arguments;
-                        arguments.insert(0, "remove");
-                        arguments
-                    },
-                    execution_context,
-                )
-                .await
-            }
-            "showcmd" | "checkcmd" => {
-                self.edit_cmds(
-                    "command",
-                    {
-                        let mut arguments = arguments;
-                        arguments.insert(0, "show");
-                        arguments
-                    },
-                    execution_context,
-                )
-                .await
-            }
-            "debug" | "check" | "test" => {
-                let action = arguments.join(" ");
-
-                self.execute_command_action(&action, user)
-            }
-            "merge" => {
-                let identifier_string = arguments.first().ok_or_else(|| {
-                    CommandError::MissingArgument(
-                        "user identifier: must be in the form of `platform:id`".to_string(),
+        if !self
+            .cooldowns
+            .read()
+            .unwrap()
+            .contains(&(user.id, command.to_string()))
+        {
+            let result = match command {
+                "ping" => (Some(self.ping()), Some(5)),
+                "whoami" | "id" => (
+                    Some(format!(
+                        "{:?}, permissions: {:?}",
+                        user,
+                        execution_context.get_permissions().await
+                    )),
+                    Some(5),
+                ),
+                "cmd" | "command" | "commands" => (
+                    self.edit_cmds(command, arguments, execution_context)
+                        .await?,
+                    Some(1),
+                ),
+                // Old commands for convenience
+                "addcmd" | "cmdadd" => (
+                    self.edit_cmds(
+                        "command",
+                        {
+                            let mut arguments = arguments;
+                            arguments.insert(0, "add");
+                            arguments
+                        },
+                        execution_context,
                     )
-                })?;
+                    .await?,
+                    Some(1),
+                ),
+                "delcmd" | "cmddel" => (
+                    self.edit_cmds(
+                        "command",
+                        {
+                            let mut arguments = arguments;
+                            arguments.insert(0, "remove");
+                            arguments
+                        },
+                        execution_context,
+                    )
+                    .await?,
+                    Some(1),
+                ),
+                "showcmd" | "checkcmd" => (
+                    self.edit_cmds(
+                        "command",
+                        {
+                            let mut arguments = arguments;
+                            arguments.insert(0, "show");
+                            arguments
+                        },
+                        execution_context,
+                    )
+                    .await?,
+                    Some(1),
+                ),
+                "debug" | "check" | "test" => {
+                    let action = arguments.join(" ");
 
-                let other_identifier =
-                    UserIdentifier::from_string(identifier_string, self.twitch_api.as_ref())
-                        .await?;
+                    (self.execute_command_action(&action, &user)?, None)
+                }
+                "merge" => {
+                    let identifier_string = arguments.first().ok_or_else(|| {
+                        CommandError::MissingArgument(
+                            "user identifier: must be in the form of `platform:id`".to_string(),
+                        )
+                    })?;
 
-                let other = self
+                    let other_identifier =
+                        UserIdentifier::from_string(identifier_string, self.twitch_api.as_ref())
+                            .await?;
+
+                    let other = self
+                        .db
+                        .get_user(&other_identifier)?
+                        .ok_or_else(|| UserIdentifierError::InvalidUser)?;
+
+                    self.db.merge_users(user.clone(), other)?;
+
+                    (Some("sucessfully merged users".to_string()), None)
+                }
+                _ => match self
                     .db
-                    .get_user(&other_identifier)?
-                    .ok_or_else(|| UserIdentifierError::InvalidUser)?;
+                    .get_command(&execution_context.get_channel(), command)?
+                {
+                    Some(cmd) => (
+                        self.execute_command_action(&cmd.action, &user)?,
+                        cmd.cooldown,
+                    ),
+                    None => (None, None),
+                },
+            };
 
-                self.db.merge_users(user, other)?;
-
-                Ok(Some("sucessfully merged users".to_string()))
+            if let Some(cooldown) = result.1 {
+                self.start_cooldown(user.id, command.to_string(), cooldown)
+                    .await;
             }
-            _ => match self
-                .db
-                .get_command(&execution_context.get_channel(), command)?
-            {
-                Some(cmd) => self.execute_command_action(&cmd.action, user),
-                None => Ok(None),
-            },
+
+            Ok(result.0)
+        } else {
+            tracing::info!("Ignoring command, on cooldown");
+            Ok(None)
         }
+    }
+
+    async fn start_cooldown(&self, user_id: u64, command: String, cooldown: u64) {
+        let cooldowns = self.cooldowns.clone();
+        task::spawn(async move {
+            {
+                let mut cooldowns = cooldowns.write().unwrap();
+                cooldowns.push((user_id, command.clone()));
+            }
+            tokio::time::sleep(Duration::from_secs(cooldown)).await;
+            {
+                let mut cooldowns = cooldowns.write().unwrap();
+                tracing::debug!("{:?}", cooldowns);
+                cooldowns.retain(|(id, cmd)| id != &user_id && cmd != &command)
+            }
+        });
     }
 
     fn execute_command_action(
         &self,
         action: &str,
-        user: User,
+        user: &User,
     ) -> Result<Option<String>, CommandError> {
         tracing::info!("Parsing action {}", action);
 
-        let inquiry_context = InquiryContext { user };
+        let inquiry_context = InquiryContext { user: user.clone() };
 
         let response = self
             .template_registry

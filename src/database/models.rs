@@ -1,7 +1,7 @@
 use super::schema::*;
 use serde::{Deserialize, Serialize};
 
-#[derive(Queryable, Identifiable, AsChangeset, Debug, Serialize, Deserialize)]
+#[derive(Queryable, Identifiable, AsChangeset, Debug, Serialize, Deserialize, Clone)]
 pub struct User {
     pub id: u64,
     pub twitch_id: Option<String>,
@@ -47,6 +47,7 @@ pub struct Command {
     pub action: String,
     pub permissions: Option<String>,
     pub channel_id: u64,
+    pub cooldown: Option<u64>,
 }
 
 #[derive(Insertable, Debug, PartialEq, Eq)]
