@@ -290,10 +290,6 @@ fn create_user_session(
 #[derive(serde::Deserialize)]
 struct TwitchAuthenticationResponse {
     pub access_token: String,
-    pub _refresh_token: String,
-    pub _scope: Vec<String>,
-    pub _expires_in: i64,
-    pub _token_type: String,
 }
 
 #[derive(serde::Deserialize)]
