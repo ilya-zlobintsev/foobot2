@@ -1,7 +1,4 @@
-use reqwest::{
-    header::{self, HeaderMap},
-    Client,
-};
+use reqwest::{header::HeaderMap, Client};
 use serde::Deserialize;
 
 const API_ENDPOINT: &'static str = "https://discord.com/api";

@@ -10,16 +10,17 @@ use rocket::{
 use rocket_contrib::templates::Template;
 
 use crate::{
-    command_handler::{discord_api::DiscordApi, twitch_api::TwitchApi},
-    database::Database,
+    command_handler::{discord_api::DiscordApi, spotify_api::SpotifyApi, twitch_api::TwitchApi},
+    database::{models::UserData, Database},
     platform::UserIdentifier,
     web::template_context::LayoutContext,
 };
 
-use super::template_context::AuthenticateContext;
+use super::template_context::{AuthInfo, AuthenticateContext};
 
 const TWITCH_SCOPES: &[&'static str] = &["user:read:email"];
 const DISCORD_SCOPES: &'static str = "identify";
+const SPOTIFY_SCOPES: &[&'static str] = &["user-read-playback-state", "user-read-recently-played"];
 
 #[get("/")]
 pub async fn index(db: &State<Database>, jar: &CookieJar<'_>) -> Template {
@@ -36,7 +37,7 @@ pub async fn logout(jar: &CookieJar<'_>) -> Redirect {
     if let Some(session_cookie) = jar.get_private("session_id") {
         jar.remove_private(session_cookie);
     }
-    
+
     Redirect::to("/")
 }
 
@@ -193,6 +194,67 @@ pub async fn discord_redirect(
     jar.add_private(cookie);
 
     Redirect::found("/")
+}
+
+#[get("/spotify")]
+pub fn authenticate_spotify(db: &State<Database>, jar: &CookieJar<'_>) -> Redirect {
+    match AuthInfo::new(&db, jar) {
+        Some(_) => {
+            let client_id = env::var("SPOTIFY_CLIENT_ID").expect("SPOTIFY_CLIENT_ID missing");
+
+            let redirect_uri = format!(
+                "{}/authenticate/spotify/redirect",
+                env::var("BASE_URL").expect("BASE_URL missing")
+            );
+            Redirect::to(format!("https://accounts.spotify.com/authorize?client_id={}&response_type=code&redirect_uri={}&scope={}", client_id, redirect_uri, SPOTIFY_SCOPES.join("%20")))
+        }
+        None => Redirect::to("/authenticate"),
+    }
+}
+
+#[get("/spotify/redirect?<code>")]
+pub async fn spotify_redirect(code: &str, db: &State<Database>, jar: &CookieJar<'_>) -> Redirect {
+    match AuthInfo::new(&db, jar) {
+        Some(auth_info) => {
+            let client_id = env::var("SPOTIFY_CLIENT_ID").expect("SPOTIFY_CLIENT_ID missing");
+            let client_secret =
+                env::var("SPOTIFY_CLIENT_SECRET").expect("SPOTIFY_CLIENT_SECRET missing");
+
+            let redirect_uri = format!(
+                "{}/authenticate/spotify/redirect",
+                env::var("BASE_URL").expect("BASE_URL missing")
+            );
+
+            let auth = SpotifyApi::get_tokens(code, &client_id, &client_secret, &redirect_uri)
+                .await
+                .expect("Spotify API Error");
+
+            db.set_user_data(
+                &UserData {
+                    name: "spotify_access_token".to_string(),
+                    value: auth.access_token,
+                    public: false,
+                    user_id: auth_info.user_id,
+                },
+                true,
+            )
+            .expect("DB Error");
+
+            db.set_user_data(
+                &UserData {
+                    name: "spotify_refresh_token".to_string(),
+                    value: auth.refresh_token,
+                    public: false,
+                    user_id: auth_info.user_id,
+                },
+                true,
+            )
+            .expect("DB Error");
+
+            Redirect::to("/")
+        }
+        None => Redirect::to("/authenticate"),
+    }
 }
 
 fn create_user_session(

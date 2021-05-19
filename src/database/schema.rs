@@ -24,7 +24,7 @@ table! {
 }
 
 table! {
-    user_data (name, value) {
+    user_data (user_id, name) {
         name -> Varchar,
         value -> Varchar,
         public -> Bool,
@@ -44,4 +44,10 @@ joinable!(commands -> channels (channel_id));
 joinable!(user_data -> users (user_id));
 joinable!(web_sessions -> users (user_id));
 
-allow_tables_to_appear_in_same_query!(channels, commands, users, user_data, web_sessions,);
+allow_tables_to_appear_in_same_query!(
+    channels,
+    commands,
+    users,
+    user_data,
+    web_sessions,
+);

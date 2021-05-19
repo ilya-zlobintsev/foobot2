@@ -12,11 +12,11 @@ impl User {
     pub fn merge(&mut self, other: User) {
         if self.twitch_id == None && other.twitch_id != None {
             self.twitch_id = other.twitch_id;
-        } 
+        }
 
         if self.discord_id == None && other.discord_id != None {
             self.discord_id = other.discord_id;
-        } 
+        }
     }
 }
 
@@ -58,12 +58,13 @@ pub struct NewCommand<'a> {
     pub channel_id: u64,
 }
 
-#[derive(Queryable, Debug, PartialEq, Eq)]
+#[derive(Queryable, Insertable, Debug, PartialEq, Eq)]
+#[table_name = "user_data"]
 pub struct UserData {
     pub name: String,
     pub value: String,
     pub public: bool,
-    user_id: u64,
+    pub user_id: u64,
 }
 
 #[derive(Queryable, Insertable, Clone)]

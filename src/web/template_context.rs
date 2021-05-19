@@ -33,22 +33,38 @@ pub struct AuthenticateContext {
 #[derive(Serialize)]
 pub struct LayoutContext {
     pub name: &'static str,
-    pub username: Option<String>,
+    pub auth_info: Option<AuthInfo>,
 }
 
 impl LayoutContext {
     pub fn new(db: &Database, cookie_jar: &CookieJar) -> Self {
-        let username = match cookie_jar.get_private("session_id") {
-            Some(session_cookie) => match db.get_web_session(session_cookie.value()).expect("DB Error") {
-                Some(session) => Some(session.username.clone()),
+        Self {
+            name: "layout",
+            auth_info: AuthInfo::new(db, cookie_jar),
+        }
+    }
+}
+
+#[derive(Serialize)]
+pub struct AuthInfo {
+    pub username: String,
+    pub user_id: u64,
+}
+
+impl AuthInfo {
+    pub fn new(db: &Database, cookie_jar: &CookieJar) -> Option<Self> {
+        match cookie_jar.get_private("session_id") {
+            Some(session_cookie) => match db
+                .get_web_session(session_cookie.value())
+                .expect("DB Error")
+            {
+                Some(session) => Some(AuthInfo {
+                    username: session.username,
+                    user_id: session.user_id,
+                }),
                 None => None, // Invalid session ID
             },
             None => None,
-        };
-
-        Self {
-            name: "layout",
-            username,
         }
     }
 }

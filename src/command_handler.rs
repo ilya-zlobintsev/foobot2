@@ -16,7 +16,6 @@ use crate::{
 };
 
 use inquiry_helper::*;
-use rocket::form::Context;
 use rocket_contrib::templates::handlebars::{Handlebars, TemplateRenderError};
 use twitch_api::TwitchApi;
 
@@ -164,11 +163,14 @@ impl<'a> CommandHandler {
                 let other_identifier =
                     UserIdentifier::from_string(identifier_string, self.twitch_api.as_ref())
                         .await?;
-                
-                let other = self.db.get_user(&other_identifier)?.ok_or_else(|| UserIdentifierError::InvalidUser)?;
-                
+
+                let other = self
+                    .db
+                    .get_user(&other_identifier)?
+                    .ok_or_else(|| UserIdentifierError::InvalidUser)?;
+
                 self.db.merge_users(user, other)?;
-                
+
                 Ok(Some("sucessfully merged users".to_string()))
             }
             _ => match self
@@ -365,7 +367,9 @@ impl From<UserIdentifierError> for CommandError {
                 "separator `:`! Must be in the form of `platform:user`".to_string(),
             ),
             UserIdentifierError::InvalidPlatform => Self::InvalidArgument("platform".to_string()),
-            UserIdentifierError::InvalidUser => Self::InvalidArgument("cannot find user".to_string()),
+            UserIdentifierError::InvalidUser => {
+                Self::InvalidArgument("cannot find user".to_string())
+            }
         }
     }
 }

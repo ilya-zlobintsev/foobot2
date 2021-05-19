@@ -96,7 +96,6 @@ impl TwitchApi {
         self.headers.get("Client-Id").unwrap().to_str().unwrap()
     }
 
-    // TODO: merge into get_users that accepts both ids and logins
     pub async fn get_users(
         &self,
         logins: Option<&Vec<&str>>,
@@ -141,9 +140,7 @@ impl TwitchApi {
         channel_login: &str,
         duration: u8,
     ) -> Result<String, reqwest::Error> {
-        let users = self
-            .get_users(Some(&vec![channel_login]), None)
-            .await?;
+        let users = self.get_users(Some(&vec![channel_login]), None).await?;
         let channel_id = &users.data.first().unwrap().id;
 
         let mut headers = HeaderMap::new();

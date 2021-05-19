@@ -335,18 +335,30 @@ impl Database {
             .next())
     }
 
+    pub fn set_user_data(
+        &self,
+        user_data: &UserData,
+        overwrite: bool,
+    ) -> Result<(), diesel::result::Error> {
+        let conn = self.conn_pool.get().unwrap();
+
+        match overwrite {
+            true => diesel::replace_into(user_data::table)
+                .values(user_data)
+                .execute(&conn),
+            false => diesel::insert_into(user_data::table)
+                .values(user_data)
+                .execute(&conn),
+        }?;
+
+        Ok(())
+    }
+
     pub fn get_spotify_access_token(
         &self,
         user_id: u64,
     ) -> Result<Option<String>, diesel::result::Error> {
         self.get_user_data_value(user_id, "spotify_access_token")
-    }
-
-    pub fn get_spotify_refresh_token(
-        &self,
-        user_id: u64,
-    ) -> Result<Option<String>, diesel::result::Error> {
-        self.get_user_data_value(user_id, "spotify_refresh_token")
     }
 
     pub fn get_web_session(

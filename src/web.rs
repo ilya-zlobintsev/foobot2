@@ -38,6 +38,8 @@ pub async fn run(command_handler: CommandHandler) -> JoinHandle<()> {
                 authenticate::twitch_redirect,
                 authenticate::authenticate_discord,
                 authenticate::discord_redirect,
+                authenticate::authenticate_spotify,
+                authenticate::spotify_redirect,
                 authenticate::logout,
             ],
         )

@@ -3,7 +3,7 @@ pub mod twitch;
 
 use std::{
     env::{self, VarError},
-    fmt::{self, Error},
+    fmt,
 };
 
 use crate::command_handler::{twitch_api::TwitchApi, CommandHandler};

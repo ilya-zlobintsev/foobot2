@@ -102,8 +102,8 @@
             <li><a href="/">Home</a></lia>
             <li><a href="/channels">Channels</a></lia>
         </ul>
-        {{ #if parent_context.username }}
-        <p class="user">Logged in as <b>{{ parent_context.username }}</b> </p>
+        {{ #if parent_context.auth_info }}
+        <p class="user">Logged in as <b>{{ parent_context.auth_info.username }}</b> </p>
         <a class="user" href="/authenticate/logout">Log out</a>
         {{ else }}
         <a class="user" href="/authenticate">Log in</a>
