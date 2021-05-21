@@ -1,3 +1,1 @@
-Icons licensed under Creative Commons 4 attribution
-
-logout icon by Eva Icons
+Icons licensed under [Creative Commons 4 attribution](https://fontawesome.com/license)

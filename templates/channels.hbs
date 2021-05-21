@@ -1,46 +1,58 @@
 {{#*inline "page"}}
 
 <style>
-    table {
-        width: 70%;
+    section {
+        width: 80%;
+        margin-left: auto;
+        margin-right: auto;
+        font-family: sans-serif;
     }
 
-    h1 {
+    ul {
+        columns: 2;
+    }
+
+    .channel {
+        border: 2px solid #3a375a;
+        border-radius: 5px;
+        padding: 20px;
+        margin: 30px;
+        width: 40vw;
+    }
+
+    .channel a {
+        text-decoration: none;
+
+        background-color: blue;
+        color: white;
+        display: flex;
+        border-radius: 5px;
         text-align: center;
+        padding: 10px;
+        padding-left: 20px;
     }
 
-    td {
-        padding: 8px;
+    .channel b {
+        margin-left: 10px;
+        margin-right: 10px;
+        margin-top: auto;
+        margin-bottom: auto;
     }
 </style>
 
 <section>
-    <h1>Channel list</h1>
-    <div style="overflow-x:auto">
-        <table border=1>
-            <col style="width:5%">
-            <col style="width:20%">
-            <col style="width:50%">
-            <col style="width:25%">
-            <thead>
-                <th>ID</th>
-                <th>Platform</th>
-                <th>Name/Channel ID</th>
-                <th>Command list</th>
-            </thead>
-            <tbody>
-                {{#each channels}}
-                <tr>
-                    <td>{{ this.id }}</td>
-                    <td>{{ this.platform }}</td>
-                    <td>{{ this.channel }}</td>
-                    <td> <a href="/channels/{{ this.id }}/commands">Here</a> </td>
-                </tr>
-                {{/each}}
-            </tbody>
-
-        </table>
-    </div>
+    <ul>
+        {{#each channels}}
+        <div class="channel">
+            <h1>Platform: {{ this.platform }}</h1>
+            <p>Name/Channel ID: {{ this.channel }}</p>
+            <p>ID: {{ this.id }}</p>
+            <a href="/channels/{{this.id}}/commands">
+                <img src="/static/list-solid.svg" height="24" width="24" /><b>Command list</b>
+            </a>
+        </div>
+        {{/each}}
+    </ul>
 </section>
 
 {{/inline}}

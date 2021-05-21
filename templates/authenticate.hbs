@@ -15,12 +15,27 @@
         display: block;
         text-decoration: none;
     }
-    
+
     .platformlist {
-        width: 70%;
+        justify-content: center;
         margin-left: auto;
         margin-right: auto;
         overflow-x: auto;
+        display: flex;
+
+    }
+
+    .platformlist a {
+        border-radius: 5px;
+        display: flex;
+    }
+
+    .platformlist b {
+        font-family: sans-serif;
+        margin-top: auto;
+        margin-bottom: auto;
+        margin-left: 10px;
+        margin-right: 10px;
     }
 </style>
 
@@ -28,8 +43,14 @@
     <div class="authentication">
         <h1>Choose a platform to authenticate with:</h1>
         <div class="platformlist">
-            <a href="/authenticate/twitch" style="background-color: rgb(92, 51, 155);"><b>Twitch</b></a>
-            <a href="/authenticate/discord" style="background-color: rgb(115, 138, 219);"><b>Discord</b></a>
+            <a href="/authenticate/twitch" style="background-color: #6441a5;">
+                <img src="/static/twitch-brands.svg" alt="Twitch icon" height="32" width="32" /> <b>Login with
+                    Twitch</b>
+            </a>
+            <a href="/authenticate/discord" style="background-color: #5567e2;">
+                <img src="/static/discord-brands.svg" alt="Discord icon" height="32" width="32" /> <b>Login with
+                    Discord</b>
+            </a>
         </div>
     </div>
 </section>

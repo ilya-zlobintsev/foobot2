@@ -27,6 +27,7 @@ async fn main() {
 
     tracing_subscriber::fmt::init();
 
+
     let db = Database::connect(env::var("DATABASE_URL").expect("DATABASE_URL missing"))
         .expect("Failed to connect to DB");
 
@@ -43,7 +44,7 @@ async fn main() {
     handles.push(web_handle);
 
     let command_handler = command_handler.clone();
-
+    
     match Twitch::init(command_handler.clone()).await {
         Ok(twitch) => {
             let handle = twitch.clone().run().await;

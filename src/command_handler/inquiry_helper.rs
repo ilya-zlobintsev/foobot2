@@ -1,6 +1,6 @@
 use std::thread;
 
-use rocket_contrib::templates::handlebars::{
+use handlebars::{
     Context, Handlebars, Helper, HelperDef, RenderContext, RenderError, ScopedJson,
 };
 use serde::{Deserialize, Serialize};

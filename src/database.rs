@@ -14,9 +14,9 @@ use crate::{
     database::schema::*,
     platform::{ChannelIdentifier, UserIdentifier},
 };
+use diesel::mysql::MysqlConnection;
 use diesel::r2d2::{self, ConnectionManager, Pool};
 use diesel::ConnectionError;
-use diesel::{mysql::MysqlConnection, Insertable};
 use diesel::{EqAll, QueryDsl};
 use diesel::{ExpressionMethods, RunQueryDsl};
 use passwords::PasswordGenerator;

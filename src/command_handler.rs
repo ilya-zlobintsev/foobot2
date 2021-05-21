@@ -16,7 +16,7 @@ use crate::{
 };
 
 use inquiry_helper::*;
-use rocket_contrib::templates::handlebars::{Handlebars, TemplateRenderError};
+use handlebars::{Handlebars, HelperDef, template};
 use tokio::task;
 use twitch_api::TwitchApi;
 
@@ -366,7 +366,7 @@ pub enum CommandError {
     InvalidArgument(String),
     NoPermissions,
     DatabaseError(diesel::result::Error),
-    TemplateError(TemplateRenderError),
+    TemplateError(handlebars::RenderError),
     ConfigurationError(VarError),
 }
 
@@ -397,8 +397,8 @@ impl From<diesel::result::Error> for CommandError {
     }
 }
 
-impl From<TemplateRenderError> for CommandError {
-    fn from(e: TemplateRenderError) -> Self {
+impl From<handlebars::RenderError> for CommandError {
+    fn from(e: handlebars::RenderError) -> Self {
         Self::TemplateError(e)
     }
 }

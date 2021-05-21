@@ -19,6 +19,7 @@ use super::{ChatPlatform, UserIdentifier};
 pub struct Twitch {
     client: Arc<RwLock<Option<TwitchIRCClient<SecureTCPTransport, StaticLoginCredentials>>>>,
     command_handler: CommandHandler,
+    command_prefix: String,
     credentials: StaticLoginCredentials,
 }
 
@@ -28,6 +29,46 @@ impl Twitch {
         let client = client.as_ref().unwrap();
 
         client.join(channel);
+    }
+
+    async fn handle_privmsg(&self, mut pm: PrivmsgMessage) {
+        tracing::debug!("{:?}", pm);
+
+        if let Some(message_text) = pm.message_text.strip_prefix(&self.command_prefix) {
+            pm.message_text = message_text.to_string();
+
+            let context = TwitchExecutionContext {
+                channel_name: pm.channel_login.clone(),
+                permissions: {
+                    if pm.badges.iter().any(|badge| badge.name == "moderator")
+                        | pm.badges.iter().any(|badge| badge.name == "broadcaster")
+                    {
+                        Permissions::ChannelMod
+                    } else {
+                        Permissions::Default
+                    }
+                },
+            };
+
+            let client = self.client.read().unwrap().as_ref().unwrap().clone();
+
+            let command_handler = self.command_handler.clone();
+
+            task::spawn(async move {
+                let response = command_handler
+                    .handle_command_message(&pm, context, pm.get_user_identifier())
+                    .await;
+
+                if let Some(response) = response {
+                    tracing::info!("Replying with {}", response);
+
+                    client
+                        .reply_to_privmsg(response, &pm)
+                        .await
+                        .expect("Failed to reply");
+                }
+            });
+        }
     }
 }
 
@@ -51,9 +92,12 @@ impl ChatPlatform for Twitch {
             }
         };
 
+        let command_prefix = Self::get_prefix();
+
         Ok(Box::new(Self {
             client: Arc::new(RwLock::new(None)),
             command_handler,
+            command_prefix,
             credentials,
         }))
     }
@@ -69,48 +113,9 @@ impl ChatPlatform for Twitch {
         *self.client.write().unwrap() = Some(client.clone());
 
         tokio::spawn(async move {
-            let command_prefix = Self::get_prefix();
-
             while let Some(message) = incoming_messages.recv().await {
                 match message {
-                    ServerMessage::Privmsg(mut pm) => {
-                        tracing::debug!("{:?}", pm);
-
-                        if let Some(message_text) = pm.message_text.strip_prefix(&command_prefix) {
-                            pm.message_text = message_text.to_string();
-
-                            let context = TwitchExecutionContext {
-                                channel_name: pm.channel_login.clone(),
-                                permissions: {
-                                    if pm.badges.iter().any(|badge| badge.name == "moderator")
-                                        | pm.badges.iter().any(|badge| badge.name == "broadcaster")
-                                    {
-                                        Permissions::ChannelMod
-                                    } else {
-                                        Permissions::Default
-                                    }
-                                },
-                            };
-
-                            let cclient = client.clone();
-                            let command_handler = self.command_handler.clone();
-
-                            task::spawn(async move {
-                                let response = command_handler
-                                    .handle_command_message(&pm, context, pm.get_user_identifier())
-                                    .await;
-
-                                if let Some(response) = response {
-                                    tracing::info!("Replying with {}", response);
-
-                                    cclient
-                                        .reply_to_privmsg(response, &pm)
-                                        .await
-                                        .expect("Failed to reply");
-                                }
-                            });
-                        }
-                    }
+                    ServerMessage::Privmsg(pm) => self.handle_privmsg(pm).await,
                     // ServerMessage::Whisper(_) => {}
                     _ => (),
                 }

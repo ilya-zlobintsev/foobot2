@@ -2,6 +2,10 @@ use std::collections::HashMap;
 
 use reqwest::{header::HeaderMap, Client};
 use serde::{Deserialize, Serialize};
+use twitch_irc::{
+    login::StaticLoginCredentials, message::ServerMessage, ClientConfig, SecureTCPTransport,
+    TwitchIRCClient,
+};
 
 #[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -169,5 +173,54 @@ impl TwitchApi {
             .await?
             .text()
             .await?)
+    }
+
+    // This terrible abomination has to exist because twitch doesn't provide an endpoint for this that doesn't require channel auth
+    /// Returns the list of logins of channel moderators. Don't expect this to be efficient
+    pub async fn get_channel_mods(
+        &self,
+        channel_login: &str,
+    ) -> Result<Vec<String>, reqwest::Error> {
+        let oauth = self.get_oauth();
+
+        let login = Self::validate_oauth(oauth).await?.login;
+
+        let config =
+            ClientConfig::new_simple(StaticLoginCredentials::new(login, Some(oauth.to_owned())));
+
+        let (mut incoming_messages, client) =
+            TwitchIRCClient::<SecureTCPTransport, StaticLoginCredentials>::new(config);
+
+        client.join(channel_login.to_owned());
+
+        client
+            .privmsg(channel_login.to_owned(), "/mods".to_owned())
+            .await
+            .expect("Failed to send");
+
+        let mut mods = vec![channel_login.to_owned()];
+
+        while let Some(msg) = incoming_messages.recv().await {
+            match msg {
+                ServerMessage::Notice(notice) => {
+                    if let Some(mods_list) = notice
+                        .message_text
+                        .strip_prefix("The moderators of this channel are:")
+                    {
+                        mods.append(
+                            &mut mods_list
+                                .trim()
+                                .split(", ")
+                                .map(|s| s.to_string())
+                                .collect(),
+                        );
+                        break;
+                    }
+                }
+                _ => {}
+            }
+        }
+
+        Ok(mods)
     }
 }

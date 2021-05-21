@@ -5,48 +5,34 @@
 <head>
     <title>Foobot 2 </title>
     <style>
-        {{!-- * {
-            font-family: "Comic Sans MS", "Comic Sans", "Times New Roman";
-        } --}}
-        * {
-            font-family:'Times New Roman', Times, serif
-        }
-
         body {
-            background-color: rgb(33, 32, 51);
             color: white;
-        }
-
-        a:link {
-            color: rgb(153, 153, 229);
-        }
-
-        a:visited {
-            color: rgb(106, 106, 238);
+            width: 100vw;
+            height: 100vh;
+            background-color: #212033;
+            margin: 0px;
+            padding: 0px;
         }
 
         header {
-            background-color: rgb(81, 78, 124);
+            font-family: sans-serif;
+            background-color: #29273f;
             display: flex;
         }
 
         ul {
+            display: flex;
             width: 100%;
-            list-style-type: none;
-            margin: 0;
-            padding: 0;
-            overflow: hidden;
-        }
-
-        li {
-            float: left;
+            margin-top: auto;
+            margin-bottom: auto;
+            list-style: none;
+            padding-left: 20px;
         }
 
         li a {
             display: block;
-            text-align: center;
-            padding: 16px;
             text-decoration: none;
+            padding: 28px;
         }
 
         li a:link,
@@ -54,47 +40,31 @@
             color: white;
         }
 
+        li a:hover {
+            background-color: rgb(102, 98, 153);
+        }
+
         .user {
+            display: block;
+            text-decoration: none;
+
+            margin-top: 16px;
+            margin-bottom: 16px;
+            margin-left: 32px;
+            margin-right: 32px;
+
+            padding-left: 40px;
+            padding-right: 40px;
+            padding-top: 12px;
+            padding-bottom: 12px;
+
             white-space: nowrap;
             text-decoration: none;
-            margin-left: 8px;
-            margin-right: 8px;
-            margin-top: auto;
-            margin-bottom: auto;
-            display: block;
-        }
-        
-
-        .user,
-        li a {
-            font-size: 20px;
-        }
-
-        .user:link,
-        .user:visited {
+            background-color: rgb(73, 73, 230);
             color: white;
-        }
-        
-        .profile:link,
-        .profile:visited {
-            color: lightblue;
-            text-decoration: none;
+            border-radius: 5px;
         }
 
-        li a:hover,
-        .user:hover a {
-            background-color: rgb(53, 51, 85);
-        }
-
-        .logout {
-            height: 32px;
-            width: 32px;
-            display: flex;
-            margin-top: auto;
-            margin-bottom: auto;
-            margin-right: 8px;
-        }
-        
         footer {
             position: fixed;
             left: 0;
@@ -103,11 +73,9 @@
             text-align: center;
             margin-bottom: 20px;
         }
-
-        table {
-            margin-left: auto;
-            margin-right: auto;
-            border-spacing: 0px;
+        
+        footer a {
+            color: white;
         }
     </style>
 </head>
@@ -119,10 +87,11 @@
             <li><a href="/channels">Channels</a></lia>
         </ul>
         {{ #if parent_context.auth_info }}
-        <p class="user">Logged in as <a class="profile" href="/profile"><b>{{ parent_context.auth_info.username }}</b></a></p>
-        <a class="logout" href="/authenticate/logout"><img src="/static/logout.png" alt="Log out"/></a>
+        <p class="user">Logged in as <a class="profile" href="/profile"><b>{{ parent_context.auth_info.username
+                    }}</b></a></p>
+        <a class="logout" href="/authenticate/logout"><img src="/static/logout.png" alt="Log out" /></a>
         {{ else }}
-        <a class="user" href="/authenticate">Log in</a>
+        <a class="user" href="/authenticate"><b>Login</b></a>
         {{ /if }}
     </header>
     {{~> page}}
