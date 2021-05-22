@@ -94,14 +94,14 @@ impl HelperDef for SpotifyHelper {
                 let length = playback.item.duration_ms / 1000;
                 let length = format!("{}:{:02}", length / 60, length % 60);
 
-                Ok(Some(ScopedJson::Derived(json!({
+                Ok(Some(json!({
                     "artist": playback.item.artists.iter().map(|artist| artist.name.as_str()).collect::<Vec<&str>>().join(" "),
                     "song": playback.item.name,
                     "position": format!("{}/{}", position, length),
                     "playlist": playback.context.external_urls.spotify,
-                }))))
+                }).into()))
             }
-            None => Ok(None),
+            None => Ok(Some(json!(null).into())),
         }
     }
 }
