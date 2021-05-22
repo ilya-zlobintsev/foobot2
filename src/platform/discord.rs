@@ -48,7 +48,7 @@ impl EventHandler for Handler {
 
             let context = ExecutionContext {
                 permissions: match &channel {
-                    ChannelIdentifier::DiscordGuildID(guild_id) => {
+                    ChannelIdentifier::DiscordGuildID(_) => {
                         get_permissions_in_guild_channel(
                             &ctx,
                             message.guild_id.unwrap(),

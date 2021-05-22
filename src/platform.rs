@@ -76,27 +76,35 @@ impl UserIdentifier {
         s: &str,
         twitch_api: Option<&TwitchApi>,
     ) -> Result<Self, UserIdentifierError> {
-        let (platform, user_id) = s
-            .split_once(":")
-            .ok_or_else(|| UserIdentifierError::MissingDelimiter)?;
+        tracing::info!("parsing user identifier {}", s);
 
-        match platform {
-            "twitch" => match twitch_api {
-                Some(twitch_api) => Ok(Self::TwitchID(
-                    twitch_api
-                        .get_users(Some(&vec![user_id]), None)
-                        .await
-                        .expect("Twitch API Error") // TODO
-                        .data
-                        .first()
-                        .ok_or_else(|| UserIdentifierError::InvalidUser)?
-                        .id
-                        .clone(),
-                )),
-                None => Ok(Self::TwitchID(user_id.to_owned())),
-            },
-            "discord" => Ok(Self::DiscordID(user_id.to_owned())),
-            _ => Err(UserIdentifierError::InvalidPlatform),
+        if let Some(discord_user_id) = s.strip_prefix("<@!") {
+            let discord_user_id = discord_user_id.strip_suffix(">").unwrap();
+
+            Ok(UserIdentifier::DiscordID(discord_user_id.to_owned()))
+        } else {
+            let (platform, user_id) = s
+                .split_once(":")
+                .ok_or_else(|| UserIdentifierError::MissingDelimiter)?;
+
+            match platform {
+                "twitch" => match twitch_api {
+                    Some(twitch_api) => Ok(Self::TwitchID(
+                        twitch_api
+                            .get_users(Some(&vec![user_id]), None)
+                            .await
+                            .expect("Twitch API Error") // TODO
+                            .data
+                            .first()
+                            .ok_or_else(|| UserIdentifierError::InvalidUser)?
+                            .id
+                            .clone(),
+                    )),
+                    None => Ok(Self::TwitchID(user_id.to_owned())),
+                },
+                "discord" => Ok(Self::DiscordID(user_id.to_owned())),
+                _ => Err(UserIdentifierError::InvalidPlatform),
+            }
         }
     }
 }
@@ -121,7 +129,7 @@ impl ChannelIdentifier {
             "discord_guild" => Ok(Self::DiscordGuildID(id.parse()?)),
             "discord_channel" => Ok(Self::DiscordChannelID(id.parse()?)),
             _ => Err(anyhow::anyhow!("invalid platform")),
-        } 
+        }
     }
 
     pub fn get_platform_name(&self) -> &str {
