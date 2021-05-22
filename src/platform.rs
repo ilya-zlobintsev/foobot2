@@ -25,11 +25,10 @@ pub trait ChatPlatform {
     }
 }
 
-#[async_trait]
-pub trait ExecutionContext {
-    fn get_channel(&self) -> ChannelIdentifier;
-
-    async fn get_permissions(&self) -> &Permissions;
+#[derive(Serialize, Deserialize, Clone, Debug)]
+pub struct ExecutionContext {
+    pub channel: ChannelIdentifier,
+    pub permissions: Permissions,
 }
 
 #[derive(Debug)]
@@ -109,13 +108,22 @@ pub enum UserIdentifierError {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub enum ChannelIdentifier<'a> {
-    TwitchChannelName(&'a str),
+pub enum ChannelIdentifier {
+    TwitchChannelName(String),
     DiscordGuildID(u64),
     DiscordChannelID(u64), // Mainly for DMs
 }
 
-impl<'a> ChannelIdentifier<'a> {
+impl ChannelIdentifier {
+    pub fn new(platform: &str, id: String) -> anyhow::Result<Self> {
+        match platform {
+            "twitch" => Ok(Self::TwitchChannelName(id)),
+            "discord_guild" => Ok(Self::DiscordGuildID(id.parse()?)),
+            "discord_channel" => Ok(Self::DiscordChannelID(id.parse()?)),
+            _ => Err(anyhow::anyhow!("invalid platform")),
+        } 
+    }
+
     pub fn get_platform_name(&self) -> &str {
         match self {
             ChannelIdentifier::TwitchChannelName(_) => "twitch",
@@ -133,7 +141,7 @@ impl<'a> ChannelIdentifier<'a> {
     }
 }
 
-#[derive(Debug, Eq, Serialize, Deserialize)]
+#[derive(Debug, Eq, Serialize, Deserialize, Clone)]
 pub enum Permissions {
     Default,
     ChannelMod,

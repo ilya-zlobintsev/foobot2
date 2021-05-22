@@ -37,8 +37,7 @@ impl Twitch {
         if let Some(message_text) = pm.message_text.strip_prefix(&self.command_prefix) {
             pm.message_text = message_text.to_string();
 
-            let context = TwitchExecutionContext {
-                channel_name: pm.channel_login.clone(),
+            let context = ExecutionContext {
                 permissions: {
                     if pm.badges.iter().any(|badge| badge.name == "moderator")
                         | pm.badges.iter().any(|badge| badge.name == "broadcaster")
@@ -48,6 +47,7 @@ impl Twitch {
                         Permissions::Default
                     }
                 },
+                channel: ChannelIdentifier::TwitchChannelName(pm.channel_login.clone()),
             };
 
             let client = self.client.read().unwrap().as_ref().unwrap().clone();
@@ -131,21 +131,5 @@ impl CommandMessage for PrivmsgMessage {
 
     fn get_text(&self) -> String {
         self.message_text.clone()
-    }
-}
-
-pub struct TwitchExecutionContext {
-    channel_name: String,
-    permissions: Permissions,
-}
-
-#[async_trait]
-impl ExecutionContext for TwitchExecutionContext {
-    fn get_channel(&self) -> ChannelIdentifier {
-        ChannelIdentifier::TwitchChannelName(&self.channel_name)
-    }
-
-    async fn get_permissions(&self) -> &Permissions {
-        &self.permissions
     }
 }

@@ -164,6 +164,19 @@ impl Database {
         }
     }
 
+    pub fn get_channel_by_id(
+        &self,
+        channel_id: u64,
+    ) -> Result<Option<Channel>, diesel::result::Error> {
+        let conn = self.conn_pool.get().unwrap();
+
+        Ok(channels::table
+            .filter(channels::id.eq_all(channel_id))
+            .load(&conn)?
+            .into_iter()
+            .next())
+    }
+
     pub fn get_channels_amount(&self) -> Result<i64, diesel::result::Error> {
         let conn = self.conn_pool.get().unwrap();
 

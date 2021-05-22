@@ -1,4 +1,9 @@
-use rocket::{get, http::CookieJar, response::Redirect, State};
+use rocket::{
+    get,
+    http::CookieJar,
+    response::{content::Html, Redirect},
+    State,
+};
 use rocket_contrib::templates::Template;
 
 use crate::database::Database;
@@ -6,7 +11,7 @@ use crate::database::Database;
 use super::template_context::{AuthInfo, LayoutContext, ProfileContext};
 
 #[get("/")]
-pub fn profile(db: &State<Database>, jar: &CookieJar<'_>) -> Result<Template, Redirect> {
+pub fn profile(db: &State<Database>, jar: &CookieJar<'_>) -> Result<Html<Template>, Redirect> {
     match AuthInfo::new(db, jar) {
         Some(auth_info) => {
             let user = db
@@ -22,14 +27,14 @@ pub fn profile(db: &State<Database>, jar: &CookieJar<'_>) -> Result<Template, Re
                 None => false,
             };
 
-            Ok(Template::render(
+            Ok(Html(Template::render(
                 "profile",
                 ProfileContext {
                     user,
                     spotify_connected,
                     parent_context: LayoutContext::new_with_auth(Some(auth_info)),
                 },
-            ))
+            )))
         }
         None => Err(Redirect::to("/authenticate")),
     }

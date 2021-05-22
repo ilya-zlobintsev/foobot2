@@ -1,7 +1,13 @@
-use std::collections::HashMap;
+use std::{
+    collections::HashMap,
+    sync::{Arc, RwLock},
+    time::Duration,
+};
 
 use reqwest::{header::HeaderMap, Client};
+use rocket::futures::channel::oneshot::channel;
 use serde::{Deserialize, Serialize};
+use tokio::task;
 use twitch_irc::{
     login::StaticLoginCredentials, message::ServerMessage, ClientConfig, SecureTCPTransport,
     TwitchIRCClient,
@@ -51,6 +57,7 @@ pub struct User {
 pub struct TwitchApi {
     headers: HeaderMap,
     client: Client,
+    moderators_cache: Arc<RwLock<HashMap<String, Vec<String>>>>,
 }
 
 impl TwitchApi {
@@ -69,9 +76,27 @@ impl TwitchApi {
             format!("Bearer {}", oauth).parse().unwrap(),
         );
 
+        let moderators_cache = Arc::new(RwLock::new(HashMap::new()));
+
+        {
+            let moderators_cache = moderators_cache.clone();
+            task::spawn(async move {
+                loop {
+                    tokio::time::sleep(Duration::from_secs(600)).await;
+
+                    tracing::info!("Clearing moderators cache");
+
+                    let mut moderators_cache = moderators_cache.write().expect("Failed to lock");
+
+                    moderators_cache.clear();
+                }
+            });
+        }
+
         Ok(TwitchApi {
             headers,
             client: Client::new(),
+            moderators_cache,
         })
     }
 
@@ -175,9 +200,31 @@ impl TwitchApi {
             .await?)
     }
 
+    pub async fn get_channel_mods(
+        &self,
+        channel_login: &str,
+    ) -> Result<Vec<String>, reqwest::Error> {
+        // This is not very idiomatic but i couldnt figure out how to make it work otherwise
+        {
+            let moderators_cache = self.moderators_cache.read().unwrap();
+
+            if let Some(mods) = moderators_cache.get(channel_login) {
+                return Ok(mods.clone());
+            }
+        }
+
+        let mods = self.get_channel_mods_from_irc(channel_login).await?;
+
+        let mut moderators_cache = self.moderators_cache.write().unwrap();
+
+        moderators_cache.insert(channel_login.to_string(), mods.clone());
+
+        Ok(mods)
+    }
+
     // This terrible abomination has to exist because twitch doesn't provide an endpoint for this that doesn't require channel auth
     /// Returns the list of logins of channel moderators. Don't expect this to be efficient
-    pub async fn get_channel_mods(
+    async fn get_channel_mods_from_irc(
         &self,
         channel_login: &str,
     ) -> Result<Vec<String>, reqwest::Error> {

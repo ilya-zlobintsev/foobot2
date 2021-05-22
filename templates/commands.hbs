@@ -16,6 +16,10 @@
         font-family: sans-serif;
     }
 
+    .title {
+        display: inline-flex;
+    }
+
     td,
     th {
         padding: 10px;
@@ -45,7 +49,10 @@
 </style>
 
 <section>
-    <h1>Command list for channel {{ channel }}</h1>
+    <div class="title">
+        <h1>Command list for channel {{ channel }}</h1>
+        <button id="add_command_button" type="button" disabled="true">Add command</button>
+    </div>
     <table border=1>
         <col style="width:25%">
         <col style="width:50%">
@@ -73,8 +80,8 @@
             </tr>
             {{/each}}
         </tbody>
-
     </table>
+    <script src="/static/js/commands.js" async></script>
 </section>
 
 {{/inline}}

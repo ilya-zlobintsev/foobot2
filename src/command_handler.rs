@@ -15,8 +15,9 @@ use crate::{
     platform::{ExecutionContext, Permissions, UserIdentifier, UserIdentifierError},
 };
 
+use handlebars::Handlebars;
 use inquiry_helper::*;
-use handlebars::{Handlebars, HelperDef, template};
+use serde::Serialize;
 use tokio::task;
 use twitch_api::TwitchApi;
 
@@ -47,7 +48,13 @@ impl CommandHandler {
         let mut template_registry = Handlebars::new();
 
         template_registry.register_helper("context", Box::new(ContextHelper {}));
-        template_registry.register_helper("spotify", Box::new(SpotifyHelper { db: db.clone() }));
+        template_registry.register_helper(
+            "spotify",
+            Box::new(SpotifyHelper {
+                db: db.clone(),
+                twitch_api: twitch_api.clone(),
+            }),
+        );
 
         template_registry.set_strict_mode(true);
 
@@ -63,15 +70,14 @@ impl CommandHandler {
     }
 
     /// This function expects a raw message that appears to be a command without the leading command prefix.
-    pub async fn handle_command_message<T, X>(
+    pub async fn handle_command_message<T>(
         &self,
         message: &T,
-        context: X,
+        context: ExecutionContext,
         user_identifier: UserIdentifier,
     ) -> Option<String>
     where
         T: Sync + CommandMessage,
-        X: ExecutionContext,
     {
         let message_text = message.get_text();
 
@@ -95,11 +101,11 @@ impl CommandHandler {
     }
 
     // #[async_recursion]
-    async fn run_command<X: ExecutionContext>(
+    async fn run_command(
         &self,
         command: &str,
         arguments: Vec<&str>,
-        execution_context: X,
+        execution_context: ExecutionContext,
         user_identifier: UserIdentifier,
     ) -> Result<Option<String>, CommandError> {
         tracing::info!("Processing command {} with {:?}", command, arguments);
@@ -117,8 +123,7 @@ impl CommandHandler {
                 "whoami" | "id" => (
                     Some(format!(
                         "{:?}, permissions: {:?}",
-                        user,
-                        execution_context.get_permissions().await
+                        user, execution_context.permissions,
                     )),
                     Some(5),
                 ),
@@ -170,7 +175,15 @@ impl CommandHandler {
                 "debug" | "check" | "test" => {
                     let action = arguments.join(" ");
 
-                    (self.execute_command_action(&action, &user)?, None)
+                    (
+                        self.execute_command_action(
+                            &action,
+                            execution_context,
+                            user.clone(),
+                            &arguments,
+                        )?,
+                        None,
+                    )
                 }
                 "merge" => {
                     let identifier_string = arguments.first().ok_or_else(|| {
@@ -192,12 +205,14 @@ impl CommandHandler {
 
                     (Some("sucessfully merged users".to_string()), None)
                 }
-                _ => match self
-                    .db
-                    .get_command(&execution_context.get_channel(), command)?
-                {
+                _ => match self.db.get_command(&execution_context.channel, command)? {
                     Some(cmd) => (
-                        self.execute_command_action(&cmd.action, &user)?,
+                        self.execute_command_action(
+                            &cmd.action,
+                            execution_context,
+                            user.clone(),
+                            &arguments,
+                        )?,
                         cmd.cooldown,
                     ),
                     None => (None, None),
@@ -235,15 +250,19 @@ impl CommandHandler {
     fn execute_command_action(
         &self,
         action: &str,
-        user: &User,
+        execution_context: ExecutionContext,
+        user: User,
+        arguments: &Vec<&str>,
     ) -> Result<Option<String>, CommandError> {
         tracing::info!("Parsing action {}", action);
 
-        let inquiry_context = InquiryContext { user: user.clone() };
+        let context = InquiryContext {
+            user,
+            execution_context,
+            arguments: arguments.iter().map(|s| s.to_owned().to_owned()).collect(),
+        };
 
-        let response = self
-            .template_registry
-            .render_template(action, &inquiry_context)?;
+        let response = self.template_registry.render_template(action, &context)?;
 
         if !response.is_empty() {
             Ok(Some(response))
@@ -279,11 +298,11 @@ impl CommandHandler {
         format!("Pong! Uptime {}", uptime)
     }
 
-    async fn edit_cmds<X: ExecutionContext>(
+    async fn edit_cmds(
         &self,
         command: &str,
         arguments: Vec<&str>,
-        execution_context: X,
+        execution_context: ExecutionContext,
     ) -> Result<Option<String>, CommandError> {
         let mut arguments = arguments.into_iter();
 
@@ -291,10 +310,10 @@ impl CommandHandler {
             Ok(Some(format!(
                 "{}/channels/{}/commands",
                 env::var("BASE_URL")?,
-                self.db.get_channel(&execution_context.get_channel())?.id
+                self.db.get_channel(&execution_context.channel)?.id
             )))
         } else {
-            match execution_context.get_permissions().await {
+            match execution_context.permissions {
                 Permissions::ChannelMod => {
                     match arguments.next().ok_or_else(|| {
                         CommandError::MissingArgument("must be either add or delete".to_string())
@@ -313,7 +332,7 @@ impl CommandHandler {
                             }
 
                             match self.db.add_command(
-                                &execution_context.get_channel(),
+                                &execution_context.channel,
                                 command_name,
                                 &command_action,
                             ) {
@@ -332,7 +351,7 @@ impl CommandHandler {
 
                             match self
                                 .db
-                                .delete_command(&execution_context.get_channel(), command_name)
+                                .delete_command(&execution_context.channel, command_name)
                             {
                                 Ok(()) => Ok(Some("Command succesfully removed".to_string())),
                                 Err(e) => Err(CommandError::DatabaseError(e)),
@@ -345,7 +364,7 @@ impl CommandHandler {
 
                             match self
                                 .db
-                                .get_command(&execution_context.get_channel(), command_name)?
+                                .get_command(&execution_context.channel, command_name)?
                             {
                                 Some(command) => Ok(Some(command.action)),
                                 None => Ok(Some(format!("command {} doesn't exist", command_name))),

@@ -1,3 +1,4 @@
+mod api;
 mod authenticate;
 mod channel;
 mod errors;
@@ -5,7 +6,7 @@ mod profile;
 mod template_context;
 
 use reqwest::Client;
-use rocket::{State, catchers, get, http::CookieJar, response::content::Html, routes};
+use rocket::{catchers, get, http::CookieJar, response::content::Html, routes, State};
 use rocket_contrib::{serve::StaticFiles, templates::Template};
 use tokio::task::{self, JoinHandle};
 
@@ -47,6 +48,7 @@ pub async fn run(command_handler: CommandHandler) -> JoinHandle<()> {
             ],
         )
         .mount("/profile", routes![profile::profile])
+        .mount("/api", routes![api::get_permissions])
         .register("/", catchers![errors::not_found])
         .register("/channels", catchers![channel::not_found])
         .manage(Client::new())

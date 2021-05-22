@@ -32,3 +32,5 @@ rocket = {git = "https://github.com/SergioBenitez/Rocket.git", features = ["secr
 rocket_contrib = { git = "https://github.com/SergioBenitez/Rocket.git", features = ["handlebars_templates"] }
 
 passwords = "3.1"
+
+anyhow = "1.0"
