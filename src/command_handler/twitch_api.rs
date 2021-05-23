@@ -58,6 +58,7 @@ pub struct TwitchApi {
     headers: HeaderMap,
     client: Client,
     moderators_cache: Arc<RwLock<HashMap<String, Vec<String>>>>,
+    users_cache: Arc<RwLock<Vec<User>>>,
 }
 
 impl TwitchApi {
@@ -78,26 +79,47 @@ impl TwitchApi {
 
         let moderators_cache = Arc::new(RwLock::new(HashMap::new()));
 
-        {
-            let moderators_cache = moderators_cache.clone();
-            task::spawn(async move {
-                loop {
-                    tokio::time::sleep(Duration::from_secs(600)).await;
+        let users_cache = Arc::new(RwLock::new(Vec::new()));
 
-                    tracing::info!("Clearing moderators cache");
-
-                    let mut moderators_cache = moderators_cache.write().expect("Failed to lock");
-
-                    moderators_cache.clear();
-                }
-            });
-        }
-
-        Ok(TwitchApi {
+        let twitch_api = TwitchApi {
             headers,
             client: Client::new(),
             moderators_cache,
-        })
+            users_cache,
+        };
+
+        twitch_api.start_cron().await;
+
+        Ok(twitch_api)
+    }
+
+    pub async fn start_cron(&self) {
+        let moderators_cache = self.moderators_cache.clone();
+        let users_cache = self.users_cache.clone();
+
+        task::spawn(async move {
+            loop {
+                tokio::time::sleep(Duration::from_secs(600)).await;
+
+                tracing::info!("Clearing moderators cache");
+
+                let mut moderators_cache = moderators_cache.write().expect("Failed to lock");
+
+                moderators_cache.clear();
+            }
+        });
+
+        task::spawn(async move {
+            loop {
+                tokio::time::sleep(Duration::from_secs(3600)).await;
+
+                tracing::info!("Clearing users cache");
+
+                let mut users_cache = users_cache.write().expect("Failed to lock");
+
+                users_cache.clear();
+            }
+        });
     }
 
     pub async fn validate_oauth(oauth: &str) -> Result<ValidationResponse, reqwest::Error> {
@@ -129,36 +151,60 @@ impl TwitchApi {
         &self,
         logins: Option<&Vec<&str>>,
         ids: Option<&Vec<&str>>,
-    ) -> Result<UsersResponse, reqwest::Error> {
+    ) -> Result<Vec<User>, reqwest::Error> {
+        let mut results = Vec::new();
+
         let mut params: Vec<(&str, &str)> = Vec::new();
 
-        if let Some(logins) = logins {
-            for login in logins {
-                params.push(("login", login));
+        {
+            let users_cache = self.users_cache.read().unwrap();
+
+            if let Some(logins) = logins {
+                for login in logins {
+                    if let Some(user) = users_cache.iter().find(|user| &user.login == *login) {
+                        results.push(user.clone());
+                    } else {
+                        params.push(("login", login));
+                    }
+                }
             }
-        }
-        if let Some(ids) = ids {
-            for id in ids {
-                params.push(("id", id));
+            if let Some(ids) = ids {
+                for id in ids {
+                    if let Some(user) = users_cache.iter().find(|user| &user.id == *id) {
+                        results.push(user.clone());
+                    } else {
+                        params.push(("id", id));
+                    }
+                }
             }
         }
 
-        Ok(self
+        let api_results = self
             .client
             .get("https://api.twitch.tv/helix/users")
             .headers(self.headers.clone())
             .query(&params)
             .send()
             .await?
-            .json()
-            .await?)
+            .json::<UsersResponse>()
+            .await?
+            .data;
+
+        if api_results.len() != 0 {
+            let mut users_cache = self.users_cache.write().unwrap();
+
+            users_cache.extend(api_results.clone());
+        }
+
+        results.extend(api_results);
+
+        Ok(results)
     }
 
     pub async fn get_self_user(&self) -> Result<User, reqwest::Error> {
         Ok(self
             .get_users(None, None)
             .await?
-            .data
             .into_iter()
             .next()
             .unwrap())
@@ -170,7 +216,7 @@ impl TwitchApi {
         duration: u8,
     ) -> Result<String, reqwest::Error> {
         let users = self.get_users(Some(&vec![channel_login]), None).await?;
-        let channel_id = &users.data.first().unwrap().id;
+        let channel_id = &users.first().unwrap().id;
 
         let mut headers = HeaderMap::new();
         headers.insert(
