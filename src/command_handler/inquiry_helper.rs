@@ -42,7 +42,6 @@ pub struct SpotifyHelper {
     pub twitch_api: Option<TwitchApi>,
 }
 
-// TODO: figure out why the helper gets called twice when using "with" handlebars statements
 impl HelperDef for SpotifyHelper {
     fn call_inner<'reg: 'rc, 'rc>(
         &self,
@@ -98,7 +97,10 @@ impl HelperDef for SpotifyHelper {
                     "artist": playback.item.artists.iter().map(|artist| artist.name.as_str()).collect::<Vec<&str>>().join(" "),
                     "song": playback.item.name,
                     "position": format!("{}/{}", position, length),
-                    "playlist": playback.context.external_urls.spotify,
+                    "playlist": match playback.context {
+                        Some(context) => context.external_urls.spotify,
+                        None => "".to_string(),
+                    },
                 }).into()))
             }
             None => Ok(Some(json!(null).into())),

@@ -139,7 +139,7 @@ pub struct SpotifyAuthentication {
 #[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct CurrentPlayback {
-    pub context: Context,
+    pub context: Option<Context>,
     #[serde(rename = "progress_ms")]
     pub progress_ms: i64,
     pub item: Item,
