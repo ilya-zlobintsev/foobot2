@@ -14,16 +14,17 @@ use crate::{
     database::schema::*,
     platform::{ChannelIdentifier, UserIdentifier},
 };
-use diesel::mysql::MysqlConnection;
 use diesel::r2d2::{self, ConnectionManager, Pool};
 use diesel::ConnectionError;
+use diesel::{mysql::MysqlConnection, Connection};
 use diesel::{EqAll, QueryDsl};
 use diesel::{ExpressionMethods, RunQueryDsl};
 use passwords::PasswordGenerator;
 use reqwest::Client;
 use tokio::time;
 
-embed_migrations!();
+use diesel_migrations::{embed_migrations, EmbeddedMigrations, MigrationHarness};
+pub const MIGRATIONS: EmbeddedMigrations = embed_migrations!();
 
 #[derive(Clone)]
 pub struct Database {
@@ -33,10 +34,14 @@ pub struct Database {
 
 impl Database {
     pub fn connect(database_url: String) -> Result<Self, ConnectionError> {
-        let manager = ConnectionManager::<MysqlConnection>::new(database_url);
+        let manager = ConnectionManager::<MysqlConnection>::new(&database_url);
         let conn_pool = r2d2::Pool::new(manager).expect("Failed to set up DB connection pool");
 
-        embedded_migrations::run(&conn_pool.get().unwrap()).expect("Failed to run migrations");
+        conn_pool
+            .get()
+            .unwrap()
+            .run_pending_migrations(MIGRATIONS)
+            .expect("Failed to run migrations");
 
         let web_sessions_cache = Arc::new(RwLock::new(HashMap::new()));
 
@@ -67,12 +72,12 @@ impl Database {
             loop {
                 tracing::info!("Updating Spotify tokens...");
 
-                let conn = conn_pool.get().unwrap();
+                let mut conn = conn_pool.get().unwrap();
 
                 let refresh_tokens = user_data::table
                     .select((user_data::user_id, user_data::value))
                     .filter(user_data::name.eq_all("spotify_refresh_token"))
-                    .load::<(u64, String)>(&conn)
+                    .load::<(u64, String)>(&mut conn)
                     .expect("DB Error");
 
                 let mut refresh_in = None;
@@ -101,7 +106,7 @@ impl Database {
                                     .filter(user_data::user_id.eq_all(user_id)),
                             )
                             .set(user_data::value.eq_all(access_token))
-                            .execute(&conn)
+                            .execute(&mut conn)
                             .expect("DB Error");
 
                             if refresh_in == None {
@@ -126,16 +131,16 @@ impl Database {
     }
 
     pub fn get_channels(&self) -> Result<Vec<Channel>, diesel::result::Error> {
-        let conn = self.conn_pool.get().unwrap();
+        let mut conn = self.conn_pool.get().unwrap();
 
-        channels::table.order(channels::id).load(&conn)
+        channels::table.order(channels::id).load(&mut conn)
     }
 
     pub fn get_channel(
         &self,
         channel_identifier: &ChannelIdentifier,
     ) -> Result<Channel, diesel::result::Error> {
-        let conn = self.conn_pool.get().unwrap();
+        let mut conn = self.conn_pool.get().unwrap();
 
         let query = channels::table.into_boxed();
 
@@ -143,7 +148,7 @@ impl Database {
         match query
             .filter(channels::platform.eq_all(channel_identifier.get_platform_name()))
             .filter(channels::channel.eq_all(channel_identifier.get_channel()))
-            .load(&conn)?
+            .load(&mut conn)?
             .into_iter()
             .next()
         {
@@ -156,7 +161,7 @@ impl Database {
 
                 diesel::insert_into(channels::table)
                     .values(new_channel)
-                    .execute(&conn)
+                    .execute(&mut conn)
                     .expect("Failed to create channel");
 
                 self.get_channel(&channel_identifier)
@@ -168,19 +173,19 @@ impl Database {
         &self,
         channel_id: u64,
     ) -> Result<Option<Channel>, diesel::result::Error> {
-        let conn = self.conn_pool.get().unwrap();
+        let mut conn = self.conn_pool.get().unwrap();
 
         Ok(channels::table
             .filter(channels::id.eq_all(channel_id))
-            .load(&conn)?
+            .load(&mut conn)?
             .into_iter()
             .next())
     }
 
     pub fn get_channels_amount(&self) -> Result<i64, diesel::result::Error> {
-        let conn = self.conn_pool.get().unwrap();
+        let mut conn = self.conn_pool.get().unwrap();
 
-        channels::table.count().get_result(&conn)
+        channels::table.count().get_result(&mut conn)
     }
 
     pub fn get_command(
@@ -188,7 +193,7 @@ impl Database {
         channel_identifier: &ChannelIdentifier,
         command: &str,
     ) -> Result<Option<Command>, diesel::result::Error> {
-        let conn = self.conn_pool.get().unwrap();
+        let mut conn = self.conn_pool.get().unwrap();
 
         Ok(commands::table
             .filter(
@@ -200,17 +205,17 @@ impl Database {
                 ),
             )
             .filter(commands::name.eq_all(command))
-            .load::<Command>(&conn)?
+            .load::<Command>(&mut conn)?
             .into_iter()
             .next())
     }
 
     pub fn get_commands(&self, channel_id: u64) -> Result<Vec<Command>, diesel::result::Error> {
-        let conn = self.conn_pool.get().unwrap();
+        let mut conn = self.conn_pool.get().unwrap();
 
         commands::table
             .filter(commands::channel_id.eq_all(channel_id))
-            .load::<Command>(&conn)
+            .load::<Command>(&mut conn)
     }
 
     pub fn add_command(
@@ -219,7 +224,7 @@ impl Database {
         command_name: &str,
         command_action: &str,
     ) -> Result<(), diesel::result::Error> {
-        let conn = self.conn_pool.get().unwrap();
+        let mut conn = self.conn_pool.get().unwrap();
 
         // I couldn't figure out how to do this as a subquery
         let channel_id = self.get_channel(channel_identifier)?.id;
@@ -231,7 +236,7 @@ impl Database {
                 permissions: None,
                 channel_id,
             })
-            .execute(&conn)?;
+            .execute(&mut conn)?;
 
         Ok(())
     }
@@ -241,7 +246,7 @@ impl Database {
         channel_identifier: &ChannelIdentifier,
         command_name: &str,
     ) -> Result<(), diesel::result::Error> {
-        let conn = self.conn_pool.get().unwrap();
+        let mut conn = self.conn_pool.get().unwrap();
 
         diesel::delete(
             commands::table
@@ -257,7 +262,7 @@ impl Database {
                 )
                 .filter(commands::name.eq_all(command_name)),
         )
-        .execute(&conn)?;
+        .execute(&mut conn)?;
 
         Ok(())
     }
@@ -266,28 +271,24 @@ impl Database {
         &self,
         user_identifier: &UserIdentifier,
     ) -> Result<Option<User>, diesel::result::Error> {
-        let conn = self.conn_pool.get().unwrap();
+        let mut conn = self.conn_pool.get().unwrap();
 
         let query = users::table.into_boxed();
 
         let query = match user_identifier {
-            UserIdentifier::TwitchID(user_id) => {
-                query.filter(users::twitch_id.eq_all(Some(user_id)))
-            }
-            UserIdentifier::DiscordID(user_id) => {
-                query.filter(users::discord_id.eq_all(Some(user_id)))
-            }
+            UserIdentifier::TwitchID(user_id) => query.filter(users::twitch_id.eq(Some(user_id))),
+            UserIdentifier::DiscordID(user_id) => query.filter(users::discord_id.eq(Some(user_id))),
         };
 
-        Ok(query.load(&conn)?.into_iter().next())
+        Ok(query.load(&mut conn)?.into_iter().next())
     }
 
     pub fn get_user_by_id(&self, user_id: u64) -> Result<Option<User>, diesel::result::Error> {
-        let conn = self.conn_pool.get().unwrap();
+        let mut conn = self.conn_pool.get().unwrap();
 
         Ok(users::table
             .filter(users::id.eq_all(user_id))
-            .load(&conn)?
+            .load(&mut conn)?
             .into_iter()
             .next())
     }
@@ -296,7 +297,7 @@ impl Database {
         &self,
         user_identifier: UserIdentifier,
     ) -> Result<User, diesel::result::Error> {
-        let conn = self.conn_pool.get().unwrap();
+        let mut conn = self.conn_pool.get().unwrap();
 
         match self.get_user(&user_identifier)? {
             Some(user) => Ok(user),
@@ -314,7 +315,7 @@ impl Database {
 
                 diesel::insert_into(users::table)
                     .values(new_user)
-                    .execute(&conn)
+                    .execute(&mut conn)
                     .expect("Failed to save new user");
 
                 Ok(self.get_user(&user_identifier)?.unwrap())
@@ -323,21 +324,21 @@ impl Database {
     }
 
     pub fn merge_users(&self, mut user: User, other: User) -> Result<User, diesel::result::Error> {
-        let conn = self.conn_pool.get().unwrap();
+        let mut conn = self.conn_pool.get().unwrap();
 
         diesel::update(user_data::table.filter(user_data::user_id.eq_all(other.id)))
             .set(user_data::user_id.eq_all(user.id))
-            .execute(&conn)?;
+            .execute(&mut conn)?;
 
         diesel::update(web_sessions::table.filter(web_sessions::user_id.eq_all(other.id)))
             .set(web_sessions::user_id.eq_all(user.id))
-            .execute(&conn)?;
+            .execute(&mut conn)?;
 
-        diesel::delete(&other).execute(&conn)?;
+        diesel::delete(&other).execute(&mut conn)?;
 
         user.merge(other);
 
-        diesel::update(users::table).set(&user).execute(&conn)?;
+        diesel::update(users::table).set(&user).execute(&mut conn)?;
 
         Ok(user)
     }
@@ -347,13 +348,13 @@ impl Database {
         user_id: u64,
         key: &str,
     ) -> Result<Option<String>, diesel::result::Error> {
-        let conn = self.conn_pool.get().unwrap();
+        let mut conn = self.conn_pool.get().unwrap();
 
         Ok(user_data::table
             .filter(user_data::user_id.eq_all(user_id))
             .filter(user_data::name.eq_all(key))
             .select(user_data::value)
-            .load(&conn)?
+            .load(&mut conn)?
             .into_iter()
             .next())
     }
@@ -363,29 +364,29 @@ impl Database {
         user_data: &UserData,
         overwrite: bool,
     ) -> Result<(), diesel::result::Error> {
-        let conn = self.conn_pool.get().unwrap();
+        let mut conn = self.conn_pool.get().unwrap();
 
         match overwrite {
             true => diesel::replace_into(user_data::table)
                 .values(user_data)
-                .execute(&conn),
+                .execute(&mut conn),
             false => diesel::insert_into(user_data::table)
                 .values(user_data)
-                .execute(&conn),
+                .execute(&mut conn),
         }?;
 
         Ok(())
     }
 
     pub fn remove_user_data(&self, user_id: u64, data: &str) -> Result<(), diesel::result::Error> {
-        let conn = self.conn_pool.get().unwrap();
+        let mut conn = self.conn_pool.get().unwrap();
 
         diesel::delete(
             user_data::table
                 .filter(user_data::user_id.eq_all(user_id))
                 .filter(user_data::name.eq_all(data)),
         )
-        .execute(&conn)?;
+        .execute(&mut conn)?;
 
         Ok(())
     }
@@ -411,11 +412,11 @@ impl Database {
             None => {
                 drop(cache);
 
-                let conn = self.conn_pool.get().unwrap();
+                let mut conn = self.conn_pool.get().unwrap();
 
                 match web_sessions::table
                     .filter(web_sessions::session_id.eq_all(session_id))
-                    .load::<WebSession>(&conn)?
+                    .load::<WebSession>(&mut conn)?
                     .into_iter()
                     .next()
                 {
@@ -443,7 +444,7 @@ impl Database {
         user_id: u64,
         username: String,
     ) -> Result<String, diesel::result::Error> {
-        let conn = self.conn_pool.get().unwrap();
+        let mut conn = self.conn_pool.get().unwrap();
 
         let session = WebSession {
             session_id: PasswordGenerator {
@@ -464,7 +465,7 @@ impl Database {
 
         diesel::insert_into(web_sessions::table)
             .values(&session)
-            .execute(&conn)?;
+            .execute(&mut conn)?;
 
         Ok(session.session_id)
     }

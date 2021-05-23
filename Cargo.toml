@@ -8,8 +8,8 @@ edition = "2018"
 [dependencies]
 dotenv = "0.15"
 
-diesel = { version = "1.4", features = ["mysql", "r2d2"] }
-diesel_migrations = "1.4"
+diesel = { git = "https://github.com/diesel-rs/diesel.git", features = ["mysql", "r2d2"] }
+diesel_migrations = { git = "https://github.com/diesel-rs/diesel.git" }
 
 tokio = { version = "1.6", features = ["full"] }
 async-trait = "0.1"
