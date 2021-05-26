@@ -156,17 +156,15 @@ pub async fn get_permissions_in_guild<T: CacheHttp + AsRef<Cache>>(
     tracing::info!("Getting Discord user permissions in channel");
     let member = guild_id.member(&cache_http, user_id).await.unwrap();
 
-        let guild_channels = guild_id
-            .channels(&cache_http.http())
-            .await
-            .expect("Failed to get guild channels");
+    let guild_channels = guild_id
+        .channels(&cache_http.http())
+        .await
+        .expect("Failed to get guild channels");
 
     match {
         let channel_id = match channel_id {
             Some(channel_id) => channel_id,
-            None => {
-                *guild_channels.iter().next().expect("No default channel").0
-            }
+            None => *guild_channels.iter().next().expect("No default channel").0,
         };
 
         let channel = guild_channels
@@ -177,8 +175,6 @@ pub async fn get_permissions_in_guild<T: CacheHttp + AsRef<Cache>>(
             .to_partial_guild(&cache_http.http())
             .await
             .expect("failed to get guild");
-
-
 
         guild.user_permissions_in(channel, &member).unwrap()
     }

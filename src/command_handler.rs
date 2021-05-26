@@ -17,8 +17,10 @@ use crate::{
 
 use handlebars::Handlebars;
 use inquiry_helper::*;
-use serde::Serialize;
-use serenity::{CacheAndHttp, client::{Cache, ClientBuilder}, http::{CacheHttp, Http}};
+use serenity::{
+    client::{Cache, ClientBuilder},
+    http::{CacheHttp, Http},
+};
 use tokio::task;
 use twitch_api::TwitchApi;
 
@@ -71,7 +73,9 @@ impl CommandHandler {
 
         let discord_context = match env::var("DISCORD_TOKEN") {
             Ok(token) => {
-                let client = ClientBuilder::new(token).await.expect("Failed to start Discord API");
+                let client = ClientBuilder::new(token)
+                    .await
+                    .expect("Failed to start Discord API");
 
                 let cache_and_http = client.cache_and_http;
 
