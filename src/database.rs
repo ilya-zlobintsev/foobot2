@@ -14,9 +14,16 @@ use crate::{
     database::schema::*,
     platform::{ChannelIdentifier, UserIdentifier},
 };
-use diesel::r2d2::{self, ConnectionManager, Pool};
-use diesel::ConnectionError;
+use diesel::Insertable;
 use diesel::{mysql::MysqlConnection, Connection};
+use diesel::{
+    r2d2::{self, ConnectionManager, Pool},
+    sql_query,
+};
+use diesel::{
+    sql_types::{BigInt, Integer, Unsigned},
+    ConnectionError,
+};
 use diesel::{EqAll, QueryDsl};
 use diesel::{ExpressionMethods, RunQueryDsl};
 use passwords::PasswordGenerator;
@@ -326,13 +333,7 @@ impl Database {
     pub fn merge_users(&self, mut user: User, other: User) -> Result<User, diesel::result::Error> {
         let mut conn = self.conn_pool.get().unwrap();
 
-        diesel::update(user_data::table.filter(user_data::user_id.eq_all(other.id)))
-            .set(user_data::user_id.eq_all(user.id))
-            .execute(&mut conn)?;
-
-        diesel::update(web_sessions::table.filter(web_sessions::user_id.eq_all(other.id)))
-            .set(web_sessions::user_id.eq_all(user.id))
-            .execute(&mut conn)?;
+        sql_query("REPLACE INTO user_data(user_id, name, value) SELECT ?, name, value FROM user_data WHERE user_id = ?").bind::<Unsigned<BigInt>, _>(user.id).bind::<Unsigned<BigInt>, _>(other.id).execute(&mut conn)?;
 
         diesel::delete(&other).execute(&mut conn)?;
 

@@ -17,8 +17,6 @@ use platform::discord::Discord;
 use platform::twitch::Twitch;
 use rocket::futures::future::join_all;
 
-use crate::platform::ChannelIdentifier;
-
 #[tokio::main]
 async fn main() {
     dotenv().unwrap_or_default();

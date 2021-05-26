@@ -3,28 +3,29 @@ use rocket::{catch, get, http::CookieJar, response::Redirect, Request, State};
 use rocket_contrib::templates::Template;
 
 #[get("/")]
-pub async fn index(db: &State<Database>, jar: &CookieJar<'_>) -> Html<Template> {
+pub async fn index(cmd: &State<CommandHandler>, jar: &CookieJar<'_>) -> Html<Template> {
     Html(Template::render(
         "channels",
         &ChannelsContext {
-            parent_context: LayoutContext::new(db, jar),
-            channels: db.get_channels().expect("Failed to get channels"),
+            parent_context: LayoutContext::new(&cmd.db, jar),
+            channels: cmd.db.get_channels().expect("Failed to get channels"),
         },
     ))
 }
 
 #[get("/<channel_id>/commands")]
 pub async fn commands_page(
-    db: &State<Database>,
+    cmd: &State<CommandHandler>,
     jar: &CookieJar<'_>,
     channel_id: String,
 ) -> Html<Template> {
     Html(Template::render(
         "commands",
         &CommandsContext {
-            parent_context: LayoutContext::new(db, jar),
+            parent_context: LayoutContext::new(&cmd.db, jar),
             channel: channel_id.clone(),
-            commands: db
+            commands: cmd
+                .db
                 .get_commands(channel_id.parse().unwrap())
                 .expect("Failed to get commands"),
         },

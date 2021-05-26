@@ -1,6 +1,8 @@
 const base_url = window.location.origin;
 const path_url = window.location.pathname;
 
+const add_command_button = document.getElementById("show-modal-button");
+
 const channel_id = path_url.split("/")[2]
 
 const Http = new XMLHttpRequest();
@@ -13,6 +15,11 @@ Http.send();
 
 Http.onloadend = (e) => {
     if (Http.responseText == "channel_mod") {
-        document.getElementById("add_command_button").disabled = false;
+        add_command_button.disabled = false;
+
+        const commands_table = document.getElementById("commands_table");
+
+        commands_table.innerHTML += "<col style=\"width:5%\">"
+
     }
 }

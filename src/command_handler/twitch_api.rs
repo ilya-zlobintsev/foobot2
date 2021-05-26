@@ -5,7 +5,6 @@ use std::{
 };
 
 use reqwest::{header::HeaderMap, Client};
-use rocket::futures::channel::oneshot::channel;
 use serde::{Deserialize, Serialize};
 use tokio::task;
 use twitch_irc::{

@@ -2,11 +2,12 @@ use std::env;
 
 use super::{ChannelIdentifier, ChatPlatform, ExecutionContext, Permissions, UserIdentifier};
 
-use crate::command_handler::{discord_api::User, CommandHandler, CommandMessage};
+use crate::command_handler::{CommandHandler, CommandMessage};
 
 use async_trait::async_trait;
 use serenity::{
-    client::{validate_token, Context, EventHandler},
+    client::{validate_token, Cache, Context, EventHandler},
+    http::CacheHttp,
     model::{
         channel::Message,
         id::{ChannelId, GuildId, UserId},
@@ -29,6 +30,11 @@ impl EventHandler for Handler {
         tracing::debug!("{:?}", message);
 
         if message.content.starts_with(&self.prefix) {
+            let typing = ctx
+                .http
+                .start_typing(message.channel_id.0)
+                .expect("Failed to type");
+
             message.content = message
                 .content
                 .strip_prefix(&self.prefix)
@@ -49,10 +55,10 @@ impl EventHandler for Handler {
             let context = ExecutionContext {
                 permissions: match &channel {
                     ChannelIdentifier::DiscordGuildID(_) => {
-                        get_permissions_in_guild_channel(
+                        get_permissions_in_guild(
                             &ctx,
                             message.guild_id.unwrap(),
-                            message.channel_id,
+                            Some(message.channel_id),
                             message.author.id,
                         )
                         .await
@@ -75,6 +81,8 @@ impl EventHandler for Handler {
                     .await
                     .expect("Failed to send message");
             }
+
+            typing.stop().unwrap();
         }
     }
 
@@ -139,34 +147,42 @@ pub enum DiscordExecutionLocation {
     DM(ChannelId),
 }
 
-async fn get_permissions_in_guild_channel(
-    ctx: &Context,
+pub async fn get_permissions_in_guild<T: CacheHttp + AsRef<Cache>>(
+    cache_http: T,
     guild_id: GuildId,
-    channel_id: ChannelId,
+    channel_id: Option<ChannelId>,
     user_id: UserId,
 ) -> Permissions {
     tracing::info!("Getting Discord user permissions in channel");
+    let member = guild_id.member(&cache_http, user_id).await.unwrap();
 
-    let guild = guild_id
-        .to_partial_guild(&ctx.http)
-        .await
-        .expect("Failed to get guild");
+        let guild_channels = guild_id
+            .channels(&cache_http.http())
+            .await
+            .expect("Failed to get guild channels");
 
-    let guild_channels = guild
-        .channels(&ctx.http)
-        .await
-        .expect("Failed to get guild channels");
+    match {
+        let channel_id = match channel_id {
+            Some(channel_id) => channel_id,
+            None => {
+                *guild_channels.iter().next().expect("No default channel").0
+            }
+        };
 
-    let channel = guild_channels
-        .get(&channel_id)
-        .expect("Failed to get channel");
+        let channel = guild_channels
+            .get(&channel_id)
+            .expect("Failed to get channel");
 
-    let member = guild.member(&ctx.http, user_id).await.unwrap();
+        let guild = guild_id
+            .to_partial_guild(&cache_http.http())
+            .await
+            .expect("failed to get guild");
 
-    match guild
-        .user_permissions_in(channel, &member)
-        .unwrap()
-        .administrator()
+
+
+        guild.user_permissions_in(channel, &member).unwrap()
+    }
+    .administrator()
     {
         true => Permissions::ChannelMod,
         false => Permissions::Default,

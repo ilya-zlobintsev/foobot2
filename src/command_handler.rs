@@ -18,6 +18,7 @@ use crate::{
 use handlebars::Handlebars;
 use inquiry_helper::*;
 use serde::Serialize;
+use serenity::{CacheAndHttp, client::{Cache, ClientBuilder}, http::{CacheHttp, Http}};
 use tokio::task;
 use twitch_api::TwitchApi;
 
@@ -25,9 +26,34 @@ use twitch_api::TwitchApi;
 pub struct CommandHandler {
     pub db: Database,
     pub twitch_api: Option<TwitchApi>,
+    pub discord_context: Option<Arc<DiscordContext>>,
     startup_time: Instant,
     template_registry: Arc<Handlebars<'static>>,
     cooldowns: Arc<RwLock<Vec<(u64, String)>>>, // User id and command
+}
+
+#[derive(Clone)]
+pub struct DiscordContext {
+    http: Arc<Http>,
+    cache: Arc<Cache>,
+}
+
+impl CacheHttp for DiscordContext {
+    fn http(&self) -> &Http {
+        &self.http
+    }
+}
+
+impl AsRef<Cache> for DiscordContext {
+    fn as_ref(&self) -> &Cache {
+        &self.cache
+    }
+}
+
+impl AsRef<serenity::http::Http> for DiscordContext {
+    fn as_ref(&self) -> &Http {
+        &self.http
+    }
 }
 
 impl CommandHandler {
@@ -41,6 +67,20 @@ impl CommandHandler {
                 tracing::info!("TWICTH_OAUTH missing! Skipping Twitch initialization");
                 None
             }
+        };
+
+        let discord_context = match env::var("DISCORD_TOKEN") {
+            Ok(token) => {
+                let client = ClientBuilder::new(token).await.expect("Failed to start Discord API");
+
+                let cache_and_http = client.cache_and_http;
+
+                Some(Arc::new(DiscordContext {
+                    http: cache_and_http.http.clone(),
+                    cache: cache_and_http.cache.clone(),
+                }))
+            }
+            Err(_) => None,
         };
 
         let startup_time = Instant::now();
@@ -65,6 +105,7 @@ impl CommandHandler {
             twitch_api,
             startup_time,
             template_registry: Arc::new(template_registry),
+            discord_context,
             cooldowns,
         }
     }
@@ -95,7 +136,7 @@ impl CommandHandler {
                 .await
             {
                 Ok(result) => result,
-                Err(e) => Some(format!("Error: {}", e)),
+                Err(e) => Some(e.to_string()),
             }
         }
     }
@@ -401,8 +442,8 @@ impl fmt::Display for CommandError {
             CommandError::NoPermissions => {
                 f.write_str("you don't have the permissions to use this command")
             }
-            CommandError::DatabaseError(e) => f.write_str(&format!("database error: {}", e)),
-            CommandError::TemplateError(e) => f.write_str(&format!("inquiry error: {}", e)),
+            CommandError::DatabaseError(e) => f.write_str(&e.to_string()),
+            CommandError::TemplateError(e) => f.write_str(&e.to_string()),
             CommandError::ConfigurationError(e) => {
                 f.write_str(&format!("configuration error: {}", e))
             }

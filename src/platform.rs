@@ -94,7 +94,6 @@ impl UserIdentifier {
                             .get_users(Some(&vec![user_id]), None)
                             .await
                             .expect("Twitch API Error") // TODO
-                            .data
                             .first()
                             .ok_or_else(|| UserIdentifierError::InvalidUser)?
                             .id

@@ -6,20 +6,25 @@ use rocket::{
 };
 use rocket_contrib::templates::Template;
 
-use crate::database::Database;
+use crate::command_handler::CommandHandler;
 
 use super::template_context::{AuthInfo, LayoutContext, ProfileContext};
 
 #[get("/")]
-pub fn profile(db: &State<Database>, jar: &CookieJar<'_>) -> Result<Html<Template>, Redirect> {
-    match AuthInfo::new(db, jar) {
+pub fn profile(
+    cmd: &State<CommandHandler>,
+    jar: &CookieJar<'_>,
+) -> Result<Html<Template>, Redirect> {
+    match AuthInfo::new(&cmd.db, jar) {
         Some(auth_info) => {
-            let user = db
+            let user = cmd
+                .db
                 .get_user_by_id(auth_info.user_id)
                 .expect("DB Error")
                 .expect("Potentially invalid user session");
 
-            let spotify_connected = match db
+            let spotify_connected = match cmd
+                .db
                 .get_spotify_access_token(auth_info.user_id)
                 .expect("DB Error")
             {
