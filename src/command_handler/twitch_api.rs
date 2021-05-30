@@ -7,7 +7,6 @@ use std::{
 };
 
 use reqwest::{header::HeaderMap, Client};
-use serde::{Deserialize, Serialize};
 use tokio::task;
 use twitch_irc::{
     login::StaticLoginCredentials, message::ServerMessage, ClientConfig, SecureTCPTransport,

@@ -155,7 +155,7 @@ impl CommandHandler {
     ) -> Result<Option<String>, CommandError> {
         tracing::info!("Processing command {} with {:?}", command, arguments);
 
-        let user = self.db.get_or_create_user(user_identifier)?;
+        let user = self.db.get_or_create_user(&user_identifier)?;
 
         if !self
             .cooldowns
@@ -243,10 +243,9 @@ impl CommandHandler {
 
                     let other = self
                         .db
-                        .get_user(&other_identifier)?
-                        .ok_or_else(|| UserIdentifierError::InvalidUser)?;
+                        .get_or_create_user(&other_identifier)?;
 
-                    self.db.merge_users(user.clone(), other)?;
+                    self.db.merge_users(user.clone(), other);
 
                     (Some("sucessfully merged users".to_string()), None)
                 }

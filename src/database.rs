@@ -14,14 +14,13 @@ use crate::{
     database::schema::*,
     platform::{ChannelIdentifier, UserIdentifier},
 };
-use diesel::Insertable;
-use diesel::{mysql::MysqlConnection, Connection};
+use diesel::mysql::MysqlConnection;
 use diesel::{
     r2d2::{self, ConnectionManager, Pool},
     sql_query,
 };
 use diesel::{
-    sql_types::{BigInt, Integer, Unsigned},
+    sql_types::{BigInt, Unsigned},
     ConnectionError,
 };
 use diesel::{EqAll, QueryDsl};
@@ -302,7 +301,7 @@ impl Database {
 
     pub fn get_or_create_user(
         &self,
-        user_identifier: UserIdentifier,
+        user_identifier: &UserIdentifier,
     ) -> Result<User, diesel::result::Error> {
         let mut conn = self.conn_pool.get().unwrap();
 
@@ -330,18 +329,23 @@ impl Database {
         }
     }
 
-    pub fn merge_users(&self, mut user: User, other: User) -> Result<User, diesel::result::Error> {
+    pub fn merge_users(&self, mut user: User, other: User) -> User {
         let mut conn = self.conn_pool.get().unwrap();
 
-        sql_query("REPLACE INTO user_data(user_id, name, value) SELECT ?, name, value FROM user_data WHERE user_id = ?").bind::<Unsigned<BigInt>, _>(user.id).bind::<Unsigned<BigInt>, _>(other.id).execute(&mut conn)?;
+        sql_query("REPLACE INTO user_data(user_id, name, value) SELECT ?, name, value FROM user_data WHERE user_id = ?").bind::<Unsigned<BigInt>, _>(user.id).bind::<Unsigned<BigInt>, _>(other.id).execute(&mut conn).expect("Failed to run replace query");
 
-        diesel::delete(&other).execute(&mut conn)?;
+        diesel::delete(&other)
+            .execute(&mut conn)
+            .expect("Failed to delete");
 
         user.merge(other);
 
-        diesel::update(users::table).set(&user).execute(&mut conn)?;
+        diesel::update(users::table.filter(users::id.eq_all(user.id)))
+            .set(&user)
+            .execute(&mut conn)
+            .expect("Failed to update");
 
-        Ok(user)
+        user
     }
 
     fn get_user_data_value(

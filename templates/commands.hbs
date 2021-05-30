@@ -1,5 +1,7 @@
 {{#*inline "page"}}
 
+<link rel="stylesheet" href="/static/css/modal.css">
+
 <style>
     section {
         text-align: center;
@@ -17,8 +19,15 @@
     }
 
     .title {
-        display: inline-flex;
+        display: flex;
+        width: 100%;
     }
+
+    .title h1 {
+        margin-left: auto;
+        margin-right: auto;
+    }
+    
 
     td,
     th {
@@ -46,18 +55,26 @@
     .last {
         border-right: none;
     }
+
+    #show-modal-button {
+        margin-top: auto;
+        margin-bottom: auto;
+        background-color: #32c552;
+        border: none;
+        border-radius: 5px;
+    }
 </style>
 
 <section>
     <div class="title">
         <h1>Command list for channel {{ channel }}</h1>
-        <button id="add_command_button" type="button" disabled="true">Add command</button>
+        <button id="show-modal-button" type="button" disabled="true">Add command</button>
     </div>
-    <table border=1>
+    <table id="commands_table" border=1>
         <col style="width:25%">
         <col style="width:50%">
         <col style="width:5%">
-        <col style="width:20%">
+        <col style="width:15%">
         <thead>
             <th>Name</th>
             <th>Action</th>
@@ -81,8 +98,25 @@
             {{/each}}
         </tbody>
     </table>
-    <script src="/static/js/commands.js" async></script>
 </section>
+<script src="/static/js/commands.js" async></script>
+
+<div id="modal">
+    <div id="modal-content">
+        <form method="POST">
+            <div>
+                <h2>Add new command</h2>
+                <label for="fname">Trigger:</label>
+                <input type="text" id="fname" name="fname"><br>
+                <label for="lname">Action:</label>
+                <input type="text" id="lname" name="lname"><br>
+                <input type="submit" value="Add">
+                <input type="button" id="close-modal-button" value="Cancel">
+            </div>
+        </form>
+    </div>
+</div>
+<script src="/static/js/modal.js" async></script>
 
 {{/inline}}
 {{~>(parent_context.name)~}}
