@@ -7,7 +7,7 @@ use rocket::{
     response::{content::Html, Redirect},
     State,
 };
-use rocket_contrib::templates::Template;
+use rocket_dyn_templates::Template;
 
 use crate::{
     command_handler::{
@@ -113,7 +113,7 @@ pub async fn twitch_redirect(
     let twitch_user = twitch_api.get_self_user().await.unwrap();
 
     let user = db
-        .get_or_create_user(UserIdentifier::TwitchID(twitch_user.id))
+        .get_or_create_user(&UserIdentifier::TwitchID(twitch_user.id))
         .expect("DB error");
 
     let cookie = create_user_session(db, user.id, twitch_user.display_name);
@@ -194,7 +194,7 @@ pub async fn discord_redirect(
         .expect("Discord API Error");
 
     let user = db
-        .get_or_create_user(UserIdentifier::DiscordID(discord_user.id))
+        .get_or_create_user(&UserIdentifier::DiscordID(discord_user.id))
         .expect("DB Error");
 
     let cookie = create_user_session(db, user.id, discord_user.username);

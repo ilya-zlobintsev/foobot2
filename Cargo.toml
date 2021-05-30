@@ -29,7 +29,7 @@ serenity = { version = "0.10", default-features = false, features = ["client", "
 handlebars = { git = "https://github.com/sunng87/handlebars-rust.git" }
 
 rocket = {git = "https://github.com/SergioBenitez/Rocket.git", features = ["secrets"] }
-rocket_contrib = { git = "https://github.com/SergioBenitez/Rocket.git", features = ["handlebars_templates"] }
+rocket_dyn_templates = { git = "https://github.com/SergioBenitez/Rocket.git", features = ["handlebars"] }
 
 passwords = "3.1"
 

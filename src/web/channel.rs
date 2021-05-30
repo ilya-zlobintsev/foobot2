@@ -1,6 +1,6 @@
 use super::*;
 use rocket::{catch, get, http::CookieJar, response::Redirect, Request, State};
-use rocket_contrib::templates::Template;
+use rocket_dyn_templates::Template;
 
 #[get("/")]
 pub async fn index(cmd: &State<CommandHandler>, jar: &CookieJar<'_>) -> Html<Template> {

@@ -4,7 +4,7 @@ use rocket::{
     response::{content::Html, Redirect},
     State,
 };
-use rocket_contrib::templates::Template;
+use rocket_dyn_templates::Template;
 
 use crate::command_handler::CommandHandler;
 

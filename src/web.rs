@@ -6,13 +6,13 @@ mod profile;
 mod template_context;
 
 use reqwest::Client;
-use rocket::{catchers, get, http::CookieJar, response::content::Html, routes, State};
-use rocket_contrib::{serve::StaticFiles, templates::Template};
+use rocket::{State, catchers, fs::FileServer, get, http::CookieJar, response::content::Html, routes};
+use rocket_dyn_templates::Template;
 use tokio::task::{self, JoinHandle};
 
 use template_context::*;
 
-use crate::{command_handler::CommandHandler, database::Database};
+use crate::command_handler::CommandHandler;
 
 #[get("/")]
 async fn index(cmd: &State<CommandHandler>, jar: &CookieJar<'_>) -> Html<Template> {
@@ -33,7 +33,7 @@ pub async fn run(command_handler: CommandHandler) -> JoinHandle<()> {
             .attach(Template::custom(|engines| {
                 engines.handlebars.set_strict_mode(true);
             }))
-            .mount("/static", StaticFiles::from("static"))
+            .mount("/static", FileServer::from("static"))
             .mount("/", routes![index])
             .mount("/channels", routes![channel::index, channel::commands_page])
             .mount(

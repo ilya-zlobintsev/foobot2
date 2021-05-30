@@ -1,5 +1,5 @@
 use rocket::{Request, catch, response::content::Html};
-use rocket_contrib::templates::Template;
+use rocket_dyn_templates::Template;
 
 #[catch(404)]
 pub async fn not_found(_: &Request<'_>) -> Html<Template> {
