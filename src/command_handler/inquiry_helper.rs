@@ -21,18 +21,16 @@ pub struct InquiryContext {
 #[derive(Clone)]
 pub struct ContextHelper;
 
-impl HelperDef for ContextHelper {
-    fn call_inner<'reg: 'rc, 'rc>(
-        &self,
+impl HelperDef for ContextHelper { fn call_inner<'reg: 'rc, 'rc>( &self,
         _: &Helper<'reg, 'rc>,
         _: &'reg Handlebars,
         _: &'rc Context,
         _: &mut RenderContext<'reg, 'rc>,
-    ) -> Result<Option<ScopedJson<'reg, 'rc>>, RenderError> {
-        Ok(Some(ScopedJson::Derived(json!({
+    ) -> Result<ScopedJson<'reg, 'rc>, RenderError> {
+        Ok(ScopedJson::Derived(json!({
             "a": 1,
             "b": 2,
-        }))))
+        })))
     }
 }
 
@@ -49,7 +47,7 @@ impl HelperDef for SpotifyHelper {
         _: &'reg Handlebars,
         context: &'rc Context,
         _: &mut RenderContext<'reg, 'rc>,
-    ) -> Result<Option<ScopedJson<'reg, 'rc>>, RenderError> {
+    ) -> Result<ScopedJson<'reg, 'rc>, RenderError> {
         let context = serde_json::from_value::<InquiryContext>(context.data().clone())
             .expect("Failed to get command context");
 
@@ -93,7 +91,7 @@ impl HelperDef for SpotifyHelper {
                 let length = playback.item.duration_ms / 1000;
                 let length = format!("{}:{:02}", length / 60, length % 60);
 
-                Ok(Some(json!({
+                Ok(json!({
                     "artist": playback.item.artists.iter().map(|artist| artist.name.as_str()).collect::<Vec<&str>>().join(" "),
                     "song": playback.item.name,
                     "position": format!("{}/{}", position, length),
@@ -101,9 +99,9 @@ impl HelperDef for SpotifyHelper {
                         Some(context) => context.external_urls.spotify,
                         None => "".to_string(),
                     },
-                }).into()))
+                }).into())
             }
-            None => Ok(Some(json!(null).into())),
+            None => Ok(json!(null).into()),
         }
     }
 }
