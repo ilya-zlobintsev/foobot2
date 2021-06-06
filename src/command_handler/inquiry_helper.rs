@@ -1,4 +1,4 @@
-use std::thread;
+use std::{env, thread};
 
 use handlebars::{
     Context, Handlebars, Helper, HelperDef, HelperResult, JsonRender, Output, RenderContext,
@@ -80,7 +80,12 @@ impl HelperDef for SpotifyHelper {
             let access_token = db
                 .get_spotify_access_token(user_id)
                 .map_err(|e| RenderError::new(format!("DB Error: {}", e.to_string())))?
-                .ok_or_else(|| RenderError::new("not configured for user"))?;
+                .ok_or_else(|| {
+                    RenderError::new(format!(
+                        "not configured for user! You can set up Spotify by going to {}/profile",
+                        env::var("BASE_URL").unwrap()
+                    ))
+                })?;
             let spotify_api = SpotifyApi::new(&access_token);
 
             runtime
