@@ -8,8 +8,10 @@
         font-family: sans-serif;
     }
 
-    ul {
-        columns: 2;
+    .channels {
+        display: flex;
+        flex-wrap: wrap;
+        justify-content: center;
     }
 
     .channel {
@@ -17,7 +19,7 @@
         border-radius: 5px;
         padding: 20px;
         margin: 30px;
-        width: 40vw;
+        width: 250px;
     }
 
     .channel a {
@@ -41,7 +43,7 @@
 </style>
 
 <section>
-    <ul>
+    <div class="channels">
         {{#each channels}}
         <div class="channel">
             <h1>Platform: {{ this.platform }}</h1>
@@ -52,7 +54,7 @@
             </a>
         </div>
         {{/each}}
-    </ul>
+    </div>
 </section>
 
 {{/inline}}
