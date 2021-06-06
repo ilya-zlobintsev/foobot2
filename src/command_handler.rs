@@ -99,6 +99,7 @@ impl CommandHandler {
                 twitch_api: twitch_api.clone(),
             }),
         );
+        template_registry.register_helper("choose", Box::new(random_helper));
 
         template_registry.set_strict_mode(true);
 
@@ -241,9 +242,7 @@ impl CommandHandler {
                         UserIdentifier::from_string(identifier_string, self.twitch_api.as_ref())
                             .await?;
 
-                    let other = self
-                        .db
-                        .get_or_create_user(&other_identifier)?;
+                    let other = self.db.get_or_create_user(&other_identifier)?;
 
                     self.db.merge_users(user.clone(), other);
 

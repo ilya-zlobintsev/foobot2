@@ -6,7 +6,9 @@ mod profile;
 mod template_context;
 
 use reqwest::Client;
-use rocket::{State, catchers, fs::FileServer, get, http::CookieJar, response::content::Html, routes};
+use rocket::{
+    catchers, fs::FileServer, get, http::CookieJar, response::content::Html, routes, State,
+};
 use rocket_dyn_templates::Template;
 use tokio::task::{self, JoinHandle};
 
@@ -35,7 +37,10 @@ pub async fn run(command_handler: CommandHandler) -> JoinHandle<()> {
             }))
             .mount("/static", FileServer::from("static"))
             .mount("/", routes![index])
-            .mount("/channels", routes![channel::index, channel::commands_page])
+            .mount(
+                "/channels",
+                routes![channel::index, channel::commands_page, channel::add_command],
+            )
             .mount(
                 "/authenticate",
                 routes![

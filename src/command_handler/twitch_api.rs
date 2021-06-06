@@ -8,10 +8,6 @@ use std::{
 
 use reqwest::{header::HeaderMap, Client};
 use tokio::task;
-use twitch_irc::{
-    login::StaticLoginCredentials, message::ServerMessage, ClientConfig, SecureTCPTransport,
-    TwitchIRCClient,
-};
 
 use model::*;
 
@@ -221,32 +217,28 @@ impl TwitchApi {
             }
         }
 
-        let mods = match self
+        let response = self
             .client
             .get(format!(
                 "https://api.ivr.fi/twitch/modsvips/{}",
                 channel_login
             ))
             .send()
-            .await
-        {
-            Ok(response) => {
-                tracing::info!("GET {}: {}", response.url(), response.status());
+            .await?;
 
-                let lookup = response.json::<IvrModInfo>().await?;
-                
-                tracing::debug!("{:?}", lookup);
+        tracing::info!("GET {}: {}", response.url(), response.status());
 
-                let mut mods = vec![channel_login.to_owned()];
+        let lookup = response.json::<IvrModInfo>().await?;
 
-                for moderator in lookup.mods {
-                    mods.push(moderator.login);
-                }
-                
-                mods
-            }
-            Err(_) => self.get_channel_mods_from_irc(channel_login).await?,
-        };
+        tracing::debug!("{:?}", lookup);
+
+        let mut mods = vec![channel_login.to_owned()];
+
+        for moderator in lookup.mods {
+            mods.push(moderator.login);
+        }
+
+        // Err(_) => self.get_channel_mods_from_irc(channel_login).await?,
 
         let mut moderators_cache = self.moderators_cache.write().unwrap();
 
@@ -256,8 +248,8 @@ impl TwitchApi {
     }
 
     // This terrible abomination has to exist because twitch doesn't provide an endpoint for this that doesn't require channel auth
-    /// Returns the list of logins of channel moderators. Don't expect this to be efficient
-    async fn get_channel_mods_from_irc(
+    // /// Returns the list of logins of channel moderators. Don't expect this to be efficient
+    /*async fn get_channel_mods_from_irc(
         &self,
         channel_login: &str,
     ) -> Result<Vec<String>, reqwest::Error> {
@@ -302,5 +294,5 @@ impl TwitchApi {
         }
 
         Ok(mods)
-    }
+    }*/
 }

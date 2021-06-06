@@ -230,10 +230,19 @@ impl Database {
         command_name: &str,
         command_action: &str,
     ) -> Result<(), diesel::result::Error> {
-        let mut conn = self.conn_pool.get().unwrap();
-
-        // I couldn't figure out how to do this as a subquery
         let channel_id = self.get_channel(channel_identifier)?.id;
+        
+        self.add_command_to_channel(channel_id, command_name, command_action)
+    }
+    
+    pub fn add_command_to_channel(
+        &self,
+        channel_id: u64,
+        command_name: &str,
+        command_action: &str,
+    ) -> Result<(), diesel::result::Error> {
+
+        let mut conn = self.conn_pool.get().unwrap();
 
         diesel::insert_into(commands::table)
             .values(&NewCommand {

@@ -34,3 +34,5 @@ rocket_dyn_templates = { git = "https://github.com/SergioBenitez/Rocket.git", fe
 passwords = "3.1"
 
 anyhow = "1.0"
+
+rand = "0.8"

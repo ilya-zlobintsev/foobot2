@@ -1,5 +1,7 @@
 #[macro_use]
 extern crate diesel;
+#[macro_use] 
+extern crate rocket;
 
 mod command_handler;
 mod database;

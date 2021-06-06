@@ -1,6 +1,10 @@
 use std::thread;
 
-use handlebars::{Context, Handlebars, Helper, HelperDef, RenderContext, RenderError, ScopedJson};
+use handlebars::{
+    Context, Handlebars, Helper, HelperDef, HelperResult, JsonRender, Output, RenderContext,
+    RenderError, ScopedJson,
+};
+use rand::{thread_rng, Rng};
 use serde::{Deserialize, Serialize};
 use serde_json::json;
 
@@ -21,7 +25,9 @@ pub struct InquiryContext {
 #[derive(Clone)]
 pub struct ContextHelper;
 
-impl HelperDef for ContextHelper { fn call_inner<'reg: 'rc, 'rc>( &self,
+impl HelperDef for ContextHelper {
+    fn call_inner<'reg: 'rc, 'rc>(
+        &self,
         _: &Helper<'reg, 'rc>,
         _: &'reg Handlebars,
         _: &'rc Context,
@@ -103,5 +109,26 @@ impl HelperDef for SpotifyHelper {
             }
             None => Ok(json!(null).into()),
         }
+    }
+}
+
+pub fn random_helper(
+    h: &Helper,
+    _: &Handlebars,
+    _: &Context,
+    _: &mut RenderContext,
+    out: &mut dyn Output,
+) -> HelperResult {
+    let len = h.params().len();
+
+    if len != 0 {
+        let mut rng = thread_rng();
+
+        let param = h.params().get(rng.gen_range(0..len)).expect("RNG Error");
+
+        out.write(param.value().render().as_ref())?;
+        Ok(())
+    } else {
+        Err(RenderError::new("missing items to choose from"))
     }
 }
