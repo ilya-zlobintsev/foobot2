@@ -100,6 +100,7 @@ impl CommandHandler {
             }),
         );
         template_registry.register_helper("choose", Box::new(random_helper));
+        template_registry.register_helper("sleep", Box::new(sleep_helper));
 
         template_registry.set_strict_mode(true);
 

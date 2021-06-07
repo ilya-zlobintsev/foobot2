@@ -1,4 +1,4 @@
-use std::{env, thread};
+use std::{env, thread::{self, sleep}, time::Duration};
 
 use handlebars::{
     Context, Handlebars, Helper, HelperDef, HelperResult, JsonRender, Output, RenderContext,
@@ -135,5 +135,16 @@ pub fn random_helper(
         Ok(())
     } else {
         Err(RenderError::new("missing items to choose from"))
+    }
+}
+
+pub fn sleep_helper(h: &Helper, _: &Handlebars, _: &Context, _: &mut RenderContext, out: &mut dyn Output) -> HelperResult {
+    match h.params().get(0) {
+        Some(duration) => {
+            sleep(Duration::from_secs(duration.value().as_u64().expect("Invalid duration")));
+
+            Ok(())
+        }
+        None => Err(RenderError::new("sleep error: no duration specified"))
     }
 }
