@@ -45,7 +45,7 @@ pub async fn add_command(
     let permissions = get_permissions(&channel_id, jar, cmd).await?;
 
     if permissions == "channel_mod" {
-        cmd.db.add_command_to_channel(
+        cmd.db.add_command_to_channel_id(
             channel_id.parse().unwrap(),
             &command_form.cmd_trigger,
             &command_form.cmd_action,

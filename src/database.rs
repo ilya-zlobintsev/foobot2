@@ -230,14 +230,14 @@ impl Database {
         command_name: &str,
         command_action: &str,
     ) -> Result<(), diesel::result::Error> {
-        let channel_id = self.get_channel(channel_identifier)?.id;
+        let channel = self.get_channel(channel_identifier)?;
         
-        self.add_command_to_channel(channel_id, command_name, command_action)
+        self.add_command_to_channel(channel, command_name, command_action)
     }
     
     pub fn add_command_to_channel(
         &self,
-        channel_id: u64,
+        channel: Channel,
         command_name: &str,
         command_action: &str,
     ) -> Result<(), diesel::result::Error> {
@@ -249,12 +249,24 @@ impl Database {
                 name: command_name,
                 action: command_action,
                 permissions: None,
-                channel_id,
+                channel_id: channel.id,
             })
             .execute(&mut conn)?;
 
         Ok(())
     }
+
+    pub fn add_command_to_channel_id(
+        &self,
+        channel_id: u64,
+        command_name: &str,
+        command_action: &str,
+    ) -> Result<(), diesel::result::Error> {
+        let channel = self.get_channel_by_id(channel_id)?.unwrap();
+        
+        self.add_command_to_channel(channel, command_name, command_action)
+    }
+    
 
     pub fn delete_command(
         &self,
