@@ -1,4 +1,7 @@
-use std::sync::{Arc, RwLock};
+use std::{
+    collections::HashMap,
+    sync::{Arc, RwLock},
+};
 
 use async_trait::async_trait;
 use tokio::task::{self, JoinHandle};
@@ -34,7 +37,12 @@ impl Twitch {
     async fn handle_privmsg(&self, mut pm: PrivmsgMessage) {
         tracing::debug!("{:?}", pm);
 
-        if let Some(message_text) = pm.message_text.strip_prefix(&self.command_prefix) {
+        let command_prefix = match std::env::var(format!("PREFIX_TWITCH_{}", pm.channel_login)) {
+            Ok(prefix) => prefix,
+            Err(_) => self.command_prefix.clone(), // TODO
+        };
+
+        if let Some(message_text) = pm.message_text.strip_prefix(&command_prefix) {
             pm.message_text = message_text.to_string();
 
             let context = ExecutionContext {
