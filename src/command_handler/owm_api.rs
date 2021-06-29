@@ -1,6 +1,6 @@
 use reqwest::Client;
 use serde::{Deserialize, Serialize};
-use serde_json::Value;
+use http::status::StatusCode;
 
 #[derive(Clone)]
 pub struct OwmApi {
@@ -23,15 +23,13 @@ impl OwmApi {
             .query(&[("q", place), ("appid", &self.api_key), ("units", "metric")])
             .send()
             .await?;
-        
+
         tracing::info!("GET {}: {}", response.url(), response.status());
 
-        let basic_response: Value = response.json().await?;
-        
-        match basic_response["cod"].to_string().trim_matches('"') {
-            "200" => Ok(serde_json::from_value(basic_response)?),
-            "404" => Err(OwmError::LocationNotFound),
-            cod => Err(OwmError::UnexpectedCode(cod.to_string())),
+        match response.status() {
+            StatusCode::OK => Ok(response.json().await?),
+            StatusCode::NOT_FOUND => Err(OwmError::LocationNotFound),
+            _ => Err(OwmError::UnexpectedCode(response.status().to_string())),
         }
     }
 }
