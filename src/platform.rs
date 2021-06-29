@@ -56,7 +56,7 @@ impl From<SerenityError> for ChatPlatformError {
     }
 }
 
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
 pub enum UserIdentifier {
     TwitchID(String),
     DiscordID(String),
@@ -108,6 +108,7 @@ impl UserIdentifier {
     }
 }
 
+#[derive(Debug)]
 pub enum UserIdentifierError {
     MissingDelimiter,
     InvalidPlatform,
@@ -152,7 +153,7 @@ impl ChannelIdentifier {
 pub enum Permissions {
     Default,
     ChannelMod,
-    // BotAdmin,
+    Admin,
 }
 
 impl Permissions {
@@ -160,6 +161,7 @@ impl Permissions {
         match self {
             Permissions::Default => "default".to_string(),
             Permissions::ChannelMod => "channel_mod".to_string(),
+            Permissions::Admin => "admin".to_string(),
         }
     }
 }

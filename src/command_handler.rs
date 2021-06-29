@@ -173,10 +173,21 @@ impl CommandHandler {
         &self,
         command: &str,
         arguments: Vec<&str>,
-        execution_context: ExecutionContext,
+        mut execution_context: ExecutionContext,
         user_identifier: UserIdentifier,
     ) -> Result<Option<String>, CommandError> {
         tracing::info!("Processing command {} with {:?}", command, arguments);
+
+        // TODO: Make this not query every time
+        if let Ok(admin) = env::var("ADMIN_USER") {
+            if UserIdentifier::from_string(&admin, self.twitch_api.as_ref())
+                .await
+                .expect("Invalid admin user format!")
+                == user_identifier
+            {
+                execution_context.permissions = Permissions::Admin;
+            }
+        }
 
         let user = self.db.get_or_create_user(&user_identifier)?;
 
@@ -340,7 +351,7 @@ impl CommandHandler {
         }
 
         action = action.replace('\\', "");
-        
+
         tracing::info!("Prased action: {}", action);
 
         let response = self.template_registry.render_template(
@@ -402,7 +413,7 @@ impl CommandHandler {
             )))
         } else {
             match execution_context.permissions {
-                Permissions::ChannelMod => {
+                Permissions::ChannelMod | Permissions::Admin => {
                     match arguments.next().ok_or_else(|| {
                         CommandError::MissingArgument("must be either add or delete".to_string())
                     })? {
