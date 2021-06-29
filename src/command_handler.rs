@@ -1,11 +1,13 @@
 pub mod discord_api;
 pub mod inquiry_helper;
+pub mod owm_api;
 pub mod spotify_api;
 pub mod twitch_api;
 
 use core::fmt;
 use std::{
     env::{self, VarError},
+    num::ParseIntError,
     sync::{Arc, RwLock},
     time::{Duration, Instant},
 };
@@ -24,11 +26,14 @@ use serenity::{
 use tokio::task;
 use twitch_api::TwitchApi;
 
+use self::owm_api::OwmApi;
+
 #[derive(Clone)]
 pub struct CommandHandler {
     pub db: Database,
     pub twitch_api: Option<TwitchApi>,
     pub discord_context: Option<Arc<DiscordContext>>,
+    owm_api: Option<OwmApi>,
     startup_time: Instant,
     template_registry: Arc<Handlebars<'static>>,
     cooldowns: Arc<RwLock<Vec<(u64, String)>>>, // User id and command
@@ -102,6 +107,21 @@ impl CommandHandler {
         template_registry.register_helper("choose", Box::new(random_helper));
         template_registry.register_helper("sleep", Box::new(sleep_helper));
 
+        if let Ok(api_key) = env::var("OWM_API_KEY") {
+            template_registry.register_helper(
+                "weather",
+                Box::new(WeatherHelper {
+                    db: db.clone(),
+                    api: OwmApi::init(api_key),
+                }),
+            )
+        }
+
+        let owm_api = match env::var("OWM_API_KEY") {
+            Ok(api_key) => Some(OwmApi::init(api_key)),
+            Err(_) => None,
+        };
+
         template_registry.set_strict_mode(true);
 
         let cooldowns = Arc::new(RwLock::new(Vec::new()));
@@ -110,6 +130,7 @@ impl CommandHandler {
             db,
             twitch_api,
             startup_time,
+            owm_api,
             template_registry: Arc::new(template_registry),
             discord_context,
             cooldowns,
@@ -224,7 +245,7 @@ impl CommandHandler {
 
                     (
                         self.execute_command_action(
-                            &action,
+                            action,
                             execution_context,
                             user.clone(),
                             &arguments,
@@ -252,7 +273,7 @@ impl CommandHandler {
                 _ => match self.db.get_command(&execution_context.channel, command)? {
                     Some(cmd) => (
                         self.execute_command_action(
-                            &cmd.action,
+                            cmd.action,
                             execution_context,
                             user.clone(),
                             &arguments,
@@ -293,20 +314,43 @@ impl CommandHandler {
 
     fn execute_command_action(
         &self,
-        action: &str,
+        mut action: String,
         execution_context: ExecutionContext,
         user: User,
         arguments: &Vec<&str>,
     ) -> Result<Option<String>, CommandError> {
         tracing::info!("Parsing action {}", action);
 
-        let context = InquiryContext {
-            user,
-            execution_context,
-            arguments: arguments.iter().map(|s| s.to_owned().to_owned()).collect(),
-        };
+        for variable in action.clone().split_whitespace() {
+            if let Some(param) = variable.strip_prefix('$') {
+                tracing::debug!("replacing {}", param);
 
-        let response = self.template_registry.render_template(action, &context)?;
+                action = action.replace(
+                    variable,
+                    &match param {
+                        "0+" => arguments.join(" "),
+                        "user_id" => user.id.to_string(),
+                        _ => arguments
+                            .get(param.parse::<usize>()?)
+                            .ok_or_else(|| CommandError::MissingArgument(param.to_string()))?
+                            .to_string(),
+                    },
+                );
+            }
+        }
+
+        action = action.replace('\\', "");
+        
+        tracing::info!("Prased action: {}", action);
+
+        let response = self.template_registry.render_template(
+            &action,
+            &(InquiryContext {
+                user,
+                execution_context,
+                arguments: arguments.iter().map(|s| s.to_owned().to_owned()).collect(),
+            }),
+        )?;
 
         if !response.is_empty() {
             Ok(Some(response))
@@ -469,6 +513,11 @@ impl From<handlebars::RenderError> for CommandError {
 impl From<VarError> for CommandError {
     fn from(e: VarError) -> Self {
         Self::ConfigurationError(e)
+    }
+}
+impl From<ParseIntError> for CommandError {
+    fn from(e: ParseIntError) -> Self {
+        Self::InvalidArgument(format!("expected a number"))
     }
 }
 

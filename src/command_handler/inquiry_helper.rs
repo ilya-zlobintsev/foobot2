@@ -1,4 +1,9 @@
-use std::{env, thread::{self, sleep}, time::Duration};
+use std::{
+    env,
+    fmt::Debug,
+    thread::{self, sleep},
+    time::Duration,
+};
 
 use handlebars::{
     Context, Handlebars, Helper, HelperDef, HelperResult, JsonRender, Output, RenderContext,
@@ -13,7 +18,7 @@ use crate::{
     platform::{ExecutionContext, UserIdentifier},
 };
 
-use super::{spotify_api::SpotifyApi, twitch_api::TwitchApi};
+use super::{owm_api::OwmApi, spotify_api::SpotifyApi, twitch_api::TwitchApi};
 
 #[derive(Serialize, Deserialize)]
 pub struct InquiryContext {
@@ -37,6 +42,60 @@ impl HelperDef for ContextHelper {
             "a": 1,
             "b": 2,
         })))
+    }
+}
+
+pub struct WeatherHelper {
+    pub db: Database,
+    pub api: OwmApi,
+}
+
+impl HelperDef for WeatherHelper {
+    fn call_inner<'reg: 'rc, 'rc>(
+        &self,
+        h: &Helper<'reg, 'rc>,
+        _: &'reg Handlebars,
+        context: &'rc Context,
+        _: &mut RenderContext<'reg, 'rc>,
+    ) -> Result<ScopedJson<'reg, 'rc>, RenderError> {
+        let context = serde_json::from_value::<InquiryContext>(context.data().clone())
+            .expect("Failed to get command context");
+
+        match context.arguments.len() {
+            0 => Ok(json!(null).into()),
+            _ => {
+                let runtime = tokio::runtime::Handle::current();
+
+                tracing::trace!("Helper params: {:?}", h.params());
+
+                let place = h
+                    .params()
+                    .iter()
+                    .map(|item| item.relative_path().expect("invalid param").as_str())
+                    .collect::<Vec<&str>>()
+                    .join(" ");
+
+                tracing::info!("Querying weather for {}", place);
+
+                let api = self.api.clone();
+
+                match thread::spawn(move || runtime.block_on(api.get_current(&place)))
+                    .join()
+                    .unwrap()
+                {
+                    Ok(weather) => Ok(json!({
+                        "location": format!("{}, {}", weather.name, weather.sys.country.unwrap_or_else(|| "Unknown Country".to_string())),
+                        "temperature": weather.main.temp,
+                        "description": match weather.weather.first() {
+                            Some(weather) => &weather.description,
+                            None => "",
+                        }
+                    })
+                    .into()),
+                    Err(e) => Err(RenderError::new(e.to_string())),
+                }
+            }
+        }
     }
 }
 
@@ -138,13 +197,21 @@ pub fn random_helper(
     }
 }
 
-pub fn sleep_helper(h: &Helper, _: &Handlebars, _: &Context, _: &mut RenderContext, out: &mut dyn Output) -> HelperResult {
+pub fn sleep_helper(
+    h: &Helper,
+    _: &Handlebars,
+    _: &Context,
+    _: &mut RenderContext,
+    out: &mut dyn Output,
+) -> HelperResult {
     match h.params().get(0) {
         Some(duration) => {
-            sleep(Duration::from_secs(duration.value().as_u64().expect("Invalid duration")));
+            sleep(Duration::from_secs(
+                duration.value().as_u64().expect("Invalid duration"),
+            ));
 
             Ok(())
         }
-        None => Err(RenderError::new("sleep error: no duration specified"))
+        None => Err(RenderError::new("sleep error: no duration specified")),
     }
 }
