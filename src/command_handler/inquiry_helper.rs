@@ -61,25 +61,30 @@ impl HelperDef for WeatherHelper {
         let context = serde_json::from_value::<InquiryContext>(context.data().clone())
             .expect("Failed to get command context");
 
-        match context.arguments.len() {
-            0 => Ok(json!(null).into()),
-            _ => {
-                let runtime = tokio::runtime::Handle::current();
+        let runtime = tokio::runtime::Handle::current();
 
+        let place = match context.arguments.len() {
+            0 => self
+                .db
+                .get_location(context.user.id)
+                .map_err(|e| RenderError::new(format!("DB Error: {}", e)))?
+                .ok_or_else(|| RenderError::new("location not set"))?,
+            _ => {
                 tracing::trace!("Helper params: {:?}", h.params());
 
-                let place = h
-                    .params()
+                h.params()
                     .iter()
                     .map(|item| item.relative_path().expect("invalid param").as_str())
                     .collect::<Vec<&str>>()
-                    .join(" ");
+                    .join(" ")
+            }
+        };
 
-                tracing::info!("Querying weather for {}", place);
+        tracing::info!("Querying weather for {}", place);
 
-                let api = self.api.clone();
+        let api = self.api.clone();
 
-                match thread::spawn(move || runtime.block_on(api.get_current(&place)))
+        match thread::spawn(move || runtime.block_on(api.get_current(&place)))
                     .join()
                     .unwrap()
                 {
@@ -94,8 +99,6 @@ impl HelperDef for WeatherHelper {
                     .into()),
                     Err(e) => Err(RenderError::new(e.to_string())),
                 }
-            }
-        }
     }
 }
 

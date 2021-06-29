@@ -231,17 +231,16 @@ impl Database {
         command_action: &str,
     ) -> Result<(), diesel::result::Error> {
         let channel = self.get_channel(channel_identifier)?;
-        
+
         self.add_command_to_channel(channel, command_name, command_action)
     }
-    
+
     pub fn add_command_to_channel(
         &self,
         channel: Channel,
         command_name: &str,
         command_action: &str,
     ) -> Result<(), diesel::result::Error> {
-
         let mut conn = self.conn_pool.get().unwrap();
 
         diesel::insert_into(commands::table)
@@ -263,10 +262,9 @@ impl Database {
         command_action: &str,
     ) -> Result<(), diesel::result::Error> {
         let channel = self.get_channel_by_id(channel_id)?.unwrap();
-        
+
         self.add_command_to_channel(channel, command_name, command_action)
     }
-    
 
     pub fn delete_command(
         &self,
@@ -422,6 +420,10 @@ impl Database {
         user_id: u64,
     ) -> Result<Option<String>, diesel::result::Error> {
         self.get_user_data_value(user_id, "spotify_access_token")
+    }
+
+    pub fn get_location(&self, user_id: u64) -> Result<Option<String>, diesel::result::Error> {
+        self.get_user_data_value(user_id, "location")
     }
 
     pub fn get_web_session(
