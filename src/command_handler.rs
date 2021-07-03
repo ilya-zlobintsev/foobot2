@@ -394,7 +394,7 @@ impl CommandHandler {
             result
         };
 
-        format!("Pong! Uptime {}", uptime)
+        format!("Pong! Version: {}, Uptime {}", env!("CARGO_PKG_VERSION") ,uptime)
     }
 
     async fn edit_cmds(
