@@ -51,14 +51,7 @@ pub async fn authenticate_twitch(cmd: &State<CommandHandler>) -> Redirect {
 
     let client_id = twitch_api.get_client_id();
 
-    let redirect_uri = format!(
-        "{}/authenticate/twitch/redirect",
-        env::var("BASE_URL").expect("BASE_URL missing")
-    );
-
-    tracing::info!("Using redirect_uri={}", redirect_uri);
-
-    Redirect::to(format!("https://id.twitch.tv/oauth2/authorize?client_id={}&redirect_uri={}&response_type=code&scope={}", client_id, redirect_uri, TWITCH_SCOPES.join(" ")))
+    Redirect::to(AuthPlatform::Twitch.construct_uri(client_id, &TWITCH_SCOPES.join(" ")))
 }
 
 #[get("/twitch/redirect?<code>")]
@@ -129,12 +122,7 @@ pub fn authenticate_discord() -> Redirect {
 
     let client_id = env::var("DISCORD_CLIENT_ID").expect("DISCORD_CLIENT_ID missing");
 
-    let redirect_uri = format!(
-        "{}/authenticate/discord/redirect",
-        env::var("BASE_URL").expect("BASE_URL missing")
-    );
-
-    Redirect::to(format!("https://discord.com/api/oauth2/authorize?client_id={}&redirect_uri={}&response_type=code&scope={}", client_id, redirect_uri, DISCORD_SCOPES))
+    Redirect::to(AuthPlatform::Discord.construct_uri(&client_id, DISCORD_SCOPES))
 }
 
 #[get("/discord/redirect?<code>")]
@@ -212,11 +200,7 @@ pub fn authenticate_spotify(cmd: &State<CommandHandler>, jar: &CookieJar<'_>) ->
         Some(_) => {
             let client_id = env::var("SPOTIFY_CLIENT_ID").expect("SPOTIFY_CLIENT_ID missing");
 
-            let redirect_uri = format!(
-                "{}/authenticate/spotify/redirect",
-                env::var("BASE_URL").expect("BASE_URL missing")
-            );
-            Redirect::to(format!("https://accounts.spotify.com/authorize?client_id={}&response_type=code&redirect_uri={}&scope={}", client_id, redirect_uri, SPOTIFY_SCOPES.join("%20")))
+            Redirect::to(AuthPlatform::Spotify.construct_uri(&client_id,&SPOTIFY_SCOPES.join("%20")))
         }
         None => Redirect::to("/authenticate"),
     }
@@ -315,4 +299,46 @@ pub struct DiscordAuthenticationResponse {
     pub expires_in: i64,
     pub refresh_token: String,
     pub scope: String,
+}
+
+enum AuthPlatform {
+    Twitch,
+    Discord,
+    Spotify,
+}
+
+impl AuthPlatform {
+    fn get_name(&self) -> &str {
+        match self {
+            Self::Spotify => "spotify",
+            Self::Twitch => "twitch",
+            Self::Discord => "discord",
+        }
+    }
+
+    fn get_auth_uri(&self) -> &str {
+        match self {
+            Self::Spotify => "https://accounts.spotify.com/authorize",
+            Self::Twitch => "https://id.twitch.tv/oauth2/authorize",
+            Self::Discord => "https://discord.com/api/oauth2/authorize",
+        }
+    }
+
+    pub fn construct_uri(&self, client_id: &str, scopes: &str) -> String {
+        let redirect_uri = format!(
+            "{}/authenticate/{}/redirect",
+            env::var("BASE_URL").expect("BASE_URL missing"),
+            self.get_name(),
+        );
+
+        tracing::info!("Using redirect_uri {}", redirect_uri);
+
+        format!(
+            "{}?client_id={}&redirect_uri={}&response_type=code&scope={}",
+            self.get_auth_uri(),
+            client_id,
+            redirect_uri,
+            scopes
+        )
+    }
 }
