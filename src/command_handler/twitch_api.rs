@@ -29,11 +29,13 @@ impl TwitchApi {
         let validation = Self::validate_oauth(oauth).await?;
 
         let mut headers = HeaderMap::new();
+
         headers.insert("Client-Id", validation.client_id.parse().unwrap());
         headers.insert(
             "Authorization",
             format!("Bearer {}", oauth).parse().unwrap(),
         );
+        headers.insert("Content-Type", "application/json".parse().unwrap());
 
         let moderators_cache = Arc::new(RwLock::new(HashMap::new()));
 
@@ -246,7 +248,7 @@ impl TwitchApi {
 
         Ok(mods)
     }
-
+    
     // This terrible abomination has to exist because twitch doesn't provide an endpoint for this that doesn't require channel auth
     // /// Returns the list of logins of channel moderators. Don't expect this to be efficient
     /*async fn get_channel_mods_from_irc(
