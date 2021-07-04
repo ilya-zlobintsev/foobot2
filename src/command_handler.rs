@@ -33,6 +33,7 @@ pub struct CommandHandler {
     pub db: Database,
     pub twitch_api: Option<TwitchApi>,
     pub discord_context: Option<Arc<DiscordContext>>,
+    admin_user: Option<User>,
     owm_api: Option<OwmApi>,
     startup_time: Instant,
     template_registry: Arc<Handlebars<'static>>,
@@ -125,6 +126,11 @@ impl CommandHandler {
         template_registry.set_strict_mode(true);
 
         let cooldowns = Arc::new(RwLock::new(Vec::new()));
+        
+        let admin_user = match env::var("ADMIN_USER") {
+            Ok(admin) => Some(db.get_or_create_user(&UserIdentifier::from_string(&admin, twitch_api.as_ref()).await.unwrap()).expect("DB Error")),
+            Err(_) => None,
+        };
 
         Self {
             db,
@@ -134,6 +140,7 @@ impl CommandHandler {
             template_registry: Arc::new(template_registry),
             discord_context,
             cooldowns,
+            admin_user,
         }
     }
 
@@ -177,19 +184,14 @@ impl CommandHandler {
         user_identifier: UserIdentifier,
     ) -> Result<Option<String>, CommandError> {
         tracing::info!("Processing command {} with {:?}", command, arguments);
+        
+        let user = self.db.get_or_create_user(&user_identifier)?;
 
-        // TODO: Make this not query every time
-        if let Ok(admin) = env::var("ADMIN_USER") {
-            if UserIdentifier::from_string(&admin, self.twitch_api.as_ref())
-                .await
-                .expect("Invalid admin user format!")
-                == user_identifier
-            {
+        if let Some(admin) = &self.admin_user {
+            if user.id == admin.id {
                 execution_context.permissions = Permissions::Admin;
             }
         }
-
-        let user = self.db.get_or_create_user(&user_identifier)?;
 
         if !self
             .cooldowns
