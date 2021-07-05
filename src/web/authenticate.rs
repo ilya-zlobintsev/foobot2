@@ -20,7 +20,7 @@ use crate::{
 
 use super::template_context::{AuthInfo, AuthenticateContext};
 
-const TWITCH_SCOPES: &[&'static str] = &["user:read:email"];
+const TWITCH_SCOPES: &[&'static str] = &[""];
 const DISCORD_SCOPES: &'static str = "identify";
 const SPOTIFY_SCOPES: &[&'static str] = &["user-read-playback-state", "user-read-recently-played"];
 
