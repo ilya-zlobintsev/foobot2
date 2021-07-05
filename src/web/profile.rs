@@ -6,41 +6,36 @@ use rocket::{
 };
 use rocket_dyn_templates::Template;
 
-use crate::command_handler::CommandHandler;
+use crate::{command_handler::CommandHandler, database::models::WebSession};
 
-use super::template_context::{AuthInfo, LayoutContext, ProfileContext};
+use super::template_context::{LayoutContext, ProfileContext};
 
 #[get("/")]
 pub fn profile(
     cmd: &State<CommandHandler>,
-    jar: &CookieJar<'_>,
+    session: WebSession,
 ) -> Result<Html<Template>, Redirect> {
-    match AuthInfo::new(&cmd.db, jar) {
-        Some(auth_info) => {
-            let user = cmd
-                .db
-                .get_user_by_id(auth_info.user_id)
-                .expect("DB Error")
-                .expect("Potentially invalid user session");
+    let user = cmd
+        .db
+        .get_user_by_id(session.user_id)
+        .expect("DB Error")
+        .expect("Potentially invalid user session");
 
-            let spotify_connected = match cmd
-                .db
-                .get_spotify_access_token(auth_info.user_id)
-                .expect("DB Error")
-            {
-                Some(_) => true,
-                None => false,
-            };
+    let spotify_connected = match cmd
+        .db
+        .get_spotify_access_token(session.user_id)
+        .expect("DB Error")
+    {
+        Some(_) => true,
+        None => false,
+    };
 
-            Ok(Html(Template::render(
-                "profile",
-                ProfileContext {
-                    user,
-                    spotify_connected,
-                    parent_context: LayoutContext::new_with_auth(Some(auth_info)),
-                },
-            )))
-        }
-        None => Err(Redirect::to("/authenticate")),
-    }
+    Ok(Html(Template::render(
+        "profile",
+        ProfileContext {
+            user,
+            spotify_connected,
+            parent_context: LayoutContext::new_with_auth(Some(session)),
+        },
+    )))
 }

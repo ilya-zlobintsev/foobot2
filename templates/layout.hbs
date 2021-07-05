@@ -86,13 +86,13 @@
             <li><a href="/">Home</a></lia>
             <li><a href="/channels">Channels</a></lia>
         </ul>
-        {{ #if parent_context.auth_info }}
-        <p class="user">Logged in as <a class="profile" href="/profile"><b>{{ parent_context.auth_info.username
+        {{ #with parent_context.session }}
+        <p class="user">Logged in as <a class="profile" href="/profile"><b>{{ username
                     }}</b></a></p>
         <a class="logout" href="/authenticate/logout"><img src="/static/logout.png" alt="Log out" /></a>
         {{ else }}
         <a class="user" href="/authenticate"><b>Login</b></a>
-        {{ /if }}
+        {{ /with }}
     </header>
     {{~> page}}
     <footer>

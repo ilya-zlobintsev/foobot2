@@ -6,11 +6,11 @@ use rocket::{catch, form::Form, get, http::CookieJar, post, response::Redirect, 
 use rocket_dyn_templates::Template;
 
 #[get("/")]
-pub async fn index(cmd: &State<CommandHandler>, jar: &CookieJar<'_>) -> Html<Template> {
+pub async fn index(cmd: &State<CommandHandler>, session: Option<WebSession>) -> Html<Template> {
     Html(Template::render(
         "channels",
         &ChannelsContext {
-            parent_context: LayoutContext::new(&cmd.db, jar),
+            parent_context: LayoutContext::new_with_auth(session),
             channels: cmd.db.get_channels().expect("Failed to get channels"),
         },
     ))
@@ -19,13 +19,13 @@ pub async fn index(cmd: &State<CommandHandler>, jar: &CookieJar<'_>) -> Html<Tem
 #[get("/<channel_id>/commands")]
 pub async fn commands_page(
     cmd: &State<CommandHandler>,
-    jar: &CookieJar<'_>,
+    session: Option<WebSession>,
     channel_id: String,
 ) -> Html<Template> {
     Html(Template::render(
         "commands",
         &CommandsContext {
-            parent_context: LayoutContext::new(&cmd.db, jar),
+            parent_context: LayoutContext::new_with_auth(session),
             channel: channel_id.clone(),
             commands: cmd
                 .db
@@ -39,10 +39,10 @@ pub async fn commands_page(
 pub async fn add_command(
     command_form: Form<AddCommandForm>,
     cmd: &State<CommandHandler>,
-    jar: &CookieJar<'_>,
+    session: WebSession,
     channel_id: String,
 ) -> Result<Redirect, ApiError> {
-    let permissions = get_permissions(&channel_id, jar, cmd).await?;
+    let permissions = get_permissions(&channel_id, session, cmd).await?;
 
     if permissions == "channel_mod" {
         cmd.db.add_command_to_channel_id(

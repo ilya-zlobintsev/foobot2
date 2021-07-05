@@ -14,16 +14,18 @@ use tokio::task::{self, JoinHandle};
 
 use template_context::*;
 
-use crate::command_handler::CommandHandler;
+use crate::{command_handler::CommandHandler, database::models::WebSession};
 
 #[get("/")]
-async fn index(cmd: &State<CommandHandler>, jar: &CookieJar<'_>) -> Html<Template> {
+async fn index(cmd: &State<CommandHandler>, session: Option<WebSession>) -> Html<Template> {
     let db = &cmd.db;
+    
+    tracing::debug!("{:?}", session);
 
     Html(Template::render(
         "index",
         &IndexContext {
-            parent_context: LayoutContext::new(db, jar),
+            parent_context: LayoutContext::new_with_auth(session),
             channel_amount: db.get_channels_amount().expect("Failed to get channels"),
         },
     ))
@@ -57,7 +59,7 @@ pub async fn run(command_handler: CommandHandler) -> JoinHandle<()> {
             )
             .mount("/profile", routes![profile::profile])
             .mount("/api", routes![api::get_permissions])
-            .register("/", catchers![errors::not_found])
+            .register("/", catchers![errors::not_found, errors::not_authorized])
             .register("/channels", catchers![channel::not_found])
             .manage(Client::new())
             .manage(command_handler)

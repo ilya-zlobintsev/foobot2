@@ -13,23 +13,26 @@ use crate::{
     command_handler::{
         discord_api::DiscordApi, spotify_api::SpotifyApi, twitch_api::TwitchApi, CommandHandler,
     },
-    database::{models::UserData, Database},
+    database::{
+        models::{UserData, WebSession},
+        Database,
+    },
     platform::UserIdentifier,
     web::template_context::LayoutContext,
 };
 
-use super::template_context::{AuthInfo, AuthenticateContext};
+use super::template_context::AuthenticateContext;
 
 const TWITCH_SCOPES: &[&'static str] = &[""];
 const DISCORD_SCOPES: &'static str = "identify";
 const SPOTIFY_SCOPES: &[&'static str] = &["user-read-playback-state", "user-read-recently-played"];
 
 #[get("/")]
-pub async fn index(cmd: &State<CommandHandler>, jar: &CookieJar<'_>) -> Html<Template> {
+pub async fn index(session: Option<WebSession>) -> Html<Template> {
     Html(Template::render(
         "authenticate",
         &AuthenticateContext {
-            parent_context: LayoutContext::new(&cmd.db, jar),
+            parent_context: LayoutContext::new_with_auth(session),
         },
     ))
 }
@@ -193,85 +196,69 @@ pub async fn discord_redirect(
 }
 
 #[get("/spotify")]
-pub fn authenticate_spotify(cmd: &State<CommandHandler>, jar: &CookieJar<'_>) -> Redirect {
+pub fn authenticate_spotify(cmd: &State<CommandHandler>, session: WebSession) -> Redirect {
     let db = &cmd.db;
 
-    match AuthInfo::new(db, jar) {
-        Some(_) => {
-            let client_id = env::var("SPOTIFY_CLIENT_ID").expect("SPOTIFY_CLIENT_ID missing");
+    let client_id = env::var("SPOTIFY_CLIENT_ID").expect("SPOTIFY_CLIENT_ID missing");
 
-            Redirect::to(AuthPlatform::Spotify.construct_uri(&client_id,&SPOTIFY_SCOPES.join("%20")))
-        }
-        None => Redirect::to("/authenticate"),
-    }
+    Redirect::to(AuthPlatform::Spotify.construct_uri(&client_id, &SPOTIFY_SCOPES.join("%20")))
 }
 
 #[get("/spotify/redirect?<code>")]
 pub async fn spotify_redirect(
     code: &str,
     cmd: &State<CommandHandler>,
-    jar: &CookieJar<'_>,
+    session: WebSession,
 ) -> Redirect {
     let db = &cmd.db;
 
-    match AuthInfo::new(&db, jar) {
-        Some(auth_info) => {
-            let client_id = env::var("SPOTIFY_CLIENT_ID").expect("SPOTIFY_CLIENT_ID missing");
-            let client_secret =
-                env::var("SPOTIFY_CLIENT_SECRET").expect("SPOTIFY_CLIENT_SECRET missing");
+    let client_id = env::var("SPOTIFY_CLIENT_ID").expect("SPOTIFY_CLIENT_ID missing");
+    let client_secret = env::var("SPOTIFY_CLIENT_SECRET").expect("SPOTIFY_CLIENT_SECRET missing");
 
-            let redirect_uri = format!(
-                "{}/authenticate/spotify/redirect",
-                env::var("BASE_URL").expect("BASE_URL missing")
-            );
+    let redirect_uri = format!(
+        "{}/authenticate/spotify/redirect",
+        env::var("BASE_URL").expect("BASE_URL missing")
+    );
 
-            let auth = SpotifyApi::get_tokens(code, &client_id, &client_secret, &redirect_uri)
-                .await
-                .expect("Spotify API Error");
+    let auth = SpotifyApi::get_tokens(code, &client_id, &client_secret, &redirect_uri)
+        .await
+        .expect("Spotify API Error");
 
-            db.set_user_data(
-                &UserData {
-                    name: "spotify_access_token".to_string(),
-                    value: auth.access_token,
-                    public: false,
-                    user_id: auth_info.user_id,
-                },
-                true,
-            )
-            .expect("DB Error");
+    db.set_user_data(
+        &UserData {
+            name: "spotify_access_token".to_string(),
+            value: auth.access_token,
+            public: false,
+            user_id: session.user_id,
+        },
+        true,
+    )
+    .expect("DB Error");
 
-            db.set_user_data(
-                &UserData {
-                    name: "spotify_refresh_token".to_string(),
-                    value: auth.refresh_token,
-                    public: false,
-                    user_id: auth_info.user_id,
-                },
-                true,
-            )
-            .expect("DB Error");
+    db.set_user_data(
+        &UserData {
+            name: "spotify_refresh_token".to_string(),
+            value: auth.refresh_token,
+            public: false,
+            user_id: session.user_id,
+        },
+        true,
+    )
+    .expect("DB Error");
 
-            Redirect::to("/profile")
-        }
-        None => Redirect::to("/authenticate"),
-    }
+    Redirect::to("/profile")
 }
 
 #[get("/spotify/disconnect")]
-pub fn disconnect_spotify(jar: &CookieJar<'_>, cmd: &State<CommandHandler>) -> Redirect {
+pub fn disconnect_spotify(session: WebSession, cmd: &State<CommandHandler>) -> Redirect {
     let db = &cmd.db;
 
-    match AuthInfo::new(&cmd.db, jar) {
-        Some(auth_info) => {
-            db.remove_user_data(auth_info.user_id, "spotify_access_token")
-                .expect("DB Error");
-            db.remove_user_data(auth_info.user_id, "spotify_refresh_token")
-                .expect("DB Error");
+    db.remove_user_data(session.user_id, "spotify_access_token")
+        .expect("DB Error");
+    db.remove_user_data(session.user_id, "spotify_refresh_token")
+        .expect("DB Error");
 
-            Redirect::to("/profile")
-        }
-        None => Redirect::to("/authenticate"),
-    }
+    Redirect::to("/profile")
 }
 
 fn create_user_session(db: &Database, user_id: u64, display_name: String) -> Cookie<'static> {

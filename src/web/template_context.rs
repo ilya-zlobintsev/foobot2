@@ -1,7 +1,19 @@
-use rocket::http::CookieJar;
+use std::convert::Infallible;
+
+use rocket::{
+    http::{CookieJar, Status},
+    outcome::Outcome,
+    request::FromRequest,
+};
 use serde::Serialize;
 
-use crate::database::{Database, models::{Channel, Command, User}};
+use crate::{
+    command_handler::CommandHandler,
+    database::{
+        models::{Channel, Command, User, WebSession},
+        Database,
+    },
+};
 
 #[derive(Serialize)]
 pub struct IndexContext {
@@ -37,42 +49,37 @@ pub struct ProfileContext {
 #[derive(Serialize)]
 pub struct LayoutContext {
     pub name: &'static str,
-    pub auth_info: Option<AuthInfo>,
+    pub session: Option<WebSession>,
 }
 
 impl LayoutContext {
-    pub fn new(db: &Database, cookie_jar: &CookieJar) -> Self {
-        Self::new_with_auth(AuthInfo::new(db, cookie_jar))
-    }
-
-    pub fn new_with_auth(auth_info: Option<AuthInfo>) -> Self {
+    pub fn new_with_auth(session: Option<WebSession>) -> Self {
         Self {
             name: "layout",
-            auth_info,
+            session,
         }
     }
 }
 
-#[derive(Serialize)]
-pub struct AuthInfo {
-    pub username: String,
-    pub user_id: u64,
-}
+#[async_trait]
+impl<'r> FromRequest<'r> for WebSession {
+    type Error = ();
 
-impl AuthInfo {
-    pub fn new(db: &Database, cookie_jar: &CookieJar) -> Option<Self> {
-        match cookie_jar.get_private("session_id") {
-            Some(session_cookie) => match db
-                .get_web_session(session_cookie.value())
-                .expect("DB Error")
-            {
-                Some(session) => Some(AuthInfo {
-                    username: session.username,
-                    user_id: session.user_id,
-                }),
-                None => None, // Invalid session ID
+    async fn from_request(
+        request: &'r rocket::Request<'_>,
+    ) -> rocket::request::Outcome<Self, Self::Error> {
+        let db = &request
+            .rocket()
+            .state::<CommandHandler>()
+            .expect("Missing state")
+            .db;
+
+        match request.cookies().get_private("session_id") {
+            Some(session_id) => match db.get_web_session(session_id.value()).expect("DB Error") {
+                Some(web_session) => Outcome::Success(web_session),
+                None => Outcome::Failure((Status::Unauthorized, ())),
             },
-            None => None,
+            None => Outcome::Failure((Status::Unauthorized, ())),
         }
     }
 }

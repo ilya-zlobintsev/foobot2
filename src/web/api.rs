@@ -7,80 +7,77 @@ use rocket::{
 };
 use serenity::model::id::{ChannelId, GuildId, UserId};
 
+use crate::database::models::WebSession;
 use crate::{
     command_handler::{CommandHandler, DiscordContext},
     platform::{discord, ChannelIdentifier},
 };
 
-use super::template_context::AuthInfo;
-
 #[get("/permissions?<channel_id>")]
 pub async fn get_permissions(
     channel_id: &str,
-    jar: &CookieJar<'_>,
+    web_session: WebSession,
     cmd: &State<CommandHandler>,
 ) -> Result<String, ApiError> {
     let db = &cmd.db;
 
-    match AuthInfo::new(db, jar) {
-        Some(auth_info) => match db.get_channel_by_id(channel_id.parse().expect("Invalid ID"))? {
-            Some(channel) => match ChannelIdentifier::new(&channel.platform, channel.channel)? {
-                ChannelIdentifier::TwitchChannelName(twitch_channel) => {
-                    let twitch_id = db
-                        .get_user_by_id(auth_info.user_id)?
-                        .ok_or_else(|| ApiError::InvalidUser)?
-                        .twitch_id
-                        .ok_or_else(|| {
-                            ApiError::GenericError("No registered on this platform".to_string())
-                        })?;
-
-                    let twitch_api = cmd.twitch_api.as_ref().ok_or_else(|| {
-                        ApiError::GenericError("Twitch not configured".to_string())
+    match db.get_channel_by_id(channel_id.parse().expect("Invalid ID"))? {
+        Some(channel) => match ChannelIdentifier::new(&channel.platform, channel.channel)? {
+            ChannelIdentifier::TwitchChannelName(twitch_channel) => {
+                let twitch_id = db
+                    .get_user_by_id(web_session.user_id)?
+                    .ok_or_else(|| ApiError::InvalidUser)?
+                    .twitch_id
+                    .ok_or_else(|| {
+                        ApiError::GenericError("No registered on this platform".to_string())
                     })?;
 
-                    match twitch_api
-                        .get_channel_mods(&twitch_channel)
-                        .await?
-                        .contains(
-                            &twitch_api
-                                .get_users(None, Some(&vec![&twitch_id]))
-                                .await?
-                                .first()
-                                .unwrap()
-                                .display_name,
-                        ) {
-                        true => Ok("channel_mod".to_owned()),
-                        false => Ok("none".to_owned()),
-                    }
+                let twitch_api = cmd
+                    .twitch_api
+                    .as_ref()
+                    .ok_or_else(|| ApiError::GenericError("Twitch not configured".to_string()))?;
+
+                match twitch_api
+                    .get_channel_mods(&twitch_channel)
+                    .await?
+                    .contains(
+                        &twitch_api
+                            .get_users(None, Some(&vec![&twitch_id]))
+                            .await?
+                            .first()
+                            .unwrap()
+                            .display_name,
+                    ) {
+                    true => Ok("channel_mod".to_owned()),
+                    false => Ok("none".to_owned()),
                 }
-                ChannelIdentifier::DiscordGuildID(guild_id) => {
-                    let discord_user_id = db
-                        .get_user_by_id(auth_info.user_id)?
-                        .ok_or_else(|| ApiError::InvalidUser)?
-                        .discord_id
-                        .ok_or_else(|| {
-                            ApiError::GenericError("No registered on this platform".to_string())
-                        })?;
+            }
+            ChannelIdentifier::DiscordGuildID(guild_id) => {
+                let discord_user_id = db
+                    .get_user_by_id(web_session.user_id)?
+                    .ok_or_else(|| ApiError::InvalidUser)?
+                    .discord_id
+                    .ok_or_else(|| {
+                        ApiError::GenericError("No registered on this platform".to_string())
+                    })?;
 
-                    let discord_context: DiscordContext =
-                        (**cmd.discord_context.as_ref().ok_or_else(|| {
-                            ApiError::GenericError("Discord not configured".to_string())
-                        })?)
-                        .clone();
+                let discord_context: DiscordContext = (**cmd
+                    .discord_context
+                    .as_ref()
+                    .ok_or_else(|| ApiError::GenericError("Discord not configured".to_string()))?)
+                .clone();
 
-                    let permissions = discord::get_permissions_in_guild(
-                        discord_context,
-                        GuildId(guild_id),
-                        None,
-                        UserId(discord_user_id.parse().unwrap()),
-                    )
-                    .await;
+                let permissions = discord::get_permissions_in_guild(
+                    discord_context,
+                    GuildId(guild_id),
+                    None,
+                    UserId(discord_user_id.parse().unwrap()),
+                )
+                .await;
 
-                    Ok(permissions.to_string())
-                }
-                _ => unimplemented!(),
-            },
-            None => Ok("none".to_owned()),
+                Ok(permissions.to_string())
+            }
+            _ => unimplemented!(),
         },
         None => Ok("none".to_owned()),
     }
