@@ -3,11 +3,12 @@ mod authenticate;
 mod channel;
 mod errors;
 mod profile;
+mod webhooks;
 mod template_context;
 
 use reqwest::Client;
 use rocket::{
-    catchers, fs::FileServer, get, http::CookieJar, response::content::Html, routes, State,
+    catchers, fs::FileServer, get, response::content::Html, routes, State,
 };
 use rocket_dyn_templates::Template;
 use tokio::task::{self, JoinHandle};
@@ -59,6 +60,7 @@ pub async fn run(command_handler: CommandHandler) -> JoinHandle<()> {
             )
             .mount("/profile", routes![profile::profile])
             .mount("/api", routes![api::get_permissions])
+            .mount("/webhooks", routes![webhooks::twitch_callback])
             .register("/", catchers![errors::not_found, errors::not_authorized])
             .register("/channels", catchers![channel::not_found])
             .manage(Client::new())

@@ -4,11 +4,12 @@ pub mod twitch;
 use std::{
     env::{self, VarError},
     fmt,
+    sync::mpsc::{channel, Sender},
 };
 
 use crate::command_handler::{twitch_api::TwitchApi, CommandHandler};
 use async_trait::async_trait;
-use tokio::task::JoinHandle;
+use tokio::task::{self, JoinHandle};
 
 use serenity::prelude::SerenityError;
 
@@ -23,6 +24,14 @@ pub trait ChatPlatform {
     fn get_prefix() -> String {
         env::var("COMMAND_PREFIX").unwrap_or_else(|_| "!".to_string())
     }
+
+    async fn create_listener(&self) -> Sender<PlatformMessage>;
+}
+
+#[derive(Clone)]
+pub struct PlatformMessage {
+    pub channel_id: String,
+    pub message: String,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug)]

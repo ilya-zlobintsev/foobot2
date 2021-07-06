@@ -1,6 +1,11 @@
-use std::env;
+use std::{
+    env,
+    sync::{mpsc::Sender, Arc, Mutex},
+};
 
-use super::{ChannelIdentifier, ChatPlatform, ExecutionContext, Permissions, UserIdentifier};
+use super::{
+    ChannelIdentifier, ChatPlatform, ExecutionContext, Permissions, PlatformMessage, UserIdentifier,
+};
 
 use crate::command_handler::{CommandHandler, CommandMessage};
 
@@ -16,20 +21,19 @@ use serenity::{
     prelude::TypeMapKey,
     Client,
 };
+use std::time::Instant;
 use tokio::task::JoinHandle;
 
-struct Handler {
-    prefix: String,
-}
-
 #[async_trait]
-impl EventHandler for Handler {
+impl EventHandler for Discord {
     // Event handlers are dispatched through a threadpool, and so multiple
     // events can be dispatched simultaneously.
     async fn message(&self, ctx: Context, mut message: Message) {
         tracing::debug!("{:?}", message);
 
         if message.content.starts_with(&self.prefix) {
+            tracing::debug!("Recieved a command at {:?}", Instant::now());
+
             let typing = ctx
                 .http
                 .start_typing(message.channel_id.0)
@@ -40,12 +44,6 @@ impl EventHandler for Handler {
                 .strip_prefix(&self.prefix)
                 .unwrap()
                 .to_string();
-
-            let data = ctx.data.read().await;
-
-            let command_handler = data
-                .get::<CommandHandler>()
-                .expect("CommandHandler not found in client");
 
             let channel = match message.guild_id {
                 Some(guild_id) => ChannelIdentifier::DiscordGuildID(guild_id.0),
@@ -69,7 +67,8 @@ impl EventHandler for Handler {
                 channel,
             };
 
-            if let Some(response) = command_handler
+            if let Some(response) = self
+                .command_handler
                 .handle_command_message(&message, context, message.get_user_identifier())
                 .await
             {
@@ -89,11 +88,17 @@ impl EventHandler for Handler {
     async fn ready(&self, _: Context, ready: Ready) {
         tracing::info!("Connected to discord as {}", ready.user.name);
     }
+
+    async fn cache_ready(&self, ctx: Context, _guilds: Vec<GuildId>) {
+        // let sender = self
+    }
 }
 
 pub struct Discord {
     token: String,
+    prefix: String,
     command_handler: CommandHandler,
+    sender: Arc<Mutex<Option<Sender<PlatformMessage>>>>,
 }
 
 #[async_trait]
@@ -106,24 +111,22 @@ impl ChatPlatform for Discord {
         Ok(Box::new(Self {
             token,
             command_handler,
+            sender: Arc::new(Mutex::new(None)),
+            prefix: Self::get_prefix(),
         }))
     }
 
     async fn run(self) -> JoinHandle<()> {
         let mut client = Client::builder(self.token.clone())
-            .event_handler(Handler {
-                prefix: Self::get_prefix(),
-            })
+            .event_handler(self)
             .await
             .expect("Failed to start Discord");
 
-        {
-            let mut data = client.data.write().await;
-
-            data.insert::<CommandHandler>(self.command_handler.clone());
-        }
-
         tokio::spawn(async move { client.start().await.expect("Discord error") })
+    }
+
+    async fn create_listener(&self) -> Sender<PlatformMessage> {
+        todo!()
     }
 }
 

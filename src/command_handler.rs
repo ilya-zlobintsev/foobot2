@@ -13,6 +13,7 @@ use std::{
 };
 
 use crate::{
+    command_handler::twitch_api::model::EventsubSubscriptionType,
     database::{models::User, Database},
     platform::{ExecutionContext, Permissions, UserIdentifier, UserIdentifierError},
 };
@@ -126,9 +127,16 @@ impl CommandHandler {
         template_registry.set_strict_mode(true);
 
         let cooldowns = Arc::new(RwLock::new(Vec::new()));
-        
+
         let admin_user = match env::var("ADMIN_USER") {
-            Ok(admin) => Some(db.get_or_create_user(&UserIdentifier::from_string(&admin, twitch_api.as_ref()).await.unwrap()).expect("DB Error")),
+            Ok(admin) => Some(
+                db.get_or_create_user(
+                    &UserIdentifier::from_string(&admin, twitch_api.as_ref())
+                        .await
+                        .unwrap(),
+                )
+                .expect("DB Error"),
+            ),
             Err(_) => None,
         };
 
@@ -184,7 +192,7 @@ impl CommandHandler {
         user_identifier: UserIdentifier,
     ) -> Result<Option<String>, CommandError> {
         tracing::info!("Processing command {} with {:?}", command, arguments);
-        
+
         let user = self.db.get_or_create_user(&user_identifier)?;
 
         if let Some(admin) = &self.admin_user {
@@ -282,6 +290,27 @@ impl CommandHandler {
                     self.db.merge_users(user.clone(), other);
 
                     (Some("sucessfully merged users".to_string()), None)
+                }
+                "testman" => {
+                    if execution_context.channel.get_platform_name() == "twitch" {
+                        let channel_name = execution_context.channel.get_channel();
+
+                        let twitch_api = self.twitch_api.as_ref().unwrap();
+
+                        let users = twitch_api
+                            .get_users(Some(&vec![&channel_name]), None)
+                            .await
+                            .unwrap();
+
+                        twitch_api
+                            .create_eventsub_subscription(
+                                EventsubSubscriptionType::ChannelFollow(users.first().unwrap().id.to_string()),
+                                rocket::Config::SECRET_KEY,
+                            )
+                            .await
+                            .unwrap();
+                    }
+                    (None, None)
                 }
                 _ => match self.db.get_command(&execution_context.channel, command)? {
                     Some(cmd) => (
@@ -396,7 +425,11 @@ impl CommandHandler {
             result
         };
 
-        format!("Pong! Version: {}, Uptime {}", env!("CARGO_PKG_VERSION") ,uptime)
+        format!(
+            "Pong! Version: {}, Uptime {}",
+            env!("CARGO_PKG_VERSION"),
+            uptime
+        )
     }
 
     async fn edit_cmds(
