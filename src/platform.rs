@@ -124,6 +124,12 @@ pub enum UserIdentifierError {
     InvalidUser,
 }
 
+#[derive(Debug, PartialEq, Eq, Hash)]
+pub enum ChatPlatformKind {
+    Twitch,
+    Discord    
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum ChannelIdentifier {
     TwitchChannelName(String),

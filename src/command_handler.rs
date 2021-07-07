@@ -6,16 +6,20 @@ pub mod twitch_api;
 
 use core::fmt;
 use std::{
+    collections::HashMap,
     env::{self, VarError},
     num::ParseIntError,
-    sync::{Arc, RwLock},
+    sync::{mpsc::Sender, Arc, Mutex, RwLock},
     time::{Duration, Instant},
 };
 
 use crate::{
     command_handler::twitch_api::model::EventsubSubscriptionType,
     database::{models::User, Database},
-    platform::{ExecutionContext, Permissions, UserIdentifier, UserIdentifierError},
+    platform::{
+        ChatPlatformKind, ExecutionContext, Permissions, PlatformMessage, UserIdentifier,
+        UserIdentifierError,
+    },
 };
 
 use handlebars::Handlebars;
@@ -34,6 +38,7 @@ pub struct CommandHandler {
     pub db: Database,
     pub twitch_api: Option<TwitchApi>,
     pub discord_context: Option<Arc<DiscordContext>>,
+    pub platform_senders: Arc<Mutex<HashMap<ChatPlatformKind, Sender<PlatformMessage>>>>,
     admin_user: Option<User>,
     owm_api: Option<OwmApi>,
     startup_time: Instant,
@@ -149,6 +154,7 @@ impl CommandHandler {
             discord_context,
             cooldowns,
             admin_user,
+            platform_senders: Arc::new(Mutex::new(HashMap::new())),
         }
     }
 
@@ -304,7 +310,9 @@ impl CommandHandler {
 
                         twitch_api
                             .create_eventsub_subscription(
-                                EventsubSubscriptionType::ChannelFollow(users.first().unwrap().id.to_string()),
+                                EventsubSubscriptionType::ChannelFollow(
+                                    users.first().unwrap().id.to_string(),
+                                ),
                                 rocket::Config::SECRET_KEY,
                             )
                             .await

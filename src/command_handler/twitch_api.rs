@@ -3,7 +3,7 @@ pub mod model;
 use std::{
     collections::HashMap,
     env,
-    sync::{mpsc::Sender, Arc, Mutex, RwLock},
+    sync::{Arc, RwLock},
     time::Duration,
 };
 
@@ -22,7 +22,6 @@ pub struct TwitchApi {
     moderators_cache: Arc<RwLock<HashMap<String, Vec<String>>>>,
     users_cache: Arc<RwLock<Vec<User>>>,
     app_access_token: Option<String>,
-    irc_sender: Arc<Mutex<Option<Sender<PlatformMessage>>>>,
 }
 
 impl TwitchApi {
@@ -56,7 +55,6 @@ impl TwitchApi {
                 Ok(secret) => Some(Self::get_app_token(&validation.client_id, &secret).await?),
                 Err(_) => None,
             },
-            irc_sender: Arc::new(Mutex::new(None)),
         };
 
         if let Some(_) = twitch_api.app_access_token {
@@ -129,19 +127,6 @@ impl TwitchApi {
             .await?;
         tracing::info!("Validating twitch API token: {}", response.status());
         Ok(response.json().await?)
-    }
-
-    pub async fn set_irc_sender(&self, sender: Sender<PlatformMessage>)  {
-        *self.irc_sender.lock().unwrap() = Some(sender);
-    }
-
-    pub async fn send_message(&self, channel_login: String, message: String) {
-        let sender = self.irc_sender.lock().unwrap().clone().expect("no sender");
-
-        sender.send(PlatformMessage {
-            channel_id: channel_login,
-            message,
-        }).expect("Send error");
     }
 
     pub fn get_oauth(&self) -> &str {

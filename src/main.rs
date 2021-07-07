@@ -13,7 +13,7 @@ use std::env;
 use command_handler::CommandHandler;
 use database::Database;
 use dotenv::dotenv;
-use platform::ChatPlatform;
+use platform::{ChatPlatform, ChatPlatformKind};
 
 use platform::discord::Discord;
 use platform::twitch::Twitch;
@@ -40,18 +40,15 @@ async fn main() {
 
     handles.push(web_handle);
 
-    let command_handler = command_handler.clone();
-
     match Twitch::init(command_handler.clone()).await {
         Ok(twitch) => {
-            let handle = twitch.clone().run().await;
+            handles.push(twitch.clone().run().await);
 
             command_handler
-                .twitch_api
-                .as_ref()
+                .platform_senders
+                .lock()
                 .unwrap()
-                .set_irc_sender(twitch.create_listener().await)
-                .await;
+                .insert(ChatPlatformKind::Twitch, twitch.create_listener().await);
 
             channels
                 .iter()
@@ -65,17 +62,21 @@ async fn main() {
                 .for_each(|channel| {
                     twitch.join_channel(channel);
                 });
-
-            handles.push(handle);
         }
         Err(e) => {
             tracing::error!("Error loading Twitch: {:?}", e);
         }
     }
 
-    match Discord::init(command_handler).await {
+    match Discord::init(command_handler.clone()).await {
         Ok(discord) => {
-            handles.push(discord.run().await);
+            handles.push(discord.clone().run().await);
+
+            command_handler
+                .platform_senders
+                .lock()
+                .unwrap()
+                .insert(ChatPlatformKind::Discord, discord.create_listener().await);
         }
         Err(e) => {
             tracing::error!("Error loading Discord: {:?}", e);

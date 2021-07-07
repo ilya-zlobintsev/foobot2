@@ -1,6 +1,9 @@
 use std::{
     env,
-    sync::{mpsc::Sender, Arc, Mutex},
+    sync::{
+        mpsc::{channel, Receiver, Sender},
+        Arc, Mutex,
+    },
 };
 
 use super::{
@@ -22,7 +25,7 @@ use serenity::{
     Client,
 };
 use std::time::Instant;
-use tokio::task::JoinHandle;
+use tokio::task::{self, JoinHandle};
 
 #[async_trait]
 impl EventHandler for Discord {
@@ -85,15 +88,28 @@ impl EventHandler for Discord {
         }
     }
 
-    async fn ready(&self, _: Context, ready: Ready) {
+    async fn ready(&self, ctx: Context, ready: Ready) {
         tracing::info!("Connected to discord as {}", ready.user.name);
-    }
 
-    async fn cache_ready(&self, ctx: Context, _guilds: Vec<GuildId>) {
-        // let sender = self
+        let (sender, receiver): (Sender<PlatformMessage>, Receiver<PlatformMessage>) = channel();
+
+        let ctx = ctx.clone();
+
+        task::spawn(async move {
+            loop {
+                let msg = receiver.recv().unwrap();
+
+                let channel = ChannelId(msg.channel_id.parse().expect("Invalid channel"));
+
+                channel.send_message(&ctx, |m| m.content(msg.message)).await.expect("failed to send message");
+            }
+        });
+
+        *self.sender.lock().unwrap() = Some(sender);
     }
 }
 
+#[derive(Clone)]
 pub struct Discord {
     token: String,
     prefix: String,
@@ -126,7 +142,12 @@ impl ChatPlatform for Discord {
     }
 
     async fn create_listener(&self) -> Sender<PlatformMessage> {
-        todo!()
+        self.sender
+            .lock()
+            .unwrap()
+            .as_ref()
+            .expect("no sender")
+            .clone()
     }
 }
 

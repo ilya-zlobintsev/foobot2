@@ -2,9 +2,12 @@ use hmac::{Hmac, Mac, NewMac};
 use rocket::{data::ToByteUnit, http::Status, outcome::Outcome, request::FromRequest, Data, State};
 use sha2::Sha256;
 
-use crate::command_handler::{
-    twitch_api::model::{EventsubMessage, EventsubMessageType},
-    CommandHandler,
+use crate::{
+    command_handler::{
+        twitch_api::model::{EventsubMessage, EventsubMessageType},
+        CommandHandler,
+    },
+    platform::{ChatPlatformKind, PlatformMessage},
 };
 
 #[post("/twitch", data = "<body>")]
@@ -15,11 +18,16 @@ pub async fn twitch_callback(
 ) -> Result<String, Status> {
     tracing::info!("Handling eventsub callback {:?}", properties.message_type);
 
-    cmd.twitch_api
-        .as_ref()
+    cmd.platform_senders
+        .lock()
         .unwrap()
-        .send_message("boring_nick".to_string(), format!("{:?}", properties.message_timestamp))
-        .await;
+        .get(&ChatPlatformKind::Twitch)
+        .unwrap()
+        .send(PlatformMessage {
+            channel_id: "boring_nick".to_string(),
+            message: properties.message_timestamp.clone(),
+        })
+        .unwrap();
 
     let body_stream = body.open(32.mebibytes());
 
@@ -36,11 +44,16 @@ pub async fn twitch_callback(
             match properties.message_type {
                 EventsubMessageType::WebhookCallbackVerification => Ok(message.challenge.unwrap()),
                 EventsubMessageType::Notification => {
-                    cmd.twitch_api
-                        .as_ref()
+                    cmd.platform_senders
+                        .lock()
                         .unwrap()
-                        .send_message("boring_nick".to_string(), format!("{:?}", message))
-                        .await;
+                        .get(&ChatPlatformKind::Twitch)
+                        .unwrap()
+                        .send(PlatformMessage {
+                            channel_id: "boring_nick".to_string(),
+                            message: format!("{:?}", message),
+                        })
+                        .unwrap();
 
                     Ok(String::new())
                 }
