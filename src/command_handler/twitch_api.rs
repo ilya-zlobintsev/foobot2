@@ -2,14 +2,18 @@ pub mod model;
 
 use std::{
     collections::HashMap,
+    env,
     sync::{Arc, RwLock},
     time::Duration,
 };
 
 use reqwest::{header::HeaderMap, Client};
+use serde_json::json;
 use tokio::task;
 
 use model::*;
+
+use crate::platform::PlatformMessage;
 
 #[derive(Clone)]
 pub struct TwitchApi {
@@ -17,6 +21,7 @@ pub struct TwitchApi {
     client: Client,
     moderators_cache: Arc<RwLock<HashMap<String, Vec<String>>>>,
     users_cache: Arc<RwLock<Vec<User>>>,
+    app_access_token: Option<String>,
 }
 
 impl TwitchApi {
@@ -46,11 +51,42 @@ impl TwitchApi {
             client: Client::new(),
             moderators_cache,
             users_cache,
+            app_access_token: match env::var("TWITCH_CLIENT_SECRET") {
+                Ok(secret) => Some(Self::get_app_token(&validation.client_id, &secret).await?),
+                Err(_) => None,
+            },
         };
+
+        /*if let Some(_) = twitch_api.app_access_token {
+            for subscription in twitch_api.list_eventsub_subscriptions().await?.data {
+                twitch_api
+                    .delete_eventsub_subscription(&subscription.id)
+                    .await?;
+            }
+        }*/
 
         twitch_api.start_cron().await;
 
         Ok(twitch_api)
+    }
+
+    // TODO
+    pub async fn get_app_token(
+        client_id: &str,
+        client_secret: &str,
+    ) -> Result<String, reqwest::Error> {
+        let client = Client::new();
+
+        let response: serde_json::Value = client.post("https://id.twitch.tv/oauth2/token").query(&[("client_id", client_id), ("client_secret", client_secret), ("grant_type", "client_credentials"), ("scope", "moderation:read channel:edit:commercial channel:manage:broadcast channel:moderate chat:edit")]).send().await?.json().await?;
+
+        tracing::info!("{:?}", response);
+
+        Ok(response
+            .get("access_token")
+            .unwrap()
+            .as_str()
+            .unwrap()
+            .to_string())
     }
 
     pub async fn start_cron(&self) {
@@ -248,7 +284,91 @@ impl TwitchApi {
 
         Ok(mods)
     }
-    
+
+    fn get_app_access_headers(&self) -> HeaderMap {
+        let mut headers = self.headers.clone();
+
+        headers.insert(
+            "Authorization",
+            format!(
+                "Bearer {}",
+                self.app_access_token
+                    .as_ref()
+                    .expect("App access token missing")
+            )
+            .parse()
+            .unwrap(),
+        );
+
+        headers
+    }
+
+    pub async fn create_eventsub_subscription(
+        &self,
+        sub: EventsubSubscriptionType,
+        secret: &str,
+    ) -> Result<(), reqwest::Error> {
+        let body = json!({
+            "type": sub.get_name(),
+            "version": sub.get_version(),
+            "condition": sub.get_condition(),
+            "transport": {
+                "method": "webhook",
+                "callback": format!("{}/webhooks/twitch", std::env::var("BASE_URL").expect("no base url")),
+                "secret": secret
+            }
+        }).to_string();
+
+        tracing::info!("Creating EventSub subscription {}", body);
+
+        let pending_response = self
+            .client
+            .post("https://api.twitch.tv/helix/eventsub/subscriptions")
+            .headers(self.get_app_access_headers())
+            .body(body)
+            .send()
+            .await?;
+
+        tracing::info!(
+            "POST {}: {}",
+            pending_response.url(),
+            pending_response.status()
+        );
+
+        let text = pending_response.text().await?;
+
+        tracing::info!("{}", text);
+
+        Ok(())
+    }
+
+    pub async fn list_eventsub_subscriptions(
+        &self,
+    ) -> Result<EventsubSubscriptionList, reqwest::Error> {
+        Ok(self
+            .client
+            .get("https://api.twitch.tv/helix/eventsub/subscriptions")
+            .headers(self.get_app_access_headers())
+            .send()
+            .await?
+            .json()
+            .await?)
+    }
+
+    pub async fn delete_eventsub_subscription(&self, sub_id: &str) -> Result<(), reqwest::Error> {
+        assert!(self
+            .client
+            .delete("https://api.twitch.tv/helix/eventsub/subscriptions")
+            .query(&[("id", sub_id)])
+            .headers(self.get_app_access_headers())
+            .send()
+            .await?
+            .status()
+            .is_success());
+
+        Ok(())
+    }
+
     // This terrible abomination has to exist because twitch doesn't provide an endpoint for this that doesn't require channel auth
     // /// Returns the list of logins of channel moderators. Don't expect this to be efficient
     /*async fn get_channel_mods_from_irc(

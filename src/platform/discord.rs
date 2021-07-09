@@ -1,99 +1,47 @@
 use std::env;
 
-use super::{ChannelIdentifier, ChatPlatform, ExecutionContext, Permissions, UserIdentifier};
-
 use crate::command_handler::{CommandHandler, CommandMessage};
 
-use async_trait::async_trait;
-use serenity::{
-    client::{validate_token, Cache, Context, EventHandler},
-    http::CacheHttp,
-    model::{
-        channel::Message,
-        id::{ChannelId, GuildId, UserId},
-        prelude::Ready,
-    },
-    prelude::TypeMapKey,
-    Client,
-};
-use tokio::task::JoinHandle;
+use super::{ChannelIdentifier, ChatPlatform, ChatPlatformError, ExecutionContext, UserIdentifier};
+use discord::model::{Event, Message};
 
-struct Handler {
-    prefix: String,
-}
-
-#[async_trait]
-impl EventHandler for Handler {
-    // Event handlers are dispatched through a threadpool, and so multiple
-    // events can be dispatched simultaneously.
-    async fn message(&self, ctx: Context, mut message: Message) {
-        tracing::debug!("{:?}", message);
-
-        if message.content.starts_with(&self.prefix) {
-            let typing = ctx
-                .http
-                .start_typing(message.channel_id.0)
-                .expect("Failed to type");
-
-            message.content = message
-                .content
-                .strip_prefix(&self.prefix)
-                .unwrap()
-                .to_string();
-
-            let data = ctx.data.read().await;
-
-            let command_handler = data
-                .get::<CommandHandler>()
-                .expect("CommandHandler not found in client");
-
-            let channel = match message.guild_id {
-                Some(guild_id) => ChannelIdentifier::DiscordGuildID(guild_id.0),
-                None => ChannelIdentifier::DiscordChannelID(message.channel_id.0),
-            };
-
-            let context = ExecutionContext {
-                permissions: match &channel {
-                    ChannelIdentifier::DiscordGuildID(_) => {
-                        get_permissions_in_guild(
-                            &ctx,
-                            message.guild_id.unwrap(),
-                            Some(message.channel_id),
-                            message.author.id,
-                        )
-                        .await
-                    }
-                    ChannelIdentifier::DiscordChannelID(_) => Permissions::ChannelMod,
-                    _ => unreachable!(),
-                },
-                channel,
-            };
-
-            if let Some(response) = command_handler
-                .handle_command_message(&message, context, message.get_user_identifier())
-                .await
-            {
-                tracing::info!("Replying with {}", response);
-
-                message
-                    .channel_id
-                    .say(&ctx.http, response)
-                    .await
-                    .expect("Failed to send message");
-            }
-
-            typing.stop().unwrap();
-        }
+impl CommandMessage for Message {
+    fn get_user_identifier(&self) -> UserIdentifier {
+        UserIdentifier::DiscordID(self.author.id.0.to_string())
     }
 
-    async fn ready(&self, _: Context, ready: Ready) {
-        tracing::info!("Connected to discord as {}", ready.user.name);
+    fn get_text(&self) -> &str {
+        &self.content
     }
 }
 
 pub struct Discord {
-    token: String,
+    discord: discord::Discord,
     command_handler: CommandHandler,
+    prefix: String,
+}
+
+impl Discord {
+    async fn handle_message(&self, mut message: Message) {
+        if let Some(command) = message.content.strip_prefix(&self.prefix) {
+            message.content = command.to_string();
+
+            let context = ExecutionContext {
+                channel: ChannelIdentifier::DiscordChannelID(message.channel_id.0),
+                permissions: super::Permissions::Default, // TODO
+            };
+
+            if let Some(response) = self
+                .command_handler
+                .handle_command_message(&message, context)
+                .await
+            {
+                self.discord
+                    .send_message(message.channel_id, &response, "", false)
+                    .expect("Failed to reply on Discord");
+            }
+        }
+    }
 }
 
 #[async_trait]
@@ -101,86 +49,40 @@ impl ChatPlatform for Discord {
     async fn init(command_handler: CommandHandler) -> Result<Box<Self>, super::ChatPlatformError> {
         let token = env::var("DISCORD_TOKEN")?;
 
-        validate_token(&token)?;
+        let discord = discord::Discord::from_bot_token(&token)
+            .map_err(|_| ChatPlatformError::DiscordError)?;
 
         Ok(Box::new(Self {
-            token,
+            discord,
             command_handler,
+            prefix: Self::get_prefix(),
         }))
     }
 
-    async fn run(self) -> JoinHandle<()> {
-        let mut client = Client::builder(self.token.clone())
-            .event_handler(Handler {
-                prefix: Self::get_prefix(),
-            })
-            .await
-            .expect("Failed to start Discord");
+    async fn run(self) -> tokio::task::JoinHandle<()> {
+        let (mut connection, _) = self
+            .discord
+            .connect()
+            .expect("Failed to connect to Discord");
 
-        {
-            let mut data = client.data.write().await;
+        tokio::spawn(async move {
+            loop {
+                match connection.recv_event() {
+                    Ok(Event::MessageCreate(message)) => self.handle_message(message).await,
+                    Ok(_) => {}
+                    Err(err) => tracing::info!("Discord connection closed with {}", err),
+                }
+            }
+        })
+    }
 
-            data.insert::<CommandHandler>(self.command_handler.clone());
+    fn get_prefix() -> String {
+        if let Ok(prefix) = env::var("DISCORD_PREFIX") {
+            prefix
+        } else if let Ok(prefix) = env::var("COMMAND_PREFIX") {
+            prefix
+        } else {
+            "!".to_string()
         }
-
-        tokio::spawn(async move { client.start().await.expect("Discord error") })
-    }
-}
-
-impl TypeMapKey for CommandHandler {
-    type Value = CommandHandler;
-}
-
-impl CommandMessage for Message {
-    fn get_user_identifier(&self) -> super::UserIdentifier {
-        UserIdentifier::DiscordID(self.author.id.as_u64().to_string())
-    }
-
-    fn get_text(&self) -> String {
-        self.content.clone()
-    }
-}
-
-#[derive(serde::Serialize, serde::Deserialize)]
-pub enum DiscordExecutionLocation {
-    Server((GuildId, ChannelId)),
-    DM(ChannelId),
-}
-
-pub async fn get_permissions_in_guild<T: CacheHttp + AsRef<Cache>>(
-    cache_http: T,
-    guild_id: GuildId,
-    channel_id: Option<ChannelId>,
-    user_id: UserId,
-) -> Permissions {
-    tracing::info!("Getting Discord user permissions in channel");
-    let member = guild_id.member(&cache_http, user_id).await.unwrap();
-
-    let guild_channels = guild_id
-        .channels(&cache_http.http())
-        .await
-        .expect("Failed to get guild channels");
-
-    match {
-        let channel_id = match channel_id {
-            Some(channel_id) => channel_id,
-            None => *guild_channels.iter().next().expect("No default channel").0,
-        };
-
-        let channel = guild_channels
-            .get(&channel_id)
-            .expect("Failed to get channel");
-
-        let guild = guild_id
-            .to_partial_guild(&cache_http.http())
-            .await
-            .expect("failed to get guild");
-
-        guild.user_permissions_in(channel, &member).unwrap()
-    }
-    .administrator()
-    {
-        true => Permissions::ChannelMod,
-        false => Permissions::Default,
     }
 }

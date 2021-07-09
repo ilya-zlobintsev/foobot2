@@ -4,13 +4,12 @@ pub mod twitch;
 use std::{
     env::{self, VarError},
     fmt,
+    sync::mpsc::{channel, Sender},
 };
 
 use crate::command_handler::{twitch_api::TwitchApi, CommandHandler};
 use async_trait::async_trait;
-use tokio::task::JoinHandle;
-
-use serenity::prelude::SerenityError;
+use tokio::task::{self, JoinHandle};
 
 use serde::{Deserialize, Serialize};
 
@@ -25,6 +24,12 @@ pub trait ChatPlatform {
     }
 }
 
+#[derive(Clone)]
+pub struct PlatformMessage {
+    pub channel_id: String,
+    pub message: String,
+}
+
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct ExecutionContext {
     pub channel: ChannelIdentifier,
@@ -35,7 +40,7 @@ pub struct ExecutionContext {
 pub enum ChatPlatformError {
     ReqwestError(reqwest::Error),
     MissingAuthentication,
-    DiscordError(SerenityError),
+    DiscordError,
 }
 
 impl From<reqwest::Error> for ChatPlatformError {
@@ -47,12 +52,6 @@ impl From<reqwest::Error> for ChatPlatformError {
 impl From<VarError> for ChatPlatformError {
     fn from(_e: VarError) -> Self {
         ChatPlatformError::MissingAuthentication
-    }
-}
-
-impl From<SerenityError> for ChatPlatformError {
-    fn from(e: SerenityError) -> Self {
-        ChatPlatformError::DiscordError(e)
     }
 }
 
@@ -115,11 +114,17 @@ pub enum UserIdentifierError {
     InvalidUser,
 }
 
+#[derive(Debug, PartialEq, Eq, Hash)]
+pub enum ChatPlatformKind {
+    Twitch,
+    Discord,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum ChannelIdentifier {
     TwitchChannelName(String),
     DiscordGuildID(u64),
-    DiscordChannelID(u64), // Mainly for DMs
+    DiscordChannelID(u64), // Mainly for DMs // This is not correct anymore
 }
 
 impl ChannelIdentifier {

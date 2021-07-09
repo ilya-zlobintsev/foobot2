@@ -1,6 +1,6 @@
 #[macro_use]
 extern crate diesel;
-#[macro_use] 
+#[macro_use]
 extern crate rocket;
 
 mod command_handler;
@@ -13,7 +13,7 @@ use std::env;
 use command_handler::CommandHandler;
 use database::Database;
 use dotenv::dotenv;
-use platform::ChatPlatform;
+use platform::{ChatPlatform, ChatPlatformKind};
 
 use platform::discord::Discord;
 use platform::twitch::Twitch;
@@ -24,7 +24,6 @@ async fn main() {
     dotenv().unwrap_or_default();
 
     tracing_subscriber::fmt::init();
-
 
     let db = Database::connect(env::var("DATABASE_URL").expect("DATABASE_URL missing"))
         .expect("Failed to connect to DB");
@@ -41,11 +40,9 @@ async fn main() {
 
     handles.push(web_handle);
 
-    let command_handler = command_handler.clone();
-    
     match Twitch::init(command_handler.clone()).await {
         Ok(twitch) => {
-            let handle = twitch.clone().run().await;
+            handles.push(twitch.clone().run().await);
 
             channels
                 .iter()
@@ -59,17 +56,21 @@ async fn main() {
                 .for_each(|channel| {
                     twitch.join_channel(channel);
                 });
-
-            handles.push(handle);
         }
         Err(e) => {
             tracing::error!("Error loading Twitch: {:?}", e);
         }
     }
 
-    match Discord::init(command_handler).await {
+    match Discord::init(command_handler.clone()).await {
         Ok(discord) => {
             handles.push(discord.run().await);
+
+            // command_handler
+            //     .platform_senders
+            //     .lock()
+            //     .unwrap()
+            //     .insert(ChatPlatformKind::Discord, discord.create_listener().await);
         }
         Err(e) => {
             tracing::error!("Error loading Discord: {:?}", e);

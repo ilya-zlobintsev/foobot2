@@ -5,11 +5,10 @@ use rocket::{
     http::{ContentType, CookieJar, Status},
     Response, State,
 };
-use serenity::model::id::{ChannelId, GuildId, UserId};
 
 use crate::database::models::WebSession;
 use crate::{
-    command_handler::{CommandHandler, DiscordContext},
+    command_handler::CommandHandler,
     platform::{discord, ChannelIdentifier},
 };
 
@@ -53,29 +52,7 @@ pub async fn get_permissions(
                 }
             }
             ChannelIdentifier::DiscordGuildID(guild_id) => {
-                let discord_user_id = db
-                    .get_user_by_id(web_session.user_id)?
-                    .ok_or_else(|| ApiError::InvalidUser)?
-                    .discord_id
-                    .ok_or_else(|| {
-                        ApiError::GenericError("No registered on this platform".to_string())
-                    })?;
-
-                let discord_context: DiscordContext = (**cmd
-                    .discord_context
-                    .as_ref()
-                    .ok_or_else(|| ApiError::GenericError("Discord not configured".to_string()))?)
-                .clone();
-
-                let permissions = discord::get_permissions_in_guild(
-                    discord_context,
-                    GuildId(guild_id),
-                    None,
-                    UserId(discord_user_id.parse().unwrap()),
-                )
-                .await;
-
-                Ok(permissions.to_string())
+                todo!()
             }
             _ => unimplemented!(),
         },

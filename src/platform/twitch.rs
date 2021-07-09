@@ -1,9 +1,13 @@
 use std::{
     collections::HashMap,
-    sync::{Arc, RwLock},
+    sync::{
+        mpsc::{channel, Receiver, Sender},
+        Arc, RwLock,
+    },
 };
 
 use async_trait::async_trait;
+use std::time::Instant;
 use tokio::task::{self, JoinHandle};
 use twitch_irc::{
     login::StaticLoginCredentials,
@@ -16,7 +20,7 @@ use crate::{
     platform::{ChannelIdentifier, ExecutionContext, Permissions},
 };
 
-use super::{ChatPlatform, UserIdentifier};
+use super::{ChatPlatform, PlatformMessage, UserIdentifier};
 
 #[derive(Clone)]
 pub struct Twitch {
@@ -35,14 +39,14 @@ impl Twitch {
     }
 
     async fn handle_privmsg(&self, mut pm: PrivmsgMessage) {
-        tracing::debug!("{:?}", pm);
-
         let command_prefix = match std::env::var(format!("PREFIX_TWITCH_{}", pm.channel_login)) {
             Ok(prefix) => prefix,
             Err(_) => self.command_prefix.clone(), // TODO
         };
 
         if let Some(message_text) = pm.message_text.strip_prefix(&command_prefix) {
+            tracing::debug!("Recieved a command at {:?}", Instant::now());
+
             pm.message_text = message_text.to_string();
 
             let context = ExecutionContext {
@@ -64,7 +68,7 @@ impl Twitch {
 
             task::spawn(async move {
                 let response = command_handler
-                    .handle_command_message(&pm, context, pm.get_user_identifier())
+                    .handle_command_message(&pm, context)
                     .await;
 
                 if let Some(response) = response {
@@ -130,6 +134,25 @@ impl ChatPlatform for Twitch {
             }
         })
     }
+
+    /*async fn create_listener(&self) -> std::sync::mpsc::Sender<super::PlatformMessage> {
+        let (sender, receiver): (Sender<PlatformMessage>, Receiver<PlatformMessage>) = channel();
+
+        let client = self.client.read().unwrap().as_ref().unwrap().clone();
+
+        task::spawn(async move {
+            loop {
+                let msg = receiver.recv().unwrap();
+
+                client
+                    .privmsg(msg.channel_id, msg.message)
+                    .await
+                    .expect("Twitch error");
+            }
+        });
+
+        sender
+    }*/
 }
 
 impl CommandMessage for PrivmsgMessage {
@@ -137,7 +160,7 @@ impl CommandMessage for PrivmsgMessage {
         UserIdentifier::TwitchID(self.sender.id.clone())
     }
 
-    fn get_text(&self) -> String {
-        self.message_text.clone()
+    fn get_text(&self) -> &str {
+        &self.message_text
     }
 }

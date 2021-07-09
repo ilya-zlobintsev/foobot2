@@ -6,23 +6,24 @@ pub mod twitch_api;
 
 use core::fmt;
 use std::{
+    collections::HashMap,
     env::{self, VarError},
     num::ParseIntError,
-    sync::{Arc, RwLock},
+    sync::{mpsc::Sender, Arc, Mutex, RwLock},
     time::{Duration, Instant},
 };
 
 use crate::{
+    command_handler::twitch_api::model::EventsubSubscriptionType,
     database::{models::User, Database},
-    platform::{ExecutionContext, Permissions, UserIdentifier, UserIdentifierError},
+    platform::{
+        ChatPlatformKind, ExecutionContext, Permissions, PlatformMessage, UserIdentifier,
+        UserIdentifierError,
+    },
 };
 
 use handlebars::Handlebars;
 use inquiry_helper::*;
-use serenity::{
-    client::{Cache, ClientBuilder},
-    http::{CacheHttp, Http},
-};
 use tokio::task;
 use twitch_api::TwitchApi;
 
@@ -32,36 +33,11 @@ use self::owm_api::OwmApi;
 pub struct CommandHandler {
     pub db: Database,
     pub twitch_api: Option<TwitchApi>,
-    pub discord_context: Option<Arc<DiscordContext>>,
     admin_user: Option<User>,
     owm_api: Option<OwmApi>,
     startup_time: Instant,
     template_registry: Arc<Handlebars<'static>>,
     cooldowns: Arc<RwLock<Vec<(u64, String)>>>, // User id and command
-}
-
-#[derive(Clone)]
-pub struct DiscordContext {
-    http: Arc<Http>,
-    cache: Arc<Cache>,
-}
-
-impl CacheHttp for DiscordContext {
-    fn http(&self) -> &Http {
-        &self.http
-    }
-}
-
-impl AsRef<Cache> for DiscordContext {
-    fn as_ref(&self) -> &Cache {
-        &self.cache
-    }
-}
-
-impl AsRef<serenity::http::Http> for DiscordContext {
-    fn as_ref(&self) -> &Http {
-        &self.http
-    }
 }
 
 impl CommandHandler {
@@ -75,22 +51,6 @@ impl CommandHandler {
                 tracing::info!("TWICTH_OAUTH missing! Skipping Twitch initialization");
                 None
             }
-        };
-
-        let discord_context = match env::var("DISCORD_TOKEN") {
-            Ok(token) => {
-                let client = ClientBuilder::new(token)
-                    .await
-                    .expect("Failed to start Discord API");
-
-                let cache_and_http = client.cache_and_http;
-
-                Some(Arc::new(DiscordContext {
-                    http: cache_and_http.http.clone(),
-                    cache: cache_and_http.cache.clone(),
-                }))
-            }
-            Err(_) => None,
         };
 
         let startup_time = Instant::now();
@@ -126,9 +86,16 @@ impl CommandHandler {
         template_registry.set_strict_mode(true);
 
         let cooldowns = Arc::new(RwLock::new(Vec::new()));
-        
+
         let admin_user = match env::var("ADMIN_USER") {
-            Ok(admin) => Some(db.get_or_create_user(&UserIdentifier::from_string(&admin, twitch_api.as_ref()).await.unwrap()).expect("DB Error")),
+            Ok(admin) => Some(
+                db.get_or_create_user(
+                    &UserIdentifier::from_string(&admin, twitch_api.as_ref())
+                        .await
+                        .unwrap(),
+                )
+                .expect("DB Error"),
+            ),
             Err(_) => None,
         };
 
@@ -138,7 +105,6 @@ impl CommandHandler {
             startup_time,
             owm_api,
             template_registry: Arc::new(template_registry),
-            discord_context,
             cooldowns,
             admin_user,
         }
@@ -149,12 +115,13 @@ impl CommandHandler {
         &self,
         message: &T,
         context: ExecutionContext,
-        user_identifier: UserIdentifier,
     ) -> Option<String>
     where
         T: Sync + CommandMessage,
     {
         let message_text = message.get_text();
+        
+        let user_identifier = message.get_user_identifier();
 
         if message_text.is_empty() {
             Some("❗".to_string())
@@ -184,7 +151,7 @@ impl CommandHandler {
         user_identifier: UserIdentifier,
     ) -> Result<Option<String>, CommandError> {
         tracing::info!("Processing command {} with {:?}", command, arguments);
-        
+
         let user = self.db.get_or_create_user(&user_identifier)?;
 
         if let Some(admin) = &self.admin_user {
@@ -282,6 +249,29 @@ impl CommandHandler {
                     self.db.merge_users(user.clone(), other);
 
                     (Some("sucessfully merged users".to_string()), None)
+                }
+                "testman" => {
+                    if execution_context.channel.get_platform_name() == "twitch" {
+                        let channel_name = execution_context.channel.get_channel();
+
+                        let twitch_api = self.twitch_api.as_ref().unwrap();
+
+                        let users = twitch_api
+                            .get_users(Some(&vec![&channel_name]), None)
+                            .await
+                            .unwrap();
+
+                        twitch_api
+                            .create_eventsub_subscription(
+                                EventsubSubscriptionType::ChannelFollow(
+                                    users.first().unwrap().id.to_string(),
+                                ),
+                                rocket::Config::SECRET_KEY,
+                            )
+                            .await
+                            .unwrap();
+                    }
+                    (None, None)
                 }
                 _ => match self.db.get_command(&execution_context.channel, command)? {
                     Some(cmd) => (
@@ -396,7 +386,11 @@ impl CommandHandler {
             result
         };
 
-        format!("Pong! Version: {}, Uptime {}", env!("CARGO_PKG_VERSION") ,uptime)
+        format!(
+            "Pong! Version: {}, Uptime {}",
+            env!("CARGO_PKG_VERSION"),
+            uptime
+        )
     }
 
     async fn edit_cmds(
@@ -551,5 +545,5 @@ impl From<UserIdentifierError> for CommandError {
 pub trait CommandMessage {
     fn get_user_identifier(&self) -> UserIdentifier;
 
-    fn get_text(&self) -> String;
+    fn get_text(&self) -> &str;
 }
