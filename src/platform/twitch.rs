@@ -68,7 +68,7 @@ impl Twitch {
 
             task::spawn(async move {
                 let response = command_handler
-                    .handle_command_message(&pm, context, pm.get_user_identifier())
+                    .handle_command_message(&pm, context)
                     .await;
 
                 if let Some(response) = response {
@@ -135,7 +135,7 @@ impl ChatPlatform for Twitch {
         })
     }
 
-    async fn create_listener(&self) -> std::sync::mpsc::Sender<super::PlatformMessage> {
+    /*async fn create_listener(&self) -> std::sync::mpsc::Sender<super::PlatformMessage> {
         let (sender, receiver): (Sender<PlatformMessage>, Receiver<PlatformMessage>) = channel();
 
         let client = self.client.read().unwrap().as_ref().unwrap().clone();
@@ -152,7 +152,7 @@ impl ChatPlatform for Twitch {
         });
 
         sender
-    }
+    }*/
 }
 
 impl CommandMessage for PrivmsgMessage {
@@ -160,7 +160,7 @@ impl CommandMessage for PrivmsgMessage {
         UserIdentifier::TwitchID(self.sender.id.clone())
     }
 
-    fn get_text(&self) -> String {
-        self.message_text.clone()
+    fn get_text(&self) -> &str {
+        &self.message_text
     }
 }

@@ -11,8 +11,6 @@ use crate::command_handler::{twitch_api::TwitchApi, CommandHandler};
 use async_trait::async_trait;
 use tokio::task::{self, JoinHandle};
 
-use serenity::prelude::SerenityError;
-
 use serde::{Deserialize, Serialize};
 
 #[async_trait]
@@ -24,8 +22,6 @@ pub trait ChatPlatform {
     fn get_prefix() -> String {
         env::var("COMMAND_PREFIX").unwrap_or_else(|_| "!".to_string())
     }
-
-    async fn create_listener(&self) -> Sender<PlatformMessage>;
 }
 
 #[derive(Clone)]
@@ -44,7 +40,7 @@ pub struct ExecutionContext {
 pub enum ChatPlatformError {
     ReqwestError(reqwest::Error),
     MissingAuthentication,
-    DiscordError(SerenityError),
+    DiscordError,
 }
 
 impl From<reqwest::Error> for ChatPlatformError {
@@ -56,12 +52,6 @@ impl From<reqwest::Error> for ChatPlatformError {
 impl From<VarError> for ChatPlatformError {
     fn from(_e: VarError) -> Self {
         ChatPlatformError::MissingAuthentication
-    }
-}
-
-impl From<SerenityError> for ChatPlatformError {
-    fn from(e: SerenityError) -> Self {
-        ChatPlatformError::DiscordError(e)
     }
 }
 
@@ -127,14 +117,14 @@ pub enum UserIdentifierError {
 #[derive(Debug, PartialEq, Eq, Hash)]
 pub enum ChatPlatformKind {
     Twitch,
-    Discord    
+    Discord,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum ChannelIdentifier {
     TwitchChannelName(String),
     DiscordGuildID(u64),
-    DiscordChannelID(u64), // Mainly for DMs
+    DiscordChannelID(u64), // Mainly for DMs // This is not correct anymore
 }
 
 impl ChannelIdentifier {

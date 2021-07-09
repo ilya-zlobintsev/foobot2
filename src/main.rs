@@ -44,12 +44,6 @@ async fn main() {
         Ok(twitch) => {
             handles.push(twitch.clone().run().await);
 
-            command_handler
-                .platform_senders
-                .lock()
-                .unwrap()
-                .insert(ChatPlatformKind::Twitch, twitch.create_listener().await);
-
             channels
                 .iter()
                 .filter_map(|channel| {
@@ -70,13 +64,13 @@ async fn main() {
 
     match Discord::init(command_handler.clone()).await {
         Ok(discord) => {
-            handles.push(discord.clone().run().await);
+            handles.push(discord.run().await);
 
-            command_handler
-                .platform_senders
-                .lock()
-                .unwrap()
-                .insert(ChatPlatformKind::Discord, discord.create_listener().await);
+            // command_handler
+            //     .platform_senders
+            //     .lock()
+            //     .unwrap()
+            //     .insert(ChatPlatformKind::Discord, discord.create_listener().await);
         }
         Err(e) => {
             tracing::error!("Error loading Discord: {:?}", e);

@@ -7,7 +7,6 @@ use crate::{
         twitch_api::model::{EventsubMessage, EventsubMessageType},
         CommandHandler,
     },
-    platform::{ChatPlatformKind, PlatformMessage},
 };
 
 #[post("/twitch", data = "<body>")]
@@ -18,7 +17,7 @@ pub async fn twitch_callback(
 ) -> Result<String, Status> {
     tracing::info!("Handling eventsub callback {:?}", properties.message_type);
 
-    cmd.platform_senders
+    /*cmd.platform_senders
         .lock()
         .unwrap()
         .get(&ChatPlatformKind::Twitch)
@@ -27,7 +26,7 @@ pub async fn twitch_callback(
             channel_id: "boring_nick".to_string(),
             message: properties.message_timestamp.clone(),
         })
-        .unwrap();
+        .unwrap();*/
 
     let body_stream = body.open(32.mebibytes());
 
@@ -44,7 +43,7 @@ pub async fn twitch_callback(
             match properties.message_type {
                 EventsubMessageType::WebhookCallbackVerification => Ok(message.challenge.unwrap()),
                 EventsubMessageType::Notification => {
-                    cmd.platform_senders
+                    /*cmd.platform_senders
                         .lock()
                         .unwrap()
                         .get(&ChatPlatformKind::Twitch)
@@ -53,7 +52,7 @@ pub async fn twitch_callback(
                             channel_id: "boring_nick".to_string(),
                             message: format!("{:?}", message),
                         })
-                        .unwrap();
+                        .unwrap();*/
 
                     Ok(String::new())
                 }
