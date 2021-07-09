@@ -2,6 +2,9 @@ FROM docker.io/rust:1.53.0-slim-buster as builder
 
 WORKDIR /build
 
+RUN apt-get update
+RUN apt-get install --assume-yes libmariadb-dev-compat libssl-dev pkg-config
+
 # Avoid having to install/build all dependencies by copying
 # the Cargo files and making a dummy src/main.rs
 COPY Cargo.toml .
@@ -14,8 +17,6 @@ RUN cargo build --release
 COPY . .
 RUN touch src/main.rs
 
-RUN apt-get update
-RUN apt-get install --assume-yes libmariadb-dev-compat
 
 RUN cargo build --release
 
