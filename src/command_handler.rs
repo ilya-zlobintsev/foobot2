@@ -331,7 +331,7 @@ impl CommandHandler {
                 action = action.replace(
                     variable,
                     &match param {
-                        "0+" => arguments.join(" "),
+                        "" | "@" => arguments.join(" "),
                         "user_id" => user.id.to_string(),
                         _ => arguments
                             .get(param.parse::<usize>()?)
@@ -346,14 +346,17 @@ impl CommandHandler {
 
         tracing::info!("Prased action: {}", action);
 
-        let response = self.template_registry.render_template(
+        let response = match self.template_registry.render_template(
             &action,
             &(InquiryContext {
                 user,
                 execution_context,
                 arguments: arguments.iter().map(|s| s.to_owned().to_owned()).collect(),
             }),
-        )?;
+        ) {
+            Ok(result) => result,
+            Err(e) => e.desc,
+        };
 
         if !response.is_empty() {
             Ok(Some(response))

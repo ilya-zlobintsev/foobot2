@@ -51,14 +51,15 @@ pub struct WeatherHelper {
 }
 
 impl HelperDef for WeatherHelper {
-    fn call_inner<'reg: 'rc, 'rc>(
+    fn call<'reg: 'rc, 'rc>(
         &self,
         h: &Helper<'reg, 'rc>,
-        _: &'reg Handlebars,
-        context: &'rc Context,
+        _: &'reg Handlebars<'reg>,
+        ctx: &'rc Context,
         _: &mut RenderContext<'reg, 'rc>,
-    ) -> Result<ScopedJson<'reg, 'rc>, RenderError> {
-        let context = serde_json::from_value::<InquiryContext>(context.data().clone())
+        out: &mut dyn Output,
+    ) -> HelperResult {
+        let context = serde_json::from_value::<InquiryContext>(ctx.data().clone())
             .expect("Failed to get command context");
 
         let runtime = tokio::runtime::Handle::current();
@@ -84,21 +85,20 @@ impl HelperDef for WeatherHelper {
 
         let api = self.api.clone();
 
-        match thread::spawn(move || runtime.block_on(api.get_current(&place)))
-                    .join()
-                    .unwrap()
-                {
-                    Ok(weather) => Ok(json!({
-                        "location": format!("{}, {}", weather.name, weather.sys.country.unwrap_or_else(|| "Unknown Country".to_string())),
-                        "temperature": weather.main.temp,
-                        "description": match weather.weather.first() {
-                            Some(weather) => &weather.description,
-                            None => "",
-                        }
-                    })
-                    .into()),
-                    Err(e) => Err(RenderError::new(e.to_string())),
-                }
+        // All of this is needed to call async apis from a blocking function
+        let weather = thread::spawn(move || runtime.block_on(api.get_current(&place)))
+            .join()
+            .unwrap()
+            .map_err(|e| RenderError::new(e.to_string()))?;
+
+        out.write(&format!(
+            "{}, {}: {}°C",
+            weather.name,
+            weather.sys.country.unwrap_or_default(),
+            weather.main.temp
+        ))?;
+
+        Ok(())
     }
 }
 
@@ -109,14 +109,15 @@ pub struct SpotifyHelper {
 }
 
 impl HelperDef for SpotifyHelper {
-    fn call_inner<'reg: 'rc, 'rc>(
+    fn call<'reg: 'rc, 'rc>(
         &self,
-        _: &Helper<'reg, 'rc>,
-        _: &'reg Handlebars,
-        context: &'rc Context,
+        h: &Helper<'reg, 'rc>,
+        r: &'reg Handlebars<'reg>,
+        ctx: &'rc Context,
         _: &mut RenderContext<'reg, 'rc>,
-    ) -> Result<ScopedJson<'reg, 'rc>, RenderError> {
-        let context = serde_json::from_value::<InquiryContext>(context.data().clone())
+        out: &mut dyn Output,
+    ) -> HelperResult {
+        let context = serde_json::from_value::<InquiryContext>(ctx.data().clone())
             .expect("Failed to get command context");
 
         let runtime = tokio::runtime::Handle::current();
@@ -144,7 +145,7 @@ impl HelperDef for SpotifyHelper {
                 .map_err(|e| RenderError::new(format!("DB Error: {}", e.to_string())))?
                 .ok_or_else(|| {
                     RenderError::new(format!(
-                        "not configured for user! You can set up Spotify by going to {}/profile",
+                        "Not configured for user! You can set up Spotify by going to {}/profile",
                         env::var("BASE_URL").unwrap()
                     ))
                 })?;
@@ -164,17 +165,23 @@ impl HelperDef for SpotifyHelper {
                 let length = playback.item.duration_ms / 1000;
                 let length = format!("{}:{:02}", length / 60, length % 60);
 
-                Ok(json!({
-                    "artist": playback.item.artists.iter().map(|artist| artist.name.as_str()).collect::<Vec<&str>>().join(" "),
-                    "song": playback.item.name,
-                    "position": format!("{}/{}", position, length),
-                    "playlist": match playback.context {
-                        Some(context) => context.external_urls.spotify,
-                        None => "".to_string(),
-                    },
-                }).into())
+                let artist = playback
+                    .item
+                    .artists
+                    .iter()
+                    .map(|artist| artist.name.as_str())
+                    .collect::<Vec<&str>>()
+                    .join(" ");
+
+                out.write(&format!(
+                    "{} - {} [{}/{}]",
+                    artist, playback.item.name, position, length
+                ))
+                .expect("Failed to write");
+
+                Ok(())
             }
-            None => Ok(json!(null).into()),
+            None => Err(RenderError::new("No song is currently playing")),
         }
     }
 }
