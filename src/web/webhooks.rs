@@ -17,17 +17,6 @@ pub async fn twitch_callback(
 ) -> Result<String, Status> {
     tracing::info!("Handling eventsub callback {:?}", properties.message_type);
 
-    /*cmd.platform_senders
-        .lock()
-        .unwrap()
-        .get(&ChatPlatformKind::Twitch)
-        .unwrap()
-        .send(PlatformMessage {
-            channel_id: "boring_nick".to_string(),
-            message: properties.message_timestamp.clone(),
-        })
-        .unwrap();*/
-
     let body_stream = body.open(32.mebibytes());
 
     let body = body_stream.into_bytes().await.unwrap();
@@ -43,17 +32,6 @@ pub async fn twitch_callback(
             match properties.message_type {
                 EventsubMessageType::WebhookCallbackVerification => Ok(message.challenge.unwrap()),
                 EventsubMessageType::Notification => {
-                    /*cmd.platform_senders
-                        .lock()
-                        .unwrap()
-                        .get(&ChatPlatformKind::Twitch)
-                        .unwrap()
-                        .send(PlatformMessage {
-                            channel_id: "boring_nick".to_string(),
-                            message: format!("{:?}", message),
-                        })
-                        .unwrap();*/
-
                     Ok(String::new())
                 }
             }

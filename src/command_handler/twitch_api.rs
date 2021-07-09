@@ -57,13 +57,13 @@ impl TwitchApi {
             },
         };
 
-        if let Some(_) = twitch_api.app_access_token {
+        /*if let Some(_) = twitch_api.app_access_token {
             for subscription in twitch_api.list_eventsub_subscriptions().await?.data {
                 twitch_api
                     .delete_eventsub_subscription(&subscription.id)
                     .await?;
             }
-        }
+        }*/
 
         twitch_api.start_cron().await;
 
