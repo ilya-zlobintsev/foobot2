@@ -27,22 +27,19 @@ pub struct InquiryContext {
     pub arguments: Vec<String>,
 }
 
-#[derive(Clone)]
-pub struct ContextHelper;
+pub fn args_helper(
+    _: &Helper,
+    _: &Handlebars,
+    ctx: &Context,
+    _: &mut RenderContext,
+    out: &mut dyn Output,
+) -> HelperResult {
+    let context = serde_json::from_value::<InquiryContext>(ctx.data().clone())
+        .expect("Failed to get command context");
 
-impl HelperDef for ContextHelper {
-    fn call_inner<'reg: 'rc, 'rc>(
-        &self,
-        _: &Helper<'reg, 'rc>,
-        _: &'reg Handlebars,
-        _: &'rc Context,
-        _: &mut RenderContext<'reg, 'rc>,
-    ) -> Result<ScopedJson<'reg, 'rc>, RenderError> {
-        Ok(ScopedJson::Derived(json!({
-            "a": 1,
-            "b": 2,
-        })))
-    }
+    out.write(&context.arguments.join(" "))?;
+
+    Ok(())
 }
 
 pub struct WeatherHelper {
@@ -75,8 +72,8 @@ impl HelperDef for WeatherHelper {
 
                 h.params()
                     .iter()
-                    .map(|item| item.relative_path().expect("invalid param").as_str())
-                    .collect::<Vec<&str>>()
+                    .map(|item| item.render())
+                    .collect::<Vec<String>>()
                     .join(" ")
             }
         };

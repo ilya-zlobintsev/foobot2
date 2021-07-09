@@ -57,7 +57,7 @@ impl CommandHandler {
 
         let mut template_registry = Handlebars::new();
 
-        template_registry.register_helper("context", Box::new(ContextHelper {}));
+        template_registry.register_helper("args", Box::new(inquiry_helper::args_helper));
         template_registry.register_helper(
             "spotify",
             Box::new(SpotifyHelper {
@@ -120,7 +120,7 @@ impl CommandHandler {
         T: Sync + CommandMessage,
     {
         let message_text = message.get_text();
-        
+
         let user_identifier = message.get_user_identifier();
 
         if message_text.is_empty() {
@@ -323,28 +323,6 @@ impl CommandHandler {
         arguments: &Vec<&str>,
     ) -> Result<Option<String>, CommandError> {
         tracing::info!("Parsing action {}", action);
-
-        for variable in action.clone().split_whitespace() {
-            if let Some(param) = variable.strip_prefix('$') {
-                tracing::debug!("replacing {}", param);
-
-                action = action.replace(
-                    variable,
-                    &match param {
-                        "" | "@" => arguments.join(" "),
-                        "user_id" => user.id.to_string(),
-                        _ => arguments
-                            .get(param.parse::<usize>()?)
-                            .ok_or_else(|| CommandError::MissingArgument(param.to_string()))?
-                            .to_string(),
-                    },
-                );
-            }
-        }
-
-        action = action.replace('\\', "");
-
-        tracing::info!("Prased action: {}", action);
 
         let response = match self.template_registry.render_template(
             &action,
