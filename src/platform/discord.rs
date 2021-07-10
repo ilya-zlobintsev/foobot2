@@ -1,11 +1,15 @@
 use std::env;
 
+use futures::StreamExt;
+use twilight_gateway::{cluster::ShardScheme, Cluster, Event, Intents};
+use twilight_http::Client;
+use twilight_model::gateway::payload::MessageCreate;
+
 use crate::command_handler::{CommandHandler, CommandMessage};
 
-use super::{ChannelIdentifier, ChatPlatform, ChatPlatformError, ExecutionContext, UserIdentifier};
-use discord::model::{Event, Message};
+use super::{ChannelIdentifier, ChatPlatform, ExecutionContext, UserIdentifier};
 
-impl CommandMessage for Message {
+impl CommandMessage for MessageCreate {
     fn get_user_identifier(&self) -> UserIdentifier {
         UserIdentifier::DiscordID(self.author.id.0.to_string())
     }
@@ -16,29 +20,37 @@ impl CommandMessage for Message {
 }
 
 pub struct Discord {
-    discord: discord::Discord,
+    token: String,
     command_handler: CommandHandler,
     prefix: String,
 }
 
 impl Discord {
-    async fn handle_message(&self, mut message: Message) {
-        if let Some(command) = message.content.strip_prefix(&self.prefix) {
-            message.content = command.to_string();
+    async fn handle_msg(&self, mut msg: MessageCreate, http: Client) {
+        if let Some(content) = msg.content.strip_prefix(&self.prefix) {
+            msg.content = content.to_string();
 
-            let context = ExecutionContext {
-                channel: ChannelIdentifier::DiscordChannelID(message.channel_id.0),
-                permissions: super::Permissions::Default, // TODO
+            let context = match msg.guild_id {
+                Some(guild_id) => ExecutionContext {
+                    channel: ChannelIdentifier::DiscordGuildID(guild_id.0),
+                    permissions: crate::platform::Permissions::Default, // TODO
+                },
+                None => ExecutionContext {
+                    channel: ChannelIdentifier::DiscordChannelID(msg.channel_id.0),
+                    permissions: crate::platform::Permissions::ChannelMod,
+                },
             };
 
             if let Some(response) = self
                 .command_handler
-                .handle_command_message(&message, context)
+                .handle_command_message(&msg, context)
                 .await
             {
-                self.discord
-                    .send_message(message.channel_id, &response, "", false)
-                    .expect("Failed to reply on Discord");
+                http.create_message(msg.channel_id)
+                    .content(response)
+                    .expect("Failed to construct message")
+                    .await
+                    .expect("Failed to reply in Discord");
             }
         }
     }
@@ -49,28 +61,38 @@ impl ChatPlatform for Discord {
     async fn init(command_handler: CommandHandler) -> Result<Box<Self>, super::ChatPlatformError> {
         let token = env::var("DISCORD_TOKEN")?;
 
-        let discord = discord::Discord::from_bot_token(&token)
-            .map_err(|_| ChatPlatformError::DiscordError)?;
-
         Ok(Box::new(Self {
-            discord,
+            token,
             command_handler,
             prefix: Self::get_prefix(),
         }))
     }
 
     async fn run(self) -> tokio::task::JoinHandle<()> {
-        let (mut connection, _) = self
-            .discord
-            .connect()
+        let scheme = ShardScheme::Auto;
+
+        let (cluster, mut events) = Cluster::builder(&self.token, Intents::GUILD_MESSAGES)
+            .shard_scheme(scheme)
+            .build()
+            .await
             .expect("Failed to connect to Discord");
 
+        {
+            let cluster = cluster.clone();
+
+            tokio::spawn(async move {
+                cluster.up().await;
+            });
+        }
+
+        let http = Client::new(&self.token);
+
         tokio::spawn(async move {
-            loop {
-                match connection.recv_event() {
-                    Ok(Event::MessageCreate(message)) => self.handle_message(message).await,
-                    Ok(_) => {}
-                    Err(err) => tracing::info!("Discord connection closed with {}", err),
+            while let Some((_, event)) = events.next().await {
+                match event {
+                    Event::ShardConnected(_) => tracing::info!("Discord shard connected"),
+                    Event::MessageCreate(msg) => self.handle_msg(*msg, http.clone()).await,
+                    _ => (),
                 }
             }
         })

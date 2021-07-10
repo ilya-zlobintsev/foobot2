@@ -1,6 +1,6 @@
 [package]
 name = "foobot2"
-version = "0.2.0"
+version = "0.3.0"
 edition = "2018"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
@@ -12,6 +12,7 @@ diesel = { git = "https://github.com/diesel-rs/diesel.git", features = ["mysql",
 diesel_migrations = { git = "https://github.com/diesel-rs/diesel.git" }
 
 tokio = { version = "1.6", features = ["full"] }
+futures = "0.3"
 async-trait = "0.1"
 #async-recursion = "0.3"
 
@@ -25,7 +26,10 @@ serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 
 twitch-irc = { version = "3.0", default-features = false, features = ["transport-tcp-rustls-webpki-roots"] }
-discord = { git = "https://github.com/SpaceManiac/discord-rs", branch = "master", default-features = false }
+twilight-http = "0.5"
+twilight-model = "0.5"
+twilight-gateway = "0.5"
+twilight-cache-inmemory = "0.5"
 
 handlebars = "4.0"
 

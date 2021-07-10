@@ -317,7 +317,7 @@ impl CommandHandler {
 
     fn execute_command_action(
         &self,
-        mut action: String,
+        action: String,
         execution_context: ExecutionContext,
         user: User,
         arguments: &Vec<&str>,
