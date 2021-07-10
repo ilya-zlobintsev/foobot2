@@ -28,7 +28,6 @@ use diesel::{EqAll, QueryDsl};
 use diesel::{ExpressionMethods, RunQueryDsl};
 use passwords::PasswordGenerator;
 use reqwest::Client;
-use rocket::figment::providers::Data;
 use tokio::time;
 
 use diesel_migrations::{embed_migrations, EmbeddedMigrations, MigrationHarness};

@@ -84,6 +84,8 @@ impl CommandHandler {
             )
         }
 
+        template_registry.register_helper("song", Box::new(inquiry_helper::song_helper));
+
         template_registry.set_strict_mode(true);
 
         let cooldowns = Arc::new(RwLock::new(Vec::new()));
