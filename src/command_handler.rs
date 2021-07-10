@@ -4,6 +4,7 @@ pub mod owm_api;
 pub mod spotify_api;
 pub mod twitch_api;
 
+use crate::database::DatabaseError;
 use crate::database::{models::User, Database};
 use crate::platform::{
     ChannelIdentifier, ExecutionContext, Permissions, UserIdentifier, UserIdentifierError,
@@ -174,7 +175,7 @@ impl CommandHandler {
                     Some(1),
                 ),
                 // Old commands for convenience
-                /*"addcmd" | "cmdadd" => (
+                "addcmd" | "cmdadd" => (
                     self.edit_cmds(
                         "command",
                         {
@@ -213,7 +214,7 @@ impl CommandHandler {
                     .await?,
                     Some(1),
                 ),
-                "debug" | "check" | "test" => {
+                "debug" | "check" => {
                     let action = arguments.join(" ");
 
                     (
@@ -225,7 +226,7 @@ impl CommandHandler {
                         )?,
                         None,
                     )
-                }*/
+                }
                 // TODO: Confirm identity
                 "merge" => {
                     let identifier_string = arguments.first().ok_or_else(|| {
@@ -248,16 +249,24 @@ impl CommandHandler {
                     .db
                     .get_command(&execution_context.get_channel(), command)?
                 {
-                    Some(cmd) => (
-                        self.execute_command_action(
-                            cmd.action,
-                            execution_context,
-                            user.clone(),
-                            &arguments,
-                        )?,
-                        cmd.cooldown,
-                    ),
-                    None => (None, None),
+                    Some(cmd) => {
+                        tracing::info!("Executing custom command {:?}", cmd);
+
+                        (
+                            self.execute_command_action(
+                                cmd.action,
+                                execution_context,
+                                user.clone(),
+                                &arguments,
+                            )?,
+                            cmd.cooldown,
+                        )
+                    }
+                    None => {
+                        tracing::info!("Command not found");
+
+                        (None, None)
+                    }
                 },
             };
 
@@ -386,9 +395,11 @@ impl CommandHandler {
                                 &command_action,
                             ) {
                                 Ok(()) => Ok(Some("Command successfully added".to_string())),
-                                Err(diesel::result::Error::DatabaseError(
-                                    diesel::result::DatabaseErrorKind::UniqueViolation,
-                                    _,
+                                Err(DatabaseError::DieselError(
+                                    diesel::result::Error::DatabaseError(
+                                        diesel::result::DatabaseErrorKind::UniqueViolation,
+                                        _,
+                                    ),
                                 )) => Ok(Some("Command already exists".to_string())),
                                 Err(e) => Err(CommandError::DatabaseError(e)),
                             }
@@ -403,7 +414,9 @@ impl CommandHandler {
                                 .delete_command(&execution_context.get_channel(), command_name)
                             {
                                 Ok(()) => Ok(Some("Command succesfully removed".to_string())),
-                                Err(e) => Err(CommandError::DatabaseError(e)),
+                                Err(e) => {
+                                    Err(CommandError::DatabaseError(DatabaseError::DieselError(e)))
+                                }
                             }
                         }
                         "show" | "check" => {
@@ -433,7 +446,7 @@ pub enum CommandError {
     MissingArgument(String),
     InvalidArgument(String),
     NoPermissions,
-    DatabaseError(diesel::result::Error),
+    DatabaseError(DatabaseError),
     TemplateError(handlebars::RenderError),
     ConfigurationError(VarError),
 }
@@ -461,6 +474,12 @@ impl fmt::Display for CommandError {
 
 impl From<diesel::result::Error> for CommandError {
     fn from(e: diesel::result::Error) -> Self {
+        Self::DatabaseError(DatabaseError::DieselError(e))
+    }
+}
+
+impl From<DatabaseError> for CommandError {
+    fn from(e: DatabaseError) -> Self {
         Self::DatabaseError(e)
     }
 }

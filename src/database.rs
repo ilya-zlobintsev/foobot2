@@ -4,6 +4,7 @@ mod schema;
 use std::{
     collections::HashMap,
     env,
+    fmt::Display,
     sync::{Arc, RwLock},
     time::Duration,
 };
@@ -27,10 +28,16 @@ use diesel::{EqAll, QueryDsl};
 use diesel::{ExpressionMethods, RunQueryDsl};
 use passwords::PasswordGenerator;
 use reqwest::Client;
+use rocket::figment::providers::Data;
 use tokio::time;
 
 use diesel_migrations::{embed_migrations, EmbeddedMigrations, MigrationHarness};
 pub const MIGRATIONS: EmbeddedMigrations = embed_migrations!();
+
+const BUILTIN_COMMANDS: &'static [&'static str] = &[
+    "ping", "commands", "cmd", "command", "addcmd", "debug", "delcmd", "merge", "showcmd",
+    "checkcmd",
+];
 
 #[derive(Clone)]
 pub struct Database {
@@ -229,7 +236,7 @@ impl Database {
         channel_identifier: &ChannelIdentifier,
         command_name: &str,
         command_action: &str,
-    ) -> Result<(), diesel::result::Error> {
+    ) -> Result<(), DatabaseError> {
         let channel = self.get_channel(channel_identifier)?;
 
         self.add_command_to_channel(channel, command_name, command_action)
@@ -240,19 +247,24 @@ impl Database {
         channel: Channel,
         command_name: &str,
         command_action: &str,
-    ) -> Result<(), diesel::result::Error> {
-        let mut conn = self.conn_pool.get().unwrap();
+    ) -> Result<(), DatabaseError> {
+        match BUILTIN_COMMANDS.contains(&command_name) {
+            false => {
+                let mut conn = self.conn_pool.get().unwrap();
 
-        diesel::insert_into(commands::table)
-            .values(&NewCommand {
-                name: command_name,
-                action: command_action,
-                permissions: None,
-                channel_id: channel.id,
-            })
-            .execute(&mut conn)?;
+                diesel::insert_into(commands::table)
+                    .values(&NewCommand {
+                        name: command_name,
+                        action: command_action,
+                        permissions: None,
+                        channel_id: channel.id,
+                    })
+                    .execute(&mut conn)?;
 
-        Ok(())
+                Ok(())
+            }
+            true => Err(DatabaseError::InvalidValue),
+        }
     }
 
     pub fn add_command_to_channel_id(
@@ -260,7 +272,7 @@ impl Database {
         channel_id: u64,
         command_name: &str,
         command_action: &str,
-    ) -> Result<(), diesel::result::Error> {
+    ) -> Result<(), DatabaseError> {
         let channel = self.get_channel_by_id(channel_id)?.unwrap();
 
         self.add_command_to_channel(channel, command_name, command_action)
@@ -496,5 +508,30 @@ impl Database {
             .execute(&mut conn)?;
 
         Ok(session.session_id)
+    }
+}
+
+#[derive(Debug)]
+pub enum DatabaseError {
+    DieselError(diesel::result::Error),
+    InvalidValue,
+}
+
+impl From<diesel::result::Error> for DatabaseError {
+    fn from(e: diesel::result::Error) -> Self {
+        Self::DieselError(e)
+    }
+}
+
+impl Display for DatabaseError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "{}",
+            match self {
+                DatabaseError::DieselError(e) => format!("database error: {}", e),
+                DatabaseError::InvalidValue => "invalid value".to_string(),
+            }
+        )
     }
 }

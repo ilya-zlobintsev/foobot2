@@ -4,6 +4,7 @@ use rocket::response::Responder;
 use rocket::response::{self};
 use rocket::{Response, State};
 
+use crate::database::DatabaseError;
 use crate::database::models::WebSession;
 use crate::{command_handler::CommandHandler, platform::ChannelIdentifier};
 
@@ -57,13 +58,19 @@ pub async fn get_permissions(
 
 pub enum ApiError {
     InvalidUser,
-    DatabaseError(diesel::result::Error),
+    DatabaseError(DatabaseError),
     RequestError(reqwest::Error),
     GenericError(String),
 }
 
 impl From<diesel::result::Error> for ApiError {
     fn from(e: diesel::result::Error) -> Self {
+        Self::DatabaseError(DatabaseError::DieselError(e))
+    }
+}
+
+impl From<DatabaseError> for ApiError {
+    fn from(e: DatabaseError) -> Self {
         Self::DatabaseError(e)
     }
 }
