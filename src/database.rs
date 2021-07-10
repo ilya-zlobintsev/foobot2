@@ -438,6 +438,10 @@ impl Database {
         self.get_user_data_value(user_id, "location")
     }
 
+    pub fn get_lastfm_name(&self, user_id: u64) -> Result<Option<String>, DatabaseError> {
+        Ok(self.get_user_data_value(user_id, "lastfm_name")?)
+    }
+
     pub fn get_web_session(
         &self,
         session_id: &str,

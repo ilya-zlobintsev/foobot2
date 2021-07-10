@@ -1,3 +1,5 @@
+use std::sync::Arc;
+
 use http::status::StatusCode;
 use reqwest::Client;
 use serde::{Deserialize, Serialize};
@@ -5,13 +7,13 @@ use serde::{Deserialize, Serialize};
 #[derive(Clone)]
 pub struct OwmApi {
     client: Client,
-    api_key: String,
+    api_key: Arc<String>,
 }
 
 impl OwmApi {
     pub fn init(api_key: String) -> Self {
         Self {
-            api_key,
+            api_key: Arc::new(api_key),
             client: Client::new(),
         }
     }

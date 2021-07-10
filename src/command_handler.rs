@@ -1,5 +1,6 @@
 pub mod discord_api;
 pub mod inquiry_helper;
+pub mod lastfm_api;
 pub mod owm_api;
 pub mod spotify_api;
 pub mod twitch_api;
@@ -23,12 +24,13 @@ use tokio::task;
 use owm_api::OwmApi;
 use twitch_api::TwitchApi;
 
+use self::lastfm_api::LastFMApi;
+
 #[derive(Clone)]
 pub struct CommandHandler {
     pub db: Database,
     pub twitch_api: Option<TwitchApi>,
     admin_user: Option<User>,
-    owm_api: Option<OwmApi>,
     startup_time: Instant,
     template_registry: Arc<Handlebars<'static>>,
     cooldowns: Arc<RwLock<Vec<(u64, String)>>>, // User id and command
@@ -62,20 +64,25 @@ impl CommandHandler {
         template_registry.register_helper("choose", Box::new(random_helper));
         template_registry.register_helper("sleep", Box::new(sleep_helper));
 
-        if let Ok(api_key) = env::var("OWM_API_KEY") {
+        if let Ok(owm_api_key) = env::var("OWM_API_KEY") {
             template_registry.register_helper(
                 "weather",
                 Box::new(WeatherHelper {
                     db: db.clone(),
-                    api: OwmApi::init(api_key),
+                    api: OwmApi::init(owm_api_key),
+                }),
+            );
+        }
+
+        if let Ok(lastfm_api_key) = env::var("LASTFM_API_KEY") {
+            template_registry.register_helper(
+                "lastfm",
+                Box::new(LastFMHelper {
+                    db: db.clone(),
+                    lastfm_api: LastFMApi::init(lastfm_api_key),
                 }),
             )
         }
-
-        let owm_api = match env::var("OWM_API_KEY") {
-            Ok(api_key) => Some(OwmApi::init(api_key)),
-            Err(_) => None,
-        };
 
         template_registry.set_strict_mode(true);
 
@@ -97,7 +104,6 @@ impl CommandHandler {
             db,
             twitch_api,
             startup_time,
-            owm_api,
             template_registry: Arc::new(template_registry),
             cooldowns,
             admin_user,
