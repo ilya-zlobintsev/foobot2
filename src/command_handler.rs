@@ -1,5 +1,6 @@
 pub mod discord_api;
 pub mod inquiry_helper;
+pub mod lastfm_api;
 pub mod owm_api;
 pub mod spotify_api;
 pub mod twitch_api;
@@ -23,12 +24,12 @@ use tokio::task;
 use owm_api::OwmApi;
 use twitch_api::TwitchApi;
 
+use self::lastfm_api::LastFMApi;
+
 #[derive(Clone)]
 pub struct CommandHandler {
     pub db: Database,
     pub twitch_api: Option<TwitchApi>,
-    admin_user: Option<User>,
-    owm_api: Option<OwmApi>,
     startup_time: Instant,
     template_registry: Arc<Handlebars<'static>>,
     cooldowns: Arc<RwLock<Vec<(u64, String)>>>, // User id and command
@@ -52,55 +53,42 @@ impl CommandHandler {
         let mut template_registry = Handlebars::new();
 
         template_registry.register_helper("args", Box::new(inquiry_helper::args_helper));
-        template_registry.register_helper(
-            "spotify",
-            Box::new(SpotifyHelper {
-                db: db.clone(),
-                twitch_api: twitch_api.clone(),
-            }),
-        );
+        template_registry.register_helper("spotify", Box::new(SpotifyHelper { db: db.clone() }));
         template_registry.register_helper("choose", Box::new(random_helper));
         template_registry.register_helper("sleep", Box::new(sleep_helper));
 
-        if let Ok(api_key) = env::var("OWM_API_KEY") {
+        if let Ok(owm_api_key) = env::var("OWM_API_KEY") {
             template_registry.register_helper(
                 "weather",
                 Box::new(WeatherHelper {
                     db: db.clone(),
-                    api: OwmApi::init(api_key),
+                    api: OwmApi::init(owm_api_key),
+                }),
+            );
+        }
+
+        if let Ok(lastfm_api_key) = env::var("LASTFM_API_KEY") {
+            template_registry.register_helper(
+                "lastfm",
+                Box::new(LastFMHelper {
+                    db: db.clone(),
+                    lastfm_api: LastFMApi::init(lastfm_api_key),
                 }),
             )
         }
 
-        let owm_api = match env::var("OWM_API_KEY") {
-            Ok(api_key) => Some(OwmApi::init(api_key)),
-            Err(_) => None,
-        };
+        template_registry.register_helper("song", Box::new(inquiry_helper::song_helper));
 
         template_registry.set_strict_mode(true);
 
         let cooldowns = Arc::new(RwLock::new(Vec::new()));
 
-        let admin_user = match env::var("ADMIN_USER") {
-            Ok(admin) => Some(
-                db.get_or_create_user(
-                    &UserIdentifier::from_string(&admin, twitch_api.as_ref())
-                        .await
-                        .unwrap(),
-                )
-                .expect("DB Error"),
-            ),
-            Err(_) => None,
-        };
-
         Self {
             db,
             twitch_api,
             startup_time,
-            owm_api,
             template_registry: Arc::new(template_registry),
             cooldowns,
-            admin_user,
         }
     }
 
@@ -108,7 +96,7 @@ impl CommandHandler {
     pub async fn handle_command_message<T, C>(&self, message: &T, context: C) -> Option<String>
     where
         T: Sync + CommandMessage,
-        C: ExecutionContext,
+        C: ExecutionContext + Sync,
     {
         let message_text = message.get_text();
 
@@ -134,7 +122,7 @@ impl CommandHandler {
     }
 
     // #[async_recursion]
-    async fn run_command<C: ExecutionContext>(
+    async fn run_command<C: ExecutionContext + std::marker::Sync>(
         &self,
         command: &str,
         arguments: Vec<&str>,
@@ -144,13 +132,6 @@ impl CommandHandler {
         tracing::info!("Processing command {} with {:?}", command, arguments);
 
         let user = self.db.get_or_create_user(&user_identifier)?;
-
-        // TODO
-        // if let Some(admin) = &self.admin_user {
-        //     if user.id == admin.id {
-        //         execution_context.permissions = Permissions::Admin;
-        //     }
-        // }
 
         if !self
             .cooldowns
@@ -162,8 +143,9 @@ impl CommandHandler {
                 "ping" => (Some(self.ping()), Some(5)),
                 "whoami" | "id" => (
                     Some(format!(
-                        "{:?}, channel: {:?}, permissions: {:?}",
+                        "{:?}, identified as {}, channel: {:?}, permissions: {:?}",
                         user,
+                        user_identifier.to_string(),
                         execution_context.get_channel(),
                         execution_context.get_permissions().await,
                     )),
@@ -235,9 +217,7 @@ impl CommandHandler {
                         )
                     })?;
 
-                    let other_identifier =
-                        UserIdentifier::from_string(identifier_string, self.twitch_api.as_ref())
-                            .await?;
+                    let other_identifier = UserIdentifier::from_string(identifier_string)?;
 
                     let other = self.db.get_or_create_user(&other_identifier)?;
 
@@ -356,7 +336,7 @@ impl CommandHandler {
         )
     }
 
-    async fn edit_cmds<C: ExecutionContext>(
+    async fn edit_cmds<C: ExecutionContext + Sync>(
         &self,
         command: &str,
         arguments: Vec<&str>,

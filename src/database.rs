@@ -28,7 +28,6 @@ use diesel::{EqAll, QueryDsl};
 use diesel::{ExpressionMethods, RunQueryDsl};
 use passwords::PasswordGenerator;
 use reqwest::Client;
-use rocket::figment::providers::Data;
 use tokio::time;
 
 use diesel_migrations::{embed_migrations, EmbeddedMigrations, MigrationHarness};
@@ -436,6 +435,22 @@ impl Database {
 
     pub fn get_location(&self, user_id: u64) -> Result<Option<String>, diesel::result::Error> {
         self.get_user_data_value(user_id, "location")
+    }
+
+    pub fn get_lastfm_name(&self, user_id: u64) -> Result<Option<String>, DatabaseError> {
+        Ok(self.get_user_data_value(user_id, "lastfm_name")?)
+    }
+
+    pub fn set_lastfm_name(&self, user_id: u64, name: &str) -> Result<(), DatabaseError> {
+        Ok(self.set_user_data(
+            &UserData {
+                name: "lastfm_name".to_string(),
+                value: name.to_string(),
+                public: true,
+                user_id,
+            },
+            true,
+        )?)
     }
 
     pub fn get_web_session(

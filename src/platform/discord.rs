@@ -118,7 +118,7 @@ pub struct DiscordExecutionContext<'a> {
 
 #[async_trait]
 impl ExecutionContext for DiscordExecutionContext<'_> {
-    async fn get_permissions(&self) -> super::Permissions {
+    async fn get_permissions_internal(&self) -> super::Permissions {
         match self.msg.guild_id {
             Some(guild_id) => {
                 let guild_member = self
@@ -169,5 +169,9 @@ impl ExecutionContext for DiscordExecutionContext<'_> {
             Some(guild_id) => ChannelIdentifier::DiscordGuildID(guild_id.0),
             None => ChannelIdentifier::DiscordChannelID(self.msg.channel_id.0),
         }
+    }
+
+    fn get_user_identifier(&self) -> UserIdentifier {
+        UserIdentifier::DiscordID(self.msg.author.id.0.to_string())
     }
 }

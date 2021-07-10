@@ -10,8 +10,9 @@ use rand::{thread_rng, Rng};
 use serde::{Deserialize, Serialize};
 
 use crate::database::{models::User, Database};
-use crate::platform::{ExecutionContext, UserIdentifier};
+use crate::platform::UserIdentifier;
 
+use super::lastfm_api::LastFMApi;
 use super::{owm_api::OwmApi, spotify_api::SpotifyApi, twitch_api::TwitchApi};
 
 #[derive(Serialize, Deserialize)]
@@ -35,6 +36,41 @@ pub fn args_helper(
     Ok(())
 }
 
+pub fn song_helper(
+    h: &Helper,
+    hb: &Handlebars,
+    ctx: &Context,
+    _: &mut RenderContext,
+    out: &mut dyn Output,
+) -> HelperResult {
+    let params = h
+        .params()
+        .iter()
+        .map(|param| param.render())
+        .collect::<Vec<String>>()
+        .join(" ");
+
+    tracing::info!("Params: {}", params);
+
+    // Curly braces are doubled for escaping
+    if let Ok(lastfm_result) =
+        hb.render_template_with_context(&format!("{{{{ lastfm {} }}}}", params), ctx)
+    {
+        out.write(&lastfm_result)?;
+    } else if let Ok(spotify_result) =
+        hb.render_template_with_context(&format!("{{{{ spotify {} }}}}", params), ctx)
+    {
+        out.write(&spotify_result)?;
+    } else {
+        out.write(&format!(
+            "No music source configured! Go to {}/profile to connect an account.",
+            env::var("BASE_URL").expect("BASE_URL missing")
+        ))?;
+    }
+
+    Ok(())
+}
+
 pub struct WeatherHelper {
     pub db: Database,
     pub api: OwmApi,
@@ -54,7 +90,7 @@ impl HelperDef for WeatherHelper {
 
         let runtime = tokio::runtime::Handle::current();
 
-        let place = match context.arguments.len() {
+        let place = match h.params().len() {
             0 => self
                 .db
                 .get_location(context.user.id)
@@ -95,7 +131,6 @@ impl HelperDef for WeatherHelper {
 #[derive(Clone)]
 pub struct SpotifyHelper {
     pub db: Database,
-    pub twitch_api: Option<TwitchApi>,
 }
 
 impl HelperDef for SpotifyHelper {
@@ -113,13 +148,12 @@ impl HelperDef for SpotifyHelper {
         let runtime = tokio::runtime::Handle::current();
 
         let db = self.db.clone();
-        let twitch_api = self.twitch_api.clone();
 
         match thread::spawn(move || {
             let user_id = match context.arguments.first() {
                 Some(arg) => {
-                    let user_identifier = runtime
-                        .block_on(UserIdentifier::from_string(arg, twitch_api.as_ref()))
+                    tracing::info!("Arg {}", arg);
+                    let user_identifier = UserIdentifier::from_string(arg)
                         .map_err(|_| RenderError::new("invalid user"))?;
 
                     db.get_user(&user_identifier)
@@ -168,11 +202,73 @@ impl HelperDef for SpotifyHelper {
                     artist, playback.item.name, position, length
                 ))
                 .expect("Failed to write");
-
-                Ok(())
             }
-            None => Err(RenderError::new("No song is currently playing")),
-        }
+            None => out.write("No song is currently playing")?,
+        };
+
+        Ok(())
+    }
+}
+
+#[derive(Clone)]
+pub struct LastFMHelper {
+    pub db: Database,
+    pub lastfm_api: LastFMApi,
+}
+
+impl HelperDef for LastFMHelper {
+    fn call<'reg: 'rc, 'rc>(
+        &self,
+        h: &Helper<'reg, 'rc>,
+        _: &'reg Handlebars<'reg>,
+        ctx: &'rc Context,
+        _: &mut RenderContext<'reg, 'rc>,
+        out: &mut dyn Output,
+    ) -> HelperResult {
+        let context = serde_json::from_value::<InquiryContext>(ctx.data().clone())
+            .expect("Failed to get command context");
+
+        let runtime = tokio::runtime::Handle::current();
+
+        let username = match h.param(0) {
+            Some(param) => {
+                tracing::info!("Param {:?}", param);
+
+                if let Some(param) = param.relative_path() {
+                    param.clone()
+                } else {
+                    param.render()
+                }
+            }
+            None => self
+                .db
+                .get_lastfm_name(context.user.id)
+                .expect("DB Error")
+                .ok_or_else(|| RenderError::new("last.fm username not set!"))?,
+        };
+
+        let lastfm_api = self.lastfm_api.clone();
+
+        let response =
+            thread::spawn(move || runtime.block_on(lastfm_api.get_recent_tracks(&username)))
+                .join()
+                .unwrap()
+                .map_err(|e| RenderError::new(format!("Last.FM Error: {}", e)))?;
+
+        out.write(&match response.recenttracks.track.iter().find(|track| {
+            if let Some(attr) = &track.attr {
+                attr.nowplaying == "true"
+            } else {
+                false
+            }
+        }) {
+            Some(current_track) => {
+                format!("{} - {}", current_track.artist.text, current_track.name)
+            }
+            None => "No song is currently playing".to_string(),
+        })?;
+
+        Ok(())
     }
 }
 
