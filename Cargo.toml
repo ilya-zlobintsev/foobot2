@@ -30,6 +30,7 @@ twilight-http = "0.5"
 twilight-model = "0.5"
 twilight-gateway = "0.5"
 twilight-cache-inmemory = "0.5"
+twilight-util = { version = "0.5", features = ["permission-calculator"] }
 
 handlebars = "4.0"
 

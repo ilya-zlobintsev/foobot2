@@ -28,10 +28,11 @@ pub struct PlatformMessage {
     pub message: String,
 }
 
-#[derive(Serialize, Deserialize, Clone, Debug)]
-pub struct ExecutionContext {
-    pub channel: ChannelIdentifier,
-    pub permissions: Permissions,
+#[async_trait]
+pub trait ExecutionContext {
+    async fn get_permissions(&self) -> Permissions;
+
+    fn get_channel(&self) -> ChannelIdentifier;
 }
 
 #[derive(Debug)]

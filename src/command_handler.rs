@@ -5,7 +5,9 @@ pub mod spotify_api;
 pub mod twitch_api;
 
 use crate::database::{models::User, Database};
-use crate::platform::{ExecutionContext, Permissions, UserIdentifier, UserIdentifierError};
+use crate::platform::{
+    ChannelIdentifier, ExecutionContext, Permissions, UserIdentifier, UserIdentifierError,
+};
 
 use core::fmt;
 use std::env::{self, VarError};
@@ -102,13 +104,10 @@ impl CommandHandler {
     }
 
     /// This function expects a raw message that appears to be a command without the leading command prefix.
-    pub async fn handle_command_message<T>(
-        &self,
-        message: &T,
-        context: ExecutionContext,
-    ) -> Option<String>
+    pub async fn handle_command_message<T, C>(&self, message: &T, context: C) -> Option<String>
     where
         T: Sync + CommandMessage,
+        C: ExecutionContext,
     {
         let message_text = message.get_text();
 
@@ -134,22 +133,23 @@ impl CommandHandler {
     }
 
     // #[async_recursion]
-    async fn run_command(
+    async fn run_command<C: ExecutionContext>(
         &self,
         command: &str,
         arguments: Vec<&str>,
-        mut execution_context: ExecutionContext,
+        execution_context: C,
         user_identifier: UserIdentifier,
     ) -> Result<Option<String>, CommandError> {
         tracing::info!("Processing command {} with {:?}", command, arguments);
 
         let user = self.db.get_or_create_user(&user_identifier)?;
 
-        if let Some(admin) = &self.admin_user {
-            if user.id == admin.id {
-                execution_context.permissions = Permissions::Admin;
-            }
-        }
+        // TODO
+        // if let Some(admin) = &self.admin_user {
+        //     if user.id == admin.id {
+        //         execution_context.permissions = Permissions::Admin;
+        //     }
+        // }
 
         if !self
             .cooldowns
@@ -161,8 +161,10 @@ impl CommandHandler {
                 "ping" => (Some(self.ping()), Some(5)),
                 "whoami" | "id" => (
                     Some(format!(
-                        "{:?}, permissions: {:?}",
-                        user, execution_context.permissions,
+                        "{:?}, channel: {:?}, permissions: {:?}",
+                        user,
+                        execution_context.get_channel(),
+                        execution_context.get_permissions().await,
                     )),
                     Some(5),
                 ),
@@ -172,7 +174,7 @@ impl CommandHandler {
                     Some(1),
                 ),
                 // Old commands for convenience
-                "addcmd" | "cmdadd" => (
+                /*"addcmd" | "cmdadd" => (
                     self.edit_cmds(
                         "command",
                         {
@@ -223,7 +225,8 @@ impl CommandHandler {
                         )?,
                         None,
                     )
-                }
+                }*/
+                // TODO: Confirm identity
                 "merge" => {
                     let identifier_string = arguments.first().ok_or_else(|| {
                         CommandError::MissingArgument(
@@ -241,7 +244,10 @@ impl CommandHandler {
 
                     (Some("sucessfully merged users".to_string()), None)
                 }
-                _ => match self.db.get_command(&execution_context.channel, command)? {
+                _ => match self
+                    .db
+                    .get_command(&execution_context.get_channel(), command)?
+                {
                     Some(cmd) => (
                         self.execute_command_action(
                             cmd.action,
@@ -283,10 +289,10 @@ impl CommandHandler {
         });
     }
 
-    fn execute_command_action(
+    fn execute_command_action<C: ExecutionContext>(
         &self,
         action: String,
-        execution_context: ExecutionContext,
+        _execution_context: C,
         user: User,
         arguments: &Vec<&str>,
     ) -> Result<Option<String>, CommandError> {
@@ -296,7 +302,6 @@ impl CommandHandler {
             &action,
             &(InquiryContext {
                 user,
-                execution_context,
                 arguments: arguments.iter().map(|s| s.to_owned().to_owned()).collect(),
             }),
         ) {
@@ -342,11 +347,11 @@ impl CommandHandler {
         )
     }
 
-    async fn edit_cmds(
+    async fn edit_cmds<C: ExecutionContext>(
         &self,
         command: &str,
         arguments: Vec<&str>,
-        execution_context: ExecutionContext,
+        execution_context: C,
     ) -> Result<Option<String>, CommandError> {
         let mut arguments = arguments.into_iter();
 
@@ -354,10 +359,10 @@ impl CommandHandler {
             Ok(Some(format!(
                 "{}/channels/{}/commands",
                 env::var("BASE_URL")?,
-                self.db.get_channel(&execution_context.channel)?.id
+                self.db.get_channel(&execution_context.get_channel())?.id
             )))
         } else {
-            match execution_context.permissions {
+            match execution_context.get_permissions().await {
                 Permissions::ChannelMod | Permissions::Admin => {
                     match arguments.next().ok_or_else(|| {
                         CommandError::MissingArgument("must be either add or delete".to_string())
@@ -376,7 +381,7 @@ impl CommandHandler {
                             }
 
                             match self.db.add_command(
-                                &execution_context.channel,
+                                &execution_context.get_channel(),
                                 command_name,
                                 &command_action,
                             ) {
@@ -395,7 +400,7 @@ impl CommandHandler {
 
                             match self
                                 .db
-                                .delete_command(&execution_context.channel, command_name)
+                                .delete_command(&execution_context.get_channel(), command_name)
                             {
                                 Ok(()) => Ok(Some("Command succesfully removed".to_string())),
                                 Err(e) => Err(CommandError::DatabaseError(e)),
@@ -408,7 +413,7 @@ impl CommandHandler {
 
                             match self
                                 .db
-                                .get_command(&execution_context.channel, command_name)?
+                                .get_command(&execution_context.get_channel(), command_name)?
                             {
                                 Some(command) => Ok(Some(command.action)),
                                 None => Ok(Some(format!("command {} doesn't exist", command_name))),
@@ -495,4 +500,6 @@ pub trait CommandMessage {
     fn get_user_identifier(&self) -> UserIdentifier;
 
     fn get_text(&self) -> &str;
+
+    fn get_channel(&self) -> ChannelIdentifier;
 }

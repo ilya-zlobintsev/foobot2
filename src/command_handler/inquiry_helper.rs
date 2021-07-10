@@ -17,7 +17,6 @@ use super::{owm_api::OwmApi, spotify_api::SpotifyApi, twitch_api::TwitchApi};
 #[derive(Serialize, Deserialize)]
 pub struct InquiryContext {
     pub user: User,
-    pub execution_context: ExecutionContext,
     pub arguments: Vec<String>,
 }
 

@@ -43,24 +43,13 @@ impl Twitch {
 
             pm.message_text = message_text.to_string();
 
-            let context = ExecutionContext {
-                permissions: {
-                    if pm.badges.iter().any(|badge| badge.name == "moderator")
-                        | pm.badges.iter().any(|badge| badge.name == "broadcaster")
-                    {
-                        Permissions::ChannelMod
-                    } else {
-                        Permissions::Default
-                    }
-                },
-                channel: ChannelIdentifier::TwitchChannelName(pm.channel_login.clone()),
-            };
-
             let client = self.client.read().unwrap().as_ref().unwrap().clone();
 
             let command_handler = self.command_handler.clone();
 
             task::spawn(async move {
+            let context = TwitchExecutionContext { pm: &pm };
+
                 let response = command_handler.handle_command_message(&pm, context).await;
 
                 if let Some(response) = response {
@@ -154,5 +143,34 @@ impl CommandMessage for PrivmsgMessage {
 
     fn get_text(&self) -> &str {
         &self.message_text
+    }
+
+    fn get_channel(&self) -> ChannelIdentifier {
+        ChannelIdentifier::TwitchChannelName(self.channel_login.clone())
+    }
+}
+
+pub struct TwitchExecutionContext<'a> {
+    pm: &'a PrivmsgMessage,
+}
+
+#[async_trait]
+impl ExecutionContext for TwitchExecutionContext<'_> {
+    async fn get_permissions(&self) -> Permissions {
+        if self.pm.badges.iter().any(|badge| badge.name == "moderator")
+            | self
+                .pm
+                .badges
+                .iter()
+                .any(|badge| badge.name == "broadcaster")
+        {
+            Permissions::ChannelMod
+        } else {
+            Permissions::Default
+        }
+    }
+
+    fn get_channel(&self) -> ChannelIdentifier {
+        ChannelIdentifier::TwitchChannelName(self.pm.channel_login.clone())
     }
 }

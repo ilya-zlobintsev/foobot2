@@ -3,7 +3,8 @@ use std::env;
 use futures::StreamExt;
 use twilight_gateway::{cluster::ShardScheme, Cluster, Event, Intents};
 use twilight_http::Client;
-use twilight_model::gateway::payload::MessageCreate;
+use twilight_model::{gateway::payload::MessageCreate, guild::Permissions};
+use twilight_util::permission_calculator::PermissionCalculator;
 
 use crate::command_handler::{CommandHandler, CommandMessage};
 
@@ -16,6 +17,13 @@ impl CommandMessage for MessageCreate {
 
     fn get_text(&self) -> &str {
         &self.content
+    }
+
+    fn get_channel(&self) -> ChannelIdentifier {
+        match &self.guild_id {
+            Some(guild_id) => ChannelIdentifier::DiscordGuildID(guild_id.0),
+            None => ChannelIdentifier::DiscordChannelID(self.channel_id.0),
+        }
     }
 }
 
@@ -30,15 +38,9 @@ impl Discord {
         if let Some(content) = msg.content.strip_prefix(&self.prefix) {
             msg.content = content.to_string();
 
-            let context = match msg.guild_id {
-                Some(guild_id) => ExecutionContext {
-                    channel: ChannelIdentifier::DiscordGuildID(guild_id.0),
-                    permissions: crate::platform::Permissions::Default, // TODO
-                },
-                None => ExecutionContext {
-                    channel: ChannelIdentifier::DiscordChannelID(msg.channel_id.0),
-                    permissions: crate::platform::Permissions::ChannelMod,
-                },
+            let context = DiscordExecutionContext {
+                msg: &msg,
+                http: http.clone(),
             };
 
             if let Some(response) = self
@@ -105,6 +107,67 @@ impl ChatPlatform for Discord {
             prefix
         } else {
             "!".to_string()
+        }
+    }
+}
+
+pub struct DiscordExecutionContext<'a> {
+    msg: &'a MessageCreate,
+    http: Client,
+}
+
+#[async_trait]
+impl ExecutionContext for DiscordExecutionContext<'_> {
+    async fn get_permissions(&self) -> super::Permissions {
+        match self.msg.guild_id {
+            Some(guild_id) => {
+                let guild_member = self
+                    .http
+                    .guild_member(guild_id, self.msg.author.id)
+                    .await
+                    .expect("Failed to get guild member")
+                    .expect("Not a guild member");
+
+                let guild_roles = self
+                    .http
+                    .roles(guild_id)
+                    .await
+                    .expect("Failed to get guild roles");
+
+                let mut member_roles = Vec::new();
+
+                for role in guild_member.roles {
+                    let role = guild_roles
+                        .iter()
+                        .find(|guild_role| guild_role.id == role)
+                        .expect("Failed to get role");
+
+                    member_roles.push((role.id, role.permissions));
+                }
+
+                let permissions_calculator = PermissionCalculator::new(
+                    guild_id,
+                    self.msg.author.id,
+                    Permissions::VIEW_CHANNEL,
+                    &member_roles,
+                );
+
+                let permissions = permissions_calculator.root();
+
+                if permissions.contains(Permissions::ADMINISTRATOR) {
+                    crate::platform::Permissions::ChannelMod
+                } else {
+                    crate::platform::Permissions::Default
+                }
+            }
+            None => crate::platform::Permissions::ChannelMod, // for DMs
+        }
+    }
+
+    fn get_channel(&self) -> ChannelIdentifier {
+        match self.msg.guild_id {
+            Some(guild_id) => ChannelIdentifier::DiscordGuildID(guild_id.0),
+            None => ChannelIdentifier::DiscordChannelID(self.msg.channel_id.0),
         }
     }
 }

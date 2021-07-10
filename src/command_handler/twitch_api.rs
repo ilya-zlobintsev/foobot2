@@ -75,7 +75,7 @@ impl TwitchApi {
 
         let response: serde_json::Value = client.post("https://id.twitch.tv/oauth2/token").query(&[("client_id", client_id), ("client_secret", client_secret), ("grant_type", "client_credentials"), ("scope", "moderation:read channel:edit:commercial channel:manage:broadcast channel:moderate chat:edit")]).send().await?.json().await?;
 
-        tracing::info!("{:?}", response);
+        // tracing::info!("{:?}", response);
 
         Ok(response
             .get("access_token")
@@ -121,7 +121,7 @@ impl TwitchApi {
             .header("Authorization", format!("Bearer {}", oauth))
             .send()
             .await?;
-        tracing::info!("Validating twitch API token: {}", response.status());
+        // tracing::info!("Validating twitch API token: {}", response.status());
         Ok(response.json().await?)
     }
 
