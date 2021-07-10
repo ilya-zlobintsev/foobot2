@@ -53,6 +53,8 @@ pub async fn run(command_handler: CommandHandler) -> JoinHandle<()> {
                     authenticate::authenticate_spotify,
                     authenticate::spotify_redirect,
                     authenticate::disconnect_spotify,
+                    authenticate::authenticate_lastfm,
+                    authenticate::lastfm_redirect,
                     authenticate::logout,
                 ],
             )

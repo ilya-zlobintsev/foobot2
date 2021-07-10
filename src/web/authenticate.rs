@@ -259,6 +259,35 @@ pub fn disconnect_spotify(session: WebSession, cmd: &State<CommandHandler>) -> R
     Redirect::to("/profile")
 }
 
+// Last.fm doesn't use oauth so it can't use the generic auth platform stuff
+#[get("/lastfm")]
+pub fn authenticate_lastfm(_session: WebSession) -> Redirect {
+    let api_key = env::var("LASTFM_API_KEY").expect("LASTFM_API_KEY missing!");
+
+    let redirect_uri = format!(
+        "{}/authenticate/lastfm/redirect",
+        env::var("BASE_URL").expect("BASE_URL missing"),
+    );
+
+    Redirect::to(format!(
+        "https://www.last.fm/api/auth/?api_key={}&cb={}",
+        api_key, redirect_uri
+    ))
+}
+
+#[get("/lastfm/redirect?<token>")]
+pub fn lastfm_redirect(
+    cmd: &State<CommandHandler>,
+    session: WebSession,
+    token: String,
+) -> Redirect {
+    cmd.db
+        .set_lastfm_token(session.user_id, token)
+        .expect("Failed to set token");
+
+    Redirect::to("/profile")
+}
+
 fn create_user_session(db: &Database, user_id: u64, display_name: String) -> Cookie<'static> {
     let session_id = db
         .create_web_session(user_id, display_name.to_string())

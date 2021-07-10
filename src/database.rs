@@ -434,6 +434,20 @@ impl Database {
         self.get_user_data_value(user_id, "spotify_access_token")
     }
 
+    pub fn set_lastfm_token(&self, user_id: u64, token: String) -> Result<(), DatabaseError> {
+        self.set_user_data(
+            &UserData {
+                name: "lastfm_token".to_string(),
+                value: token,
+                public: false,
+                user_id,
+            },
+            true,
+        )?;
+
+        Ok(())
+    }
+
     pub fn get_location(&self, user_id: u64) -> Result<Option<String>, diesel::result::Error> {
         self.get_user_data_value(user_id, "location")
     }
