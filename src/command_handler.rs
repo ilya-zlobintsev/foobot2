@@ -53,13 +53,7 @@ impl CommandHandler {
         let mut template_registry = Handlebars::new();
 
         template_registry.register_helper("args", Box::new(inquiry_helper::args_helper));
-        template_registry.register_helper(
-            "spotify",
-            Box::new(SpotifyHelper {
-                db: db.clone(),
-                twitch_api: twitch_api.clone(),
-            }),
-        );
+        template_registry.register_helper("spotify", Box::new(SpotifyHelper { db: db.clone() }));
         template_registry.register_helper("choose", Box::new(random_helper));
         template_registry.register_helper("sleep", Box::new(sleep_helper));
 
@@ -230,9 +224,7 @@ impl CommandHandler {
                         )
                     })?;
 
-                    let other_identifier =
-                        UserIdentifier::from_string(identifier_string, self.twitch_api.as_ref())
-                            .await?;
+                    let other_identifier = UserIdentifier::from_string(identifier_string)?;
 
                     let other = self.db.get_or_create_user(&other_identifier)?;
 

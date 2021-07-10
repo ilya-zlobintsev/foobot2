@@ -131,7 +131,6 @@ impl HelperDef for WeatherHelper {
 #[derive(Clone)]
 pub struct SpotifyHelper {
     pub db: Database,
-    pub twitch_api: Option<TwitchApi>,
 }
 
 impl HelperDef for SpotifyHelper {
@@ -149,14 +148,12 @@ impl HelperDef for SpotifyHelper {
         let runtime = tokio::runtime::Handle::current();
 
         let db = self.db.clone();
-        let twitch_api = self.twitch_api.clone();
 
         match thread::spawn(move || {
             let user_id = match context.arguments.first() {
                 Some(arg) => {
                     tracing::info!("Arg {}", arg);
-                    let user_identifier = runtime
-                        .block_on(UserIdentifier::from_string(arg, twitch_api.as_ref()))
+                    let user_identifier = UserIdentifier::from_string(arg)
                         .map_err(|_| RenderError::new("invalid user"))?;
 
                     db.get_user(&user_identifier)
