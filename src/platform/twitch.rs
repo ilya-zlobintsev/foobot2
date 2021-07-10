@@ -1,10 +1,4 @@
-use std::{
-    collections::HashMap,
-    sync::{
-        mpsc::{channel, Receiver, Sender},
-        Arc, RwLock,
-    },
-};
+use std::sync::{Arc, RwLock};
 
 use async_trait::async_trait;
 use std::time::Instant;
@@ -20,7 +14,7 @@ use crate::{
     platform::{ChannelIdentifier, ExecutionContext, Permissions},
 };
 
-use super::{ChatPlatform, PlatformMessage, UserIdentifier};
+use super::{ChatPlatform, UserIdentifier};
 
 #[derive(Clone)]
 pub struct Twitch {
@@ -67,9 +61,7 @@ impl Twitch {
             let command_handler = self.command_handler.clone();
 
             task::spawn(async move {
-                let response = command_handler
-                    .handle_command_message(&pm, context)
-                    .await;
+                let response = command_handler.handle_command_message(&pm, context).await;
 
                 if let Some(response) = response {
                     tracing::info!("Replying with {}", response);

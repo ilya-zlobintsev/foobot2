@@ -8,15 +8,16 @@ mod database;
 mod platform;
 mod web;
 
+use dotenv::dotenv;
 use std::env;
 
 use command_handler::CommandHandler;
 use database::Database;
-use dotenv::dotenv;
-use platform::{ChatPlatform, ChatPlatformKind};
 
 use platform::discord::Discord;
 use platform::twitch::Twitch;
+use platform::ChatPlatform;
+
 use rocket::futures::future::join_all;
 
 #[tokio::main]

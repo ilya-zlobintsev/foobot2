@@ -1,4 +1,8 @@
-use rocket::{Request, catch, response::{Redirect, content::Html}};
+use rocket::{
+    catch,
+    response::{content::Html, Redirect},
+    Request,
+};
 use rocket_dyn_templates::Template;
 
 #[catch(404)]

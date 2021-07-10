@@ -1,8 +1,7 @@
-use super::{
-    api::{get_permissions, ApiError},
-    *,
-};
-use rocket::{catch, form::Form, get, http::CookieJar, post, response::Redirect, Request, State};
+use super::api::{get_permissions, ApiError};
+use super::*;
+
+use rocket::{catch, form::Form, get, post, response::Redirect, Request, State};
 use rocket_dyn_templates::Template;
 
 #[get("/")]

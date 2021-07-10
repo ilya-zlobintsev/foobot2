@@ -1,9 +1,7 @@
-use rocket::{
-    get,
-    http::CookieJar,
-    response::{content::Html, Redirect},
-    State,
-};
+use rocket::get;
+use rocket::response::{content::Html, Redirect};
+use rocket::State;
+
 use rocket_dyn_templates::Template;
 
 use crate::{command_handler::CommandHandler, database::models::WebSession};

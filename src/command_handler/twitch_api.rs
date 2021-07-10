@@ -1,19 +1,15 @@
 pub mod model;
 
-use std::{
-    collections::HashMap,
-    env,
-    sync::{Arc, RwLock},
-    time::Duration,
-};
+use std::collections::HashMap;
+use std::env;
+use std::sync::{Arc, RwLock};
+use std::time::Duration;
 
 use reqwest::{header::HeaderMap, Client};
 use serde_json::json;
 use tokio::task;
 
 use model::*;
-
-use crate::platform::PlatformMessage;
 
 #[derive(Clone)]
 pub struct TwitchApi {

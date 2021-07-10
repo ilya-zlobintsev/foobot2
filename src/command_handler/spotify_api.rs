@@ -43,7 +43,7 @@ impl SpotifyApi {
         }
     }
 
-    pub async fn get_recently_played(&self, access_token: &str) -> Result<String, reqwest::Error> {
+    pub async fn get_recently_played(&self) -> Result<String, reqwest::Error> {
         match self
             .client
             .get("https://api.spotify.com/v1/me/player/recently-played")

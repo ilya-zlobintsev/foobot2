@@ -1,22 +1,16 @@
-use std::{
-    env,
-    fmt::Debug,
-    thread::{self, sleep},
-    time::Duration,
-};
+use std::env;
+use std::thread::{self, sleep};
+use std::time::Duration;
 
 use handlebars::{
     Context, Handlebars, Helper, HelperDef, HelperResult, JsonRender, Output, RenderContext,
-    RenderError, ScopedJson,
+    RenderError,
 };
 use rand::{thread_rng, Rng};
 use serde::{Deserialize, Serialize};
-use serde_json::json;
 
-use crate::{
-    database::{models::User, Database},
-    platform::{ExecutionContext, UserIdentifier},
-};
+use crate::database::{models::User, Database};
+use crate::platform::{ExecutionContext, UserIdentifier};
 
 use super::{owm_api::OwmApi, spotify_api::SpotifyApi, twitch_api::TwitchApi};
 
@@ -108,8 +102,8 @@ pub struct SpotifyHelper {
 impl HelperDef for SpotifyHelper {
     fn call<'reg: 'rc, 'rc>(
         &self,
-        h: &Helper<'reg, 'rc>,
-        r: &'reg Handlebars<'reg>,
+        _: &Helper<'reg, 'rc>,
+        _: &'reg Handlebars<'reg>,
         ctx: &'rc Context,
         _: &mut RenderContext<'reg, 'rc>,
         out: &mut dyn Output,
@@ -209,7 +203,7 @@ pub fn sleep_helper(
     _: &Handlebars,
     _: &Context,
     _: &mut RenderContext,
-    out: &mut dyn Output,
+    _: &mut dyn Output,
 ) -> HelperResult {
     match h.params().get(0) {
         Some(duration) => {

@@ -7,9 +7,7 @@ mod profile;
 mod template_context;
 
 use reqwest::Client;
-use rocket::{
-    catchers, fs::FileServer, get, response::content::Html, routes, State,
-};
+use rocket::{catchers, fs::FileServer, get, response::content::Html, routes, State};
 use rocket_dyn_templates::Template;
 use tokio::task::{self, JoinHandle};
 
@@ -20,7 +18,7 @@ use crate::{command_handler::CommandHandler, database::models::WebSession};
 #[get("/")]
 async fn index(cmd: &State<CommandHandler>, session: Option<WebSession>) -> Html<Template> {
     let db = &cmd.db;
-    
+
     tracing::debug!("{:?}", session);
 
     Html(Template::render(

@@ -4,30 +4,21 @@ pub mod owm_api;
 pub mod spotify_api;
 pub mod twitch_api;
 
-use core::fmt;
-use std::{
-    collections::HashMap,
-    env::{self, VarError},
-    num::ParseIntError,
-    sync::{mpsc::Sender, Arc, Mutex, RwLock},
-    time::{Duration, Instant},
-};
+use crate::database::{models::User, Database};
+use crate::platform::{ExecutionContext, Permissions, UserIdentifier, UserIdentifierError};
 
-use crate::{
-    command_handler::twitch_api::model::EventsubSubscriptionType,
-    database::{models::User, Database},
-    platform::{
-        ChatPlatformKind, ExecutionContext, Permissions, PlatformMessage, UserIdentifier,
-        UserIdentifierError,
-    },
-};
+use core::fmt;
+use std::env::{self, VarError};
+use std::num::ParseIntError;
+use std::sync::{Arc, RwLock};
+use std::time::{Duration, Instant};
 
 use handlebars::Handlebars;
 use inquiry_helper::*;
 use tokio::task;
-use twitch_api::TwitchApi;
 
-use self::owm_api::OwmApi;
+use owm_api::OwmApi;
+use twitch_api::TwitchApi;
 
 #[derive(Clone)]
 pub struct CommandHandler {
@@ -249,29 +240,6 @@ impl CommandHandler {
                     self.db.merge_users(user.clone(), other);
 
                     (Some("sucessfully merged users".to_string()), None)
-                }
-                "testman" => {
-                    if execution_context.channel.get_platform_name() == "twitch" {
-                        let channel_name = execution_context.channel.get_channel();
-
-                        let twitch_api = self.twitch_api.as_ref().unwrap();
-
-                        let users = twitch_api
-                            .get_users(Some(&vec![&channel_name]), None)
-                            .await
-                            .unwrap();
-
-                        twitch_api
-                            .create_eventsub_subscription(
-                                EventsubSubscriptionType::ChannelFollow(
-                                    users.first().unwrap().id.to_string(),
-                                ),
-                                rocket::Config::SECRET_KEY,
-                            )
-                            .await
-                            .unwrap();
-                    }
-                    (None, None)
                 }
                 _ => match self.db.get_command(&execution_context.channel, command)? {
                     Some(cmd) => (
@@ -504,7 +472,7 @@ impl From<VarError> for CommandError {
     }
 }
 impl From<ParseIntError> for CommandError {
-    fn from(e: ParseIntError) -> Self {
+    fn from(_: ParseIntError) -> Self {
         Self::InvalidArgument(format!("expected a number"))
     }
 }

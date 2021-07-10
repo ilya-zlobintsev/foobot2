@@ -1,17 +1,15 @@
 pub mod discord;
 pub mod twitch;
 
-use std::{
-    env::{self, VarError},
-    fmt,
-    sync::mpsc::{channel, Sender},
-};
-
 use crate::command_handler::{twitch_api::TwitchApi, CommandHandler};
+
 use async_trait::async_trait;
-use tokio::task::{self, JoinHandle};
+use tokio::task::JoinHandle;
 
 use serde::{Deserialize, Serialize};
+
+use std::env::{self, VarError};
+use std::fmt;
 
 #[async_trait]
 pub trait ChatPlatform {
@@ -40,7 +38,6 @@ pub struct ExecutionContext {
 pub enum ChatPlatformError {
     ReqwestError(reqwest::Error),
     MissingAuthentication,
-    DiscordError,
 }
 
 impl From<reqwest::Error> for ChatPlatformError {
@@ -112,12 +109,6 @@ pub enum UserIdentifierError {
     MissingDelimiter,
     InvalidPlatform,
     InvalidUser,
-}
-
-#[derive(Debug, PartialEq, Eq, Hash)]
-pub enum ChatPlatformKind {
-    Twitch,
-    Discord,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

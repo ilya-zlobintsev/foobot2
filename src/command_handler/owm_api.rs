@@ -1,6 +1,6 @@
+use http::status::StatusCode;
 use reqwest::Client;
 use serde::{Deserialize, Serialize};
-use http::status::StatusCode;
 
 #[derive(Clone)]
 pub struct OwmApi {

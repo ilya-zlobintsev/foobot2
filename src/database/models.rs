@@ -68,7 +68,6 @@ pub struct UserData {
     pub user_id: u64,
 }
 
-
 #[derive(Insertable)]
 #[table_name = "user_data"]
 pub struct UserDataUserId {

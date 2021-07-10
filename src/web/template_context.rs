@@ -1,19 +1,8 @@
-use std::convert::Infallible;
-
-use rocket::{
-    http::{CookieJar, Status},
-    outcome::Outcome,
-    request::FromRequest,
-};
+use rocket::{http::Status, outcome::Outcome, request::FromRequest};
 use serde::Serialize;
 
-use crate::{
-    command_handler::CommandHandler,
-    database::{
-        models::{Channel, Command, User, WebSession},
-        Database,
-    },
-};
+use crate::command_handler::CommandHandler;
+use crate::database::models::{Channel, Command, User, WebSession};
 
 #[derive(Serialize)]
 pub struct IndexContext {

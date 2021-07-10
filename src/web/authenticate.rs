@@ -196,9 +196,7 @@ pub async fn discord_redirect(
 }
 
 #[get("/spotify")]
-pub fn authenticate_spotify(cmd: &State<CommandHandler>, session: WebSession) -> Redirect {
-    let db = &cmd.db;
-
+pub fn authenticate_spotify(_session: WebSession) -> Redirect {
     let client_id = env::var("SPOTIFY_CLIENT_ID").expect("SPOTIFY_CLIENT_ID missing");
 
     Redirect::to(AuthPlatform::Spotify.construct_uri(&client_id, &SPOTIFY_SCOPES.join("%20")))

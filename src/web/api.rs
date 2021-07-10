@@ -1,16 +1,11 @@
+use rocket::get;
+use rocket::http::{ContentType, Status};
 use rocket::response::Responder;
 use rocket::response::{self};
-use rocket::{
-    get,
-    http::{ContentType, CookieJar, Status},
-    Response, State,
-};
+use rocket::{Response, State};
 
 use crate::database::models::WebSession;
-use crate::{
-    command_handler::CommandHandler,
-    platform::{discord, ChannelIdentifier},
-};
+use crate::{command_handler::CommandHandler, platform::ChannelIdentifier};
 
 #[get("/permissions?<channel_id>")]
 pub async fn get_permissions(
