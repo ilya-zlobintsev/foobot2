@@ -30,7 +30,6 @@ use self::lastfm_api::LastFMApi;
 pub struct CommandHandler {
     pub db: Database,
     pub twitch_api: Option<TwitchApi>,
-    admin_user: Option<User>,
     startup_time: Instant,
     template_registry: Arc<Handlebars<'static>>,
     cooldowns: Arc<RwLock<Vec<(u64, String)>>>, // User id and command
@@ -90,25 +89,12 @@ impl CommandHandler {
 
         let cooldowns = Arc::new(RwLock::new(Vec::new()));
 
-        let admin_user = match env::var("ADMIN_USER") {
-            Ok(admin) => Some(
-                db.get_or_create_user(
-                    &UserIdentifier::from_string(&admin, twitch_api.as_ref())
-                        .await
-                        .unwrap(),
-                )
-                .expect("DB Error"),
-            ),
-            Err(_) => None,
-        };
-
         Self {
             db,
             twitch_api,
             startup_time,
             template_registry: Arc::new(template_registry),
             cooldowns,
-            admin_user,
         }
     }
 
@@ -116,7 +102,7 @@ impl CommandHandler {
     pub async fn handle_command_message<T, C>(&self, message: &T, context: C) -> Option<String>
     where
         T: Sync + CommandMessage,
-        C: ExecutionContext,
+        C: ExecutionContext + Sync,
     {
         let message_text = message.get_text();
 
@@ -142,7 +128,7 @@ impl CommandHandler {
     }
 
     // #[async_recursion]
-    async fn run_command<C: ExecutionContext>(
+    async fn run_command<C: ExecutionContext + std::marker::Sync>(
         &self,
         command: &str,
         arguments: Vec<&str>,
@@ -170,8 +156,9 @@ impl CommandHandler {
                 "ping" => (Some(self.ping()), Some(5)),
                 "whoami" | "id" => (
                     Some(format!(
-                        "{:?}, channel: {:?}, permissions: {:?}",
+                        "{:?}, identified as {}, channel: {:?}, permissions: {:?}",
                         user,
+                        user_identifier.to_string(),
                         execution_context.get_channel(),
                         execution_context.get_permissions().await,
                     )),
@@ -364,7 +351,7 @@ impl CommandHandler {
         )
     }
 
-    async fn edit_cmds<C: ExecutionContext>(
+    async fn edit_cmds<C: ExecutionContext + Sync>(
         &self,
         command: &str,
         arguments: Vec<&str>,

@@ -156,7 +156,7 @@ pub struct TwitchExecutionContext<'a> {
 
 #[async_trait]
 impl ExecutionContext for TwitchExecutionContext<'_> {
-    async fn get_permissions(&self) -> Permissions {
+    async fn get_permissions_internal(&self) -> Permissions {
         if self.pm.badges.iter().any(|badge| badge.name == "moderator")
             | self
                 .pm
@@ -172,5 +172,9 @@ impl ExecutionContext for TwitchExecutionContext<'_> {
 
     fn get_channel(&self) -> ChannelIdentifier {
         ChannelIdentifier::TwitchChannelName(self.pm.channel_login.clone())
+    }
+    
+    fn get_user_identifier(&self) -> UserIdentifier {
+        UserIdentifier::TwitchID(self.pm.sender.id.clone())
     }
 }
