@@ -133,13 +133,6 @@ impl CommandHandler {
 
         let user = self.db.get_or_create_user(&user_identifier)?;
 
-        // TODO
-        // if let Some(admin) = &self.admin_user {
-        //     if user.id == admin.id {
-        //         execution_context.permissions = Permissions::Admin;
-        //     }
-        // }
-
         if !self
             .cooldowns
             .read()

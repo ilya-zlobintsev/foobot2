@@ -441,6 +441,18 @@ impl Database {
         Ok(self.get_user_data_value(user_id, "lastfm_name")?)
     }
 
+    pub fn set_lastfm_name(&self, user_id: u64, name: &str) -> Result<(), DatabaseError> {
+        Ok(self.set_user_data(
+            &UserData {
+                name: "lastfm_name".to_string(),
+                value: name.to_string(),
+                public: true,
+                user_id,
+            },
+            true,
+        )?)
+    }
+
     pub fn get_web_session(
         &self,
         session_id: &str,

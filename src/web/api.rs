@@ -4,9 +4,22 @@ use rocket::response::Responder;
 use rocket::response::{self};
 use rocket::{Response, State};
 
-use crate::database::DatabaseError;
 use crate::database::models::WebSession;
+use crate::database::DatabaseError;
 use crate::{command_handler::CommandHandler, platform::ChannelIdentifier};
+
+#[post("/user/lastfm", data = "<name>")]
+pub async fn set_lastfm_name(
+    web_session: WebSession,
+    cmd: &State<CommandHandler>,
+    name: String,
+) -> Status {
+    cmd.db
+        .set_lastfm_name(web_session.user_id, &name)
+        .expect("DB Error");
+
+    Status::Accepted
+}
 
 #[get("/permissions?<channel_id>")]
 pub async fn get_permissions(

@@ -33,6 +33,7 @@ pub struct ProfileContext {
     pub user: User,
     pub spotify_connected: bool,
     pub parent_context: LayoutContext,
+    pub lastfm_name: Option<String>,
 }
 
 #[derive(Serialize)]
