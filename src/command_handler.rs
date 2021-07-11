@@ -7,9 +7,7 @@ pub mod twitch_api;
 
 use crate::database::DatabaseError;
 use crate::database::{models::User, Database};
-use crate::platform::{
-    ChannelIdentifier, ExecutionContext, Permissions, UserIdentifier, UserIdentifierError,
-};
+use crate::platform::{ExecutionContext, Permissions, UserIdentifier, UserIdentifierError};
 
 use core::fmt;
 use std::env::{self, VarError};

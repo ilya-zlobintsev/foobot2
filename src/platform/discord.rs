@@ -19,22 +19,28 @@ pub struct Discord {
 impl Discord {
     async fn handle_msg(&self, msg: MessageCreate, http: Client) {
         if let Some(content) = msg.content.strip_prefix(&self.prefix) {
-            let context = DiscordExecutionContext {
-                msg: &msg,
-                http: http.clone(),
-            };
+            let content = content.to_owned();
 
-            if let Some(response) = self
-                .command_handler
-                .handle_command_message(content, context)
-                .await
-            {
-                http.create_message(msg.channel_id)
-                    .content(response)
-                    .expect("Failed to construct message")
+            let command_handler = self.command_handler.clone();
+
+            tokio::spawn(async move {
+                let context = DiscordExecutionContext {
+                    msg: &msg,
+                    http: http.clone(),
+                };
+
+                if let Some(response) = command_handler
+                    .handle_command_message(&content, context)
                     .await
-                    .expect("Failed to reply in Discord");
-            }
+                {
+                    http.create_message(msg.channel_id)
+                        .reply(msg.id)
+                        .content(response)
+                        .expect("Failed to construct message")
+                        .await
+                        .expect("Failed to reply in Discord");
+                }
+            });
         }
     }
 }
