@@ -318,10 +318,14 @@ impl CommandHandler {
             result
         };
 
+        let mem = psutil::memory::virtual_memory().unwrap();
+
         format!(
-            "Pong! Version: {}, Uptime {}",
+            "Pong! Version: {}, Uptime {}, RAM usage: {}/{} MiB",
             env!("CARGO_PKG_VERSION"),
-            uptime
+            uptime,
+            mem.used() / 1024 / 1024,
+            mem.total() / 1024 / 1024
         )
     }
 
