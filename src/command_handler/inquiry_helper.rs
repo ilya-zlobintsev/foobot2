@@ -13,7 +13,7 @@ use crate::database::{models::User, Database};
 use crate::platform::UserIdentifier;
 
 use super::lastfm_api::LastFMApi;
-use super::{owm_api::OwmApi, spotify_api::SpotifyApi, twitch_api::TwitchApi};
+use super::{owm_api::OwmApi, spotify_api::SpotifyApi};
 
 #[derive(Serialize, Deserialize)]
 pub struct InquiryContext {

@@ -6,26 +6,9 @@ use twilight_http::Client;
 use twilight_model::{gateway::payload::MessageCreate, guild::Permissions};
 use twilight_util::permission_calculator::PermissionCalculator;
 
-use crate::command_handler::{CommandHandler, CommandMessage};
+use crate::command_handler::CommandHandler;
 
 use super::{ChannelIdentifier, ChatPlatform, ExecutionContext, UserIdentifier};
-
-impl CommandMessage for MessageCreate {
-    fn get_user_identifier(&self) -> UserIdentifier {
-        UserIdentifier::DiscordID(self.author.id.0.to_string())
-    }
-
-    fn get_text(&self) -> &str {
-        &self.content
-    }
-
-    fn get_channel(&self) -> ChannelIdentifier {
-        match &self.guild_id {
-            Some(guild_id) => ChannelIdentifier::DiscordGuildID(guild_id.0),
-            None => ChannelIdentifier::DiscordChannelID(self.channel_id.0),
-        }
-    }
-}
 
 pub struct Discord {
     token: String,
@@ -34,10 +17,8 @@ pub struct Discord {
 }
 
 impl Discord {
-    async fn handle_msg(&self, mut msg: MessageCreate, http: Client) {
+    async fn handle_msg(&self, msg: MessageCreate, http: Client) {
         if let Some(content) = msg.content.strip_prefix(&self.prefix) {
-            msg.content = content.to_string();
-
             let context = DiscordExecutionContext {
                 msg: &msg,
                 http: http.clone(),
@@ -45,7 +26,7 @@ impl Discord {
 
             if let Some(response) = self
                 .command_handler
-                .handle_command_message(&msg, context)
+                .handle_command_message(content, context)
                 .await
             {
                 http.create_message(msg.channel_id)

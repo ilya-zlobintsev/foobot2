@@ -10,7 +10,7 @@ use twitch_irc::{
 };
 
 use crate::{
-    command_handler::{twitch_api::TwitchApi, CommandHandler, CommandMessage},
+    command_handler::{twitch_api::TwitchApi, CommandHandler},
     platform::{ChannelIdentifier, ExecutionContext, Permissions},
 };
 
@@ -32,25 +32,27 @@ impl Twitch {
         client.join(channel);
     }
 
-    async fn handle_privmsg(&self, mut pm: PrivmsgMessage) {
+    async fn handle_privmsg(&self, pm: PrivmsgMessage) {
         let command_prefix = match std::env::var(format!("PREFIX_TWITCH_{}", pm.channel_login)) {
             Ok(prefix) => prefix,
             Err(_) => self.command_prefix.clone(), // TODO
         };
 
         if let Some(message_text) = pm.message_text.strip_prefix(&command_prefix) {
-            tracing::debug!("Recieved a command at {:?}", Instant::now());
+            let message_text = message_text.to_owned();
 
-            pm.message_text = message_text.to_string();
+            tracing::debug!("Recieved a command at {:?}", Instant::now());
 
             let client = self.client.read().unwrap().as_ref().unwrap().clone();
 
             let command_handler = self.command_handler.clone();
 
             task::spawn(async move {
-            let context = TwitchExecutionContext { pm: &pm };
+                let context = TwitchExecutionContext { pm: &pm };
 
-                let response = command_handler.handle_command_message(&pm, context).await;
+                let response = command_handler
+                    .handle_command_message(&message_text, context)
+                    .await;
 
                 if let Some(response) = response {
                     tracing::info!("Replying with {}", response);
@@ -136,20 +138,6 @@ impl ChatPlatform for Twitch {
     }*/
 }
 
-impl CommandMessage for PrivmsgMessage {
-    fn get_user_identifier(&self) -> UserIdentifier {
-        UserIdentifier::TwitchID(self.sender.id.clone())
-    }
-
-    fn get_text(&self) -> &str {
-        &self.message_text
-    }
-
-    fn get_channel(&self) -> ChannelIdentifier {
-        ChannelIdentifier::TwitchChannelName(self.channel_login.clone())
-    }
-}
-
 pub struct TwitchExecutionContext<'a> {
     pm: &'a PrivmsgMessage,
 }
@@ -173,7 +161,7 @@ impl ExecutionContext for TwitchExecutionContext<'_> {
     fn get_channel(&self) -> ChannelIdentifier {
         ChannelIdentifier::TwitchChannelName(self.pm.channel_login.clone())
     }
-    
+
     fn get_user_identifier(&self) -> UserIdentifier {
         UserIdentifier::TwitchID(self.pm.sender.id.clone())
     }

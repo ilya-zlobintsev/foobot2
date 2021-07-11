@@ -1,7 +1,7 @@
 pub mod discord;
 pub mod twitch;
 
-use crate::command_handler::{twitch_api::TwitchApi, CommandHandler};
+use crate::command_handler::CommandHandler;
 
 use async_trait::async_trait;
 use tokio::task::JoinHandle;
@@ -20,12 +20,6 @@ pub trait ChatPlatform {
     fn get_prefix() -> String {
         env::var("COMMAND_PREFIX").unwrap_or_else(|_| "!".to_string())
     }
-}
-
-#[derive(Clone)]
-pub struct PlatformMessage {
-    pub channel_id: String,
-    pub message: String,
 }
 
 #[async_trait]
@@ -106,7 +100,6 @@ impl UserIdentifier {
 pub enum UserIdentifierError {
     MissingDelimiter,
     InvalidPlatform,
-    InvalidUser,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

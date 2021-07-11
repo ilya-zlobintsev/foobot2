@@ -93,15 +93,10 @@ impl CommandHandler {
     }
 
     /// This function expects a raw message that appears to be a command without the leading command prefix.
-    pub async fn handle_command_message<T, C>(&self, message: &T, context: C) -> Option<String>
+    pub async fn handle_command_message<C>(&self, message_text: &str, context: C) -> Option<String>
     where
-        T: Sync + CommandMessage,
         C: ExecutionContext + Sync,
     {
-        let message_text = message.get_text();
-
-        let user_identifier = message.get_user_identifier();
-
         if message_text.is_empty() {
             Some("❗".to_string())
         } else {
@@ -111,10 +106,7 @@ impl CommandHandler {
 
             let arguments: Vec<&str> = split.collect();
 
-            match self
-                .run_command(&command, arguments, context, user_identifier)
-                .await
-            {
+            match self.run_command(&command, arguments, context).await {
                 Ok(result) => result,
                 Err(e) => Some(e.to_string()),
             }
@@ -127,9 +119,10 @@ impl CommandHandler {
         command: &str,
         arguments: Vec<&str>,
         execution_context: C,
-        user_identifier: UserIdentifier,
     ) -> Result<Option<String>, CommandError> {
         tracing::info!("Processing command {} with {:?}", command, arguments);
+
+        let user_identifier = execution_context.get_user_identifier();
 
         let user = self.db.get_or_create_user(&user_identifier)?;
 
@@ -488,17 +481,6 @@ impl From<UserIdentifierError> for CommandError {
                 "separator `:`! Must be in the form of `platform:user`".to_string(),
             ),
             UserIdentifierError::InvalidPlatform => Self::InvalidArgument("platform".to_string()),
-            UserIdentifierError::InvalidUser => {
-                Self::InvalidArgument("cannot find user".to_string())
-            }
         }
     }
-}
-
-pub trait CommandMessage {
-    fn get_user_identifier(&self) -> UserIdentifier;
-
-    fn get_text(&self) -> &str;
-
-    fn get_channel(&self) -> ChannelIdentifier;
 }
