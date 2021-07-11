@@ -28,7 +28,7 @@ use self::lastfm_api::LastFMApi;
 pub struct CommandHandler {
     pub db: Database,
     pub twitch_api: Option<TwitchApi>,
-    startup_time: Instant,
+    startup_time: Arc<Instant>,
     template_registry: Arc<Handlebars<'static>>,
     cooldowns: Arc<RwLock<Vec<(u64, String)>>>, // User id and command
 }
@@ -45,8 +45,6 @@ impl CommandHandler {
                 None
             }
         };
-
-        let startup_time = Instant::now();
 
         let mut template_registry = Handlebars::new();
 
@@ -84,7 +82,7 @@ impl CommandHandler {
         Self {
             db,
             twitch_api,
-            startup_time,
+            startup_time: Arc::new(Instant::now()),
             template_registry: Arc::new(template_registry),
             cooldowns,
         }
