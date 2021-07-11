@@ -43,7 +43,7 @@ pub fn song_helper(
     _: &mut RenderContext,
     out: &mut dyn Output,
 ) -> HelperResult {
-    let params = h
+    let mut params = h
         .params()
         .iter()
         .map(|param| param.render())
@@ -51,21 +51,31 @@ pub fn song_helper(
         .join(" ");
 
     tracing::info!("Params: {}", params);
+    
+    if !params.is_empty() {
+        params = format!("\"{}\"", params);
+    }
 
     // Curly braces are doubled for escaping
-    if let Ok(lastfm_result) =
-        hb.render_template_with_context(&format!("{{{{ lastfm {} }}}}", params), ctx)
-    {
-        out.write(&lastfm_result)?;
-    } else if let Ok(spotify_result) =
-        hb.render_template_with_context(&format!("{{{{ spotify {} }}}}", params), ctx)
-    {
-        out.write(&spotify_result)?;
-    } else {
-        out.write(&format!(
-            "No music source configured! Go to {}/profile to connect an account.",
-            env::var("BASE_URL").expect("BASE_URL missing")
-        ))?;
+    match hb.render_template_with_context(&format!("{{{{ lastfm {} }}}}", params), ctx) {
+        Ok(lastfm_result) => {
+            out.write(&lastfm_result)?;
+        }
+        Err(e) => {
+            tracing::info!("Last.FM Error: {}", e);
+
+            match hb.render_template_with_context(&format!("{{{{ spotify {} }}}}", params), ctx) {
+                Ok(spotify_result) => out.write(&spotify_result)?,
+                Err(e) => {
+                    tracing::info!("Spotify Error: {}", e);
+
+                    out.write(&format!(
+                        "No music source configured! Go to {}/profile to connect an account.",
+                        env::var("BASE_URL").expect("BASE_URL missing")
+                    ))?;
+                }
+            }
+        }
     }
 
     Ok(())
@@ -136,7 +146,7 @@ pub struct SpotifyHelper {
 impl HelperDef for SpotifyHelper {
     fn call<'reg: 'rc, 'rc>(
         &self,
-        _: &Helper<'reg, 'rc>,
+        h: &Helper<'reg, 'rc>,
         _: &'reg Handlebars<'reg>,
         ctx: &'rc Context,
         _: &mut RenderContext<'reg, 'rc>,
@@ -147,34 +157,37 @@ impl HelperDef for SpotifyHelper {
 
         let runtime = tokio::runtime::Handle::current();
 
-        let db = self.db.clone();
+        let user_id = match h.param(0) {
+            Some(param) => {
+                tracing::info!("Spotify param: {:?}", param);
+                let user_identifier = UserIdentifier::from_string(&param.render())
+                    .map_err(|_| RenderError::new("invalid user"))?;
+
+                self.db
+                    .get_user(&user_identifier)
+                    .expect("DB Error")
+                    .ok_or_else(|| RenderError::new("invalid user"))?
+                    .id
+            }
+            None => context.user.id,
+        };
+
+        tracing::info!("Looking for spotify token for user ID {}", user_id);
+
+        let access_token = self
+            .db
+            .get_spotify_access_token(user_id)
+            .map_err(|e| RenderError::new(format!("DB Error: {}", e.to_string())))?
+            .ok_or_else(|| {
+                RenderError::new(format!(
+                    "Not configured for user! You can set up Spotify by going to {}/profile",
+                    env::var("BASE_URL").unwrap()
+                ))
+            })?;
+
+        let spotify_api = SpotifyApi::new(&access_token);
 
         match thread::spawn(move || {
-            let user_id = match context.arguments.first() {
-                Some(arg) => {
-                    tracing::info!("Arg {}", arg);
-                    let user_identifier = UserIdentifier::from_string(arg)
-                        .map_err(|_| RenderError::new("invalid user"))?;
-
-                    db.get_user(&user_identifier)
-                        .expect("DB Error")
-                        .ok_or_else(|| RenderError::new("invalid user"))?
-                        .id
-                }
-                None => context.user.id,
-            };
-
-            let access_token = db
-                .get_spotify_access_token(user_id)
-                .map_err(|e| RenderError::new(format!("DB Error: {}", e.to_string())))?
-                .ok_or_else(|| {
-                    RenderError::new(format!(
-                        "Not configured for user! You can set up Spotify by going to {}/profile",
-                        env::var("BASE_URL").unwrap()
-                    ))
-                })?;
-            let spotify_api = SpotifyApi::new(&access_token);
-
             runtime
                 .block_on(spotify_api.get_current_song())
                 .map_err(|e| RenderError::new(format!("Spotify API Error: {}", e.to_string())))
@@ -230,22 +243,26 @@ impl HelperDef for LastFMHelper {
 
         let runtime = tokio::runtime::Handle::current();
 
-        let username = match h.param(0) {
+        let user_id = match h.param(0) {
             Some(param) => {
-                tracing::info!("Param {:?}", param);
+                tracing::info!("Last.FM param: {:?}", param);
+                let user_identifier = UserIdentifier::from_string(&param.render())
+                    .map_err(|_| RenderError::new("invalid user"))?;
 
-                if let Some(param) = param.relative_path() {
-                    param.clone()
-                } else {
-                    param.render()
-                }
+                self.db
+                    .get_user(&user_identifier)
+                    .expect("DB Error")
+                    .ok_or_else(|| RenderError::new("invalid user"))?
+                    .id
             }
-            None => self
-                .db
-                .get_lastfm_name(context.user.id)
-                .expect("DB Error")
-                .ok_or_else(|| RenderError::new("last.fm username not set!"))?,
+            None => context.user.id,
         };
+
+        let username = self
+            .db
+            .get_lastfm_name(user_id)
+            .expect("DB Error")
+            .ok_or_else(|| RenderError::new("last.fm username not set!"))?;
 
         let lastfm_api = self.lastfm_api.clone();
 
