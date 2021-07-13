@@ -180,12 +180,10 @@ impl TwitchApi {
             .query(&params)
             .send()
             .await?;
-        
+
         tracing::info!("GET {}: {}", response.url(), response.status());
 
-        let api_results = response.json::<UsersResponse>()
-            .await?
-            .data;
+        let api_results = response.json::<UsersResponse>().await?.data;
 
         if api_results.len() != 0 {
             let mut users_cache = self.users_cache.write().unwrap();

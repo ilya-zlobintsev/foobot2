@@ -5,7 +5,7 @@ use std::time::Instant;
 use tokio::task::{self, JoinHandle};
 use twitch_irc::{
     login::StaticLoginCredentials,
-    message::{PrivmsgMessage, ServerMessage},
+    message::{Badge, PrivmsgMessage, ServerMessage, TwitchUserBasics, WhisperMessage},
     ClientConfig, SecureTCPTransport, TwitchIRCClient,
 };
 
@@ -32,13 +32,8 @@ impl Twitch {
         client.join(channel);
     }
 
-    async fn handle_privmsg(&self, pm: PrivmsgMessage) {
-        let command_prefix = match std::env::var(format!("PREFIX_TWITCH_{}", pm.channel_login)) {
-            Ok(prefix) => prefix,
-            Err(_) => self.command_prefix.clone(), // TODO
-        };
-
-        if let Some(message_text) = pm.message_text.strip_prefix(&command_prefix) {
+    async fn handle_message<T: 'static + TwitchMessage + Send + Sync>(&self, msg: T) {
+        if let Some(message_text) = msg.get_content().strip_prefix(&self.command_prefix) {
             let message_text = message_text.to_owned();
 
             tracing::debug!("Recieved a command at {:?}", Instant::now());
@@ -48,7 +43,7 @@ impl Twitch {
             let command_handler = self.command_handler.clone();
 
             task::spawn(async move {
-                let context = TwitchExecutionContext { pm: &pm };
+                let context = TwitchExecutionContext { msg: &msg };
 
                 let response = command_handler
                     .handle_command_message(&message_text, context)
@@ -57,10 +52,20 @@ impl Twitch {
                 if let Some(response) = response {
                     tracing::info!("Replying with {}", response);
 
-                    client
-                        .reply_to_privmsg(response, &pm)
-                        .await
-                        .expect("Failed to reply");
+                    if let Some(pm) = msg.get_privmsg() {
+                        client
+                            .reply_to_privmsg(response, &pm)
+                            .await
+                            .expect("Failed to reply");
+                    } else {
+                        client
+                            .privmsg(
+                                msg.get_sender().login.clone(),
+                                format!("/w {} {}", msg.get_sender().login, response),
+                            )
+                            .await
+                            .expect("Failed to say");
+                    }
                 }
             });
         }
@@ -110,7 +115,8 @@ impl ChatPlatform for Twitch {
         tokio::spawn(async move {
             while let Some(message) = incoming_messages.recv().await {
                 match message {
-                    ServerMessage::Privmsg(pm) => self.handle_privmsg(pm).await,
+                    ServerMessage::Privmsg(pm) => self.handle_message(pm).await,
+                    ServerMessage::Whisper(whisper) => self.handle_message(whisper).await,
                     // ServerMessage::Whisper(_) => {}
                     _ => (),
                 }
@@ -138,19 +144,74 @@ impl ChatPlatform for Twitch {
     }*/
 }
 
-pub struct TwitchExecutionContext<'a> {
-    pm: &'a PrivmsgMessage,
+pub trait TwitchMessage {
+    fn get_badges(&self) -> &Vec<Badge>;
+
+    fn get_sender(&self) -> &TwitchUserBasics;
+
+    fn get_channel(&self) -> Option<&str>;
+
+    fn get_content(&self) -> &str;
+
+    fn get_privmsg(&self) -> Option<&PrivmsgMessage>;
+}
+
+impl TwitchMessage for PrivmsgMessage {
+    fn get_badges(&self) -> &Vec<Badge> {
+        &self.badges
+    }
+
+    fn get_sender(&self) -> &TwitchUserBasics {
+        &self.sender
+    }
+
+    fn get_channel(&self) -> Option<&str> {
+        Some(&self.channel_login)
+    }
+
+    fn get_content(&self) -> &str {
+        &self.message_text
+    }
+
+    fn get_privmsg(&self) -> Option<&PrivmsgMessage> {
+        Some(&self)
+    }
+}
+
+impl TwitchMessage for WhisperMessage {
+    fn get_badges(&self) -> &Vec<Badge> {
+        &self.badges
+    }
+
+    fn get_sender(&self) -> &TwitchUserBasics {
+        &self.sender
+    }
+
+    fn get_channel(&self) -> Option<&str> {
+        None
+    }
+
+    fn get_content(&self) -> &str {
+        &self.message_text
+    }
+
+    fn get_privmsg(&self) -> Option<&PrivmsgMessage> {
+        None
+    }
+}
+
+pub struct TwitchExecutionContext<'a, M: TwitchMessage + std::marker::Sync> {
+    msg: &'a M,
 }
 
 #[async_trait]
-impl ExecutionContext for TwitchExecutionContext<'_> {
+impl<T: TwitchMessage + std::marker::Sync> ExecutionContext for TwitchExecutionContext<'_, T> {
     async fn get_permissions_internal(&self) -> Permissions {
-        if self.pm.badges.iter().any(|badge| badge.name == "moderator")
-            | self
-                .pm
-                .badges
-                .iter()
-                .any(|badge| badge.name == "broadcaster")
+        if self
+            .msg
+            .get_badges()
+            .iter()
+            .any(|badge| (badge.name == "moderator") | (badge.name == "broadcaster"))
         {
             Permissions::ChannelMod
         } else {
@@ -159,10 +220,13 @@ impl ExecutionContext for TwitchExecutionContext<'_> {
     }
 
     fn get_channel(&self) -> ChannelIdentifier {
-        ChannelIdentifier::TwitchChannelName(self.pm.channel_login.clone())
+        match self.msg.get_channel() {
+            Some(channel) => ChannelIdentifier::TwitchChannelName(channel.to_owned()),
+            None => ChannelIdentifier::Anonymous,
+        }
     }
 
     fn get_user_identifier(&self) -> UserIdentifier {
-        UserIdentifier::TwitchID(self.pm.sender.id.clone())
+        UserIdentifier::TwitchID(self.msg.get_sender().id.clone())
     }
 }

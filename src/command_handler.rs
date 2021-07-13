@@ -217,7 +217,9 @@ impl CommandHandler {
 
                     let other_identifier = UserIdentifier::from_string(identifier_string)?;
 
-                    let other = self.db.get_or_create_user(&other_identifier)?;
+                    let other = self.db.get_user(&other_identifier)?.ok_or_else(|| {
+                        CommandError::InvalidArgument("user not found".to_string())
+                    })?;
 
                     self.db.merge_users(user.clone(), other);
 
@@ -350,7 +352,12 @@ impl CommandHandler {
             Ok(Some(format!(
                 "{}/channels/{}/commands",
                 env::var("BASE_URL")?,
-                self.db.get_channel(&execution_context.get_channel())?.id
+                self.db
+                    .get_channel(&execution_context.get_channel())?
+                    .ok_or_else(|| CommandError::InvalidArgument(
+                        "can't add commands outside of channels".to_string()
+                    ))?
+                    .id
             )))
         } else {
             match execution_context.get_permissions().await {
@@ -396,9 +403,7 @@ impl CommandHandler {
                                 .delete_command(&execution_context.get_channel(), command_name)
                             {
                                 Ok(()) => Ok(Some("Command succesfully removed".to_string())),
-                                Err(e) => {
-                                    Err(CommandError::DatabaseError(DatabaseError::DieselError(e)))
-                                }
+                                Err(e) => Err(CommandError::DatabaseError(e)),
                             }
                         }
                         "show" | "check" => {

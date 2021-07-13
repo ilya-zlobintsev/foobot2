@@ -18,6 +18,7 @@ pub struct Discord {
 
 impl Discord {
     async fn handle_msg(&self, msg: MessageCreate, http: Client) {
+        tracing::debug!("{:?}", msg);
         if let Some(content) = msg.content.strip_prefix(&self.prefix) {
             let content = content.to_owned();
 
@@ -60,7 +61,7 @@ impl ChatPlatform for Discord {
     async fn run(self) -> tokio::task::JoinHandle<()> {
         let scheme = ShardScheme::Auto;
 
-        let (cluster, mut events) = Cluster::builder(&self.token, Intents::GUILD_MESSAGES)
+        let (cluster, mut events) = Cluster::builder(&self.token, Intents::DIRECT_MESSAGES)
             .shard_scheme(scheme)
             .build()
             .await
@@ -153,8 +154,8 @@ impl ExecutionContext for DiscordExecutionContext<'_> {
 
     fn get_channel(&self) -> ChannelIdentifier {
         match self.msg.guild_id {
-            Some(guild_id) => ChannelIdentifier::DiscordGuildID(guild_id.0),
-            None => ChannelIdentifier::DiscordChannelID(self.msg.channel_id.0),
+            Some(guild_id) => ChannelIdentifier::DiscordGuildID(guild_id.0.to_string()),
+            None => ChannelIdentifier::Anonymous,
         }
     }
 

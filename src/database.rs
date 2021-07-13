@@ -164,33 +164,37 @@ impl Database {
     pub fn get_channel(
         &self,
         channel_identifier: &ChannelIdentifier,
-    ) -> Result<Channel, diesel::result::Error> {
+    ) -> Result<Option<Channel>, diesel::result::Error> {
         let mut conn = self.conn_pool.get().unwrap();
 
         let query = channels::table.into_boxed();
 
-        // Doing .load().iter().next() looks nicer than doing .first() and then mapping NotFoundError to None
-        match query
-            .filter(channels::platform.eq_all(channel_identifier.get_platform_name()))
-            .filter(channels::channel.eq_all(channel_identifier.get_channel()))
-            .load(&mut conn)?
-            .into_iter()
-            .next()
-        {
-            Some(channel) => Ok(channel),
-            None => {
-                let new_channel = NewChannel {
-                    platform: channel_identifier.get_platform_name(),
-                    channel: &channel_identifier.get_channel(),
-                };
+        if let Some(channel) = channel_identifier.get_channel() {
+            // Doing .load().iter().next() looks nicer than doing .first() and then mapping NotFoundError to None
+            match query
+                .filter(channels::platform.eq_all(channel_identifier.get_platform_name().unwrap()))
+                .filter(channels::channel.eq_all(channel))
+                .load(&mut conn)?
+                .into_iter()
+                .next()
+            {
+                Some(channel) => Ok(Some(channel)),
+                None => {
+                    let new_channel = NewChannel {
+                        platform: channel_identifier.get_platform_name().unwrap(),
+                        channel,
+                    };
 
-                diesel::insert_into(channels::table)
-                    .values(new_channel)
-                    .execute(&mut conn)
-                    .expect("Failed to create channel");
+                    diesel::insert_into(channels::table)
+                        .values(new_channel)
+                        .execute(&mut conn)
+                        .expect("Failed to create channel");
 
-                self.get_channel(&channel_identifier)
+                    self.get_channel(&channel_identifier)
+                }
             }
+        } else {
+            Ok(None)
         }
     }
 
@@ -217,22 +221,28 @@ impl Database {
         &self,
         channel_identifier: &ChannelIdentifier,
         command: &str,
-    ) -> Result<Option<Command>, diesel::result::Error> {
+    ) -> Result<Option<Command>, DatabaseError> {
         let mut conn = self.conn_pool.get().unwrap();
 
-        Ok(commands::table
-            .filter(
-                commands::channel_id.eq_any(
-                    channels::table
-                        .filter(channels::platform.eq_all(channel_identifier.get_platform_name()))
-                        .filter(channels::channel.eq_all(channel_identifier.get_channel()))
-                        .select(channels::id),
-                ),
-            )
-            .filter(commands::name.eq_all(command))
-            .load::<Command>(&mut conn)?
-            .into_iter()
-            .next())
+        match channel_identifier.get_channel() {
+            Some(channel) => Ok(commands::table
+                .filter(
+                    commands::channel_id.eq_any(
+                        channels::table
+                            .filter(
+                                channels::platform
+                                    .eq_all(channel_identifier.get_platform_name().unwrap()),
+                            )
+                            .filter(channels::channel.eq_all(channel))
+                            .select(channels::id),
+                    ),
+                )
+                .filter(commands::name.eq_all(command))
+                .load::<Command>(&mut conn)?
+                .into_iter()
+                .next()),
+            None => Ok(None),
+        }
     }
 
     pub fn get_commands(&self, channel_id: u64) -> Result<Vec<Command>, diesel::result::Error> {
@@ -249,9 +259,10 @@ impl Database {
         command_name: &str,
         command_action: &str,
     ) -> Result<(), DatabaseError> {
-        let channel = self.get_channel(channel_identifier)?;
-
-        self.add_command_to_channel(channel, command_name, command_action)
+        match self.get_channel(channel_identifier)? {
+            Some(channel) => self.add_command_to_channel(channel, command_name, command_action),
+            None => Err(DatabaseError::NotAllowed),
+        }
     }
 
     pub fn add_command_to_channel(
@@ -294,26 +305,31 @@ impl Database {
         &self,
         channel_identifier: &ChannelIdentifier,
         command_name: &str,
-    ) -> Result<(), diesel::result::Error> {
+    ) -> Result<(), DatabaseError> {
         let mut conn = self.conn_pool.get().unwrap();
 
-        diesel::delete(
-            commands::table
-                .filter(
-                    commands::channel_id.eq_any(
-                        channels::table
-                            .filter(
-                                channels::platform.eq_all(channel_identifier.get_platform_name()),
-                            )
-                            .filter(channels::channel.eq_all(channel_identifier.get_channel()))
-                            .select(channels::id),
-                    ),
-                )
-                .filter(commands::name.eq_all(command_name)),
-        )
-        .execute(&mut conn)?;
+        if let Some(channel) = channel_identifier.get_channel() {
+            diesel::delete(
+                commands::table
+                    .filter(
+                        commands::channel_id.eq_any(
+                            channels::table
+                                .filter(
+                                    channels::platform
+                                        .eq_all(channel_identifier.get_platform_name().unwrap()),
+                                )
+                                .filter(channels::channel.eq_all(channel))
+                                .select(channels::id),
+                        ),
+                    )
+                    .filter(commands::name.eq_all(command_name)),
+            )
+            .execute(&mut conn)?;
 
-        Ok(())
+            Ok(())
+        } else {
+            Err(DatabaseError::InvalidValue)
+        }
     }
 
     pub fn get_user(
@@ -543,6 +559,7 @@ impl Database {
 pub enum DatabaseError {
     DieselError(diesel::result::Error),
     InvalidValue,
+    NotAllowed,
 }
 
 impl From<diesel::result::Error> for DatabaseError {
@@ -557,8 +574,9 @@ impl Display for DatabaseError {
             f,
             "{}",
             match self {
-                DatabaseError::DieselError(e) => format!("database error: {}", e),
-                DatabaseError::InvalidValue => "invalid value".to_string(),
+                DatabaseError::DieselError(e) => format!("Database error: {}", e),
+                DatabaseError::InvalidValue => "Invalid value".to_string(),
+                DatabaseError::NotAllowed => "Not allowed!".to_string(),
             }
         )
     }

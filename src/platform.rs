@@ -105,8 +105,8 @@ pub enum UserIdentifierError {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum ChannelIdentifier {
     TwitchChannelName(String),
-    DiscordGuildID(u64),
-    DiscordChannelID(u64), // Mainly for DMs // This is not correct anymore
+    DiscordGuildID(String),
+    Anonymous, // Used for DMs and such
 }
 
 impl ChannelIdentifier {
@@ -114,24 +114,23 @@ impl ChannelIdentifier {
         match platform {
             "twitch" => Ok(Self::TwitchChannelName(id)),
             "discord_guild" => Ok(Self::DiscordGuildID(id.parse()?)),
-            "discord_channel" => Ok(Self::DiscordChannelID(id.parse()?)),
             _ => Err(anyhow::anyhow!("invalid platform")),
         }
     }
 
-    pub fn get_platform_name(&self) -> &str {
+    pub fn get_platform_name(&self) -> Option<&str> {
         match self {
-            ChannelIdentifier::TwitchChannelName(_) => "twitch",
-            ChannelIdentifier::DiscordGuildID(_) => "discord_guild",
-            ChannelIdentifier::DiscordChannelID(_) => "discord_channel",
+            ChannelIdentifier::TwitchChannelName(_) => Some("twitch"),
+            ChannelIdentifier::DiscordGuildID(_) => Some("discord_guild"),
+            ChannelIdentifier::Anonymous => None,
         }
     }
 
-    pub fn get_channel(&self) -> String {
+    pub fn get_channel(&self) -> Option<&str> {
         match self {
-            ChannelIdentifier::TwitchChannelName(name) => name.to_string(),
-            ChannelIdentifier::DiscordGuildID(id) => id.to_string(),
-            ChannelIdentifier::DiscordChannelID(id) => id.to_string(),
+            ChannelIdentifier::TwitchChannelName(name) => Some(&name),
+            ChannelIdentifier::DiscordGuildID(id) => Some(&id),
+            ChannelIdentifier::Anonymous => None,
         }
     }
 }
