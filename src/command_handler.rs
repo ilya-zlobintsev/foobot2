@@ -73,6 +73,15 @@ impl CommandHandler {
             )
         }
 
+        if let Some(twitch_api) = &twitch_api {
+            template_registry.register_helper(
+                "twitchuser",
+                Box::new(TwitchUserHelper {
+                    twitch_api: twitch_api.clone(),
+                }),
+            );
+        }
+
         template_registry.register_helper("song", Box::new(inquiry_helper::song_helper));
 
         template_registry.set_strict_mode(true);

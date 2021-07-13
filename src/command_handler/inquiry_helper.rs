@@ -4,7 +4,7 @@ use std::time::Duration;
 
 use handlebars::{
     Context, Handlebars, Helper, HelperDef, HelperResult, JsonRender, Output, RenderContext,
-    RenderError,
+    RenderError, ScopedJson,
 };
 use rand::{thread_rng, Rng};
 use serde::{Deserialize, Serialize};
@@ -13,12 +13,76 @@ use crate::database::{models::User, Database};
 use crate::platform::UserIdentifier;
 
 use super::lastfm_api::LastFMApi;
+use super::twitch_api::TwitchApi;
 use super::{owm_api::OwmApi, spotify_api::SpotifyApi};
 
 #[derive(Serialize, Deserialize)]
 pub struct InquiryContext {
     pub user: User,
     pub arguments: Vec<String>,
+}
+
+pub struct TwitchUserHelper {
+    pub twitch_api: TwitchApi,
+}
+
+impl HelperDef for TwitchUserHelper {
+    fn call_inner<'reg: 'rc, 'rc>(
+        &self,
+        h: &Helper<'reg, 'rc>,
+        _: &'reg Handlebars<'reg>,
+        ctx: &'rc Context,
+        _: &mut RenderContext<'reg, 'rc>,
+    ) -> Result<handlebars::ScopedJson<'reg, 'rc>, RenderError> {
+        tracing::info!("{:?}", h.param(0));
+
+        let param = h
+            .param(0)
+            .ok_or_else(|| RenderError::new("user not specified"))?;
+
+        let user = match param.relative_path() {
+            Some(path) => path.to_owned(),
+            None => param.render(),
+        };
+
+        let mut logins = Vec::new();
+        let mut ids = Vec::new();
+
+        match user.is_empty() {
+            false => logins.push(user),
+            true => {
+                let context = serde_json::from_value::<InquiryContext>(ctx.data().clone())
+                    .expect("Failed to get command context");
+
+                match context.user.twitch_id {
+                    Some(twitch_id) => ids.push(twitch_id),
+                    None => return Err(RenderError::new("user not specified")),
+                }
+            }
+        }
+
+        let runtime = tokio::runtime::Handle::current();
+
+        let twitch_api = self.twitch_api.clone();
+
+        let users_response = thread::spawn(move || {
+            runtime.block_on(twitch_api.get_users(
+                Some(&logins.iter().map(|u| u.as_str()).collect::<Vec<&str>>()),
+                Some(&ids.iter().map(|u| u.as_str()).collect::<Vec<&str>>()),
+            ))
+        })
+        .join()
+        .unwrap()
+        .map_err(|e| RenderError::new(e.to_string()))?;
+
+        let user = users_response
+            .first()
+            .ok_or_else(|| RenderError::new("user not found"))?;
+
+        tracing::info!("Twitch user: {:?}", user);
+
+        Ok(ScopedJson::Derived(serde_json::to_value(user).unwrap()))
+    }
 }
 
 pub fn args_helper(
@@ -51,7 +115,7 @@ pub fn song_helper(
         .join(" ");
 
     tracing::info!("Params: {}", params);
-    
+
     if !params.is_empty() {
         params = format!("\"{}\"", params);
     }
@@ -69,10 +133,10 @@ pub fn song_helper(
                 Err(e) => {
                     tracing::info!("Spotify Error: {}", e);
 
-                    out.write(&format!(
+                    return Err(RenderError::new(format!(
                         "No music source configured! Go to {}/profile to connect an account.",
                         env::var("BASE_URL").expect("BASE_URL missing")
-                    ))?;
+                    )));
                 }
             }
         }
