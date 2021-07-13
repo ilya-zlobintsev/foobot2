@@ -20,7 +20,7 @@ RUN touch src/main.rs
 
 RUN cargo build --release
 
-FROM debian:buster-slim
+FROM docker.io/debian:buster-slim
 
 RUN apt-get update
 RUN apt-get install --assume-yes libmariadb-dev-compat ca-certificates
@@ -30,5 +30,6 @@ WORKDIR /app
 COPY --from=builder /build/target/release/foobot2 .
 COPY static ./static
 COPY templates ./templates
+COPY Rocket.toml .
 
 CMD ["/app/foobot2"]
