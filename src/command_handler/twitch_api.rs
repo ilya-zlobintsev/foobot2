@@ -13,11 +13,11 @@ use model::*;
 
 #[derive(Clone)]
 pub struct TwitchApi {
-    headers: HeaderMap,
+    headers: Arc<HeaderMap>,
     client: Client,
     moderators_cache: Arc<RwLock<HashMap<String, Vec<String>>>>,
     users_cache: Arc<RwLock<Vec<User>>>,
-    app_access_token: Option<String>,
+    app_access_token: Option<Arc<String>>,
 }
 
 impl TwitchApi {
@@ -43,12 +43,14 @@ impl TwitchApi {
         let users_cache = Arc::new(RwLock::new(Vec::new()));
 
         let twitch_api = TwitchApi {
-            headers,
+            headers: Arc::new(headers),
             client: Client::new(),
             moderators_cache,
             users_cache,
             app_access_token: match env::var("TWITCH_CLIENT_SECRET") {
-                Ok(secret) => Some(Self::get_app_token(&validation.client_id, &secret).await?),
+                Ok(secret) => Some(Arc::new(
+                    Self::get_app_token(&validation.client_id, &secret).await?,
+                )),
                 Err(_) => None,
             },
         };
@@ -171,14 +173,17 @@ impl TwitchApi {
             }
         }
 
-        let api_results = self
+        let response = self
             .client
             .get("https://api.twitch.tv/helix/users")
-            .headers(self.headers.clone())
+            .headers((*self.headers).clone())
             .query(&params)
             .send()
-            .await?
-            .json::<UsersResponse>()
+            .await?;
+        
+        tracing::info!("GET {}: {}", response.url(), response.status());
+
+        let api_results = response.json::<UsersResponse>()
             .await?
             .data;
 
@@ -282,7 +287,7 @@ impl TwitchApi {
     }
 
     fn get_app_access_headers(&self) -> HeaderMap {
-        let mut headers = self.headers.clone();
+        let mut headers = (*self.headers).clone();
 
         headers.insert(
             "Authorization",
