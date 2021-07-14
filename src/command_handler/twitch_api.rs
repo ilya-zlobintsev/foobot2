@@ -156,6 +156,7 @@ impl TwitchApi {
             if let Some(logins) = logins {
                 for login in logins {
                     if let Some(user) = users_cache.iter().find(|user| &user.login == *login) {
+                        tracing::info!("Using cache for user {}", user.login);
                         results.push(user.clone());
                     } else {
                         params.push(("login", login));
@@ -165,6 +166,7 @@ impl TwitchApi {
             if let Some(ids) = ids {
                 for id in ids {
                     if let Some(user) = users_cache.iter().find(|user| &user.id == *id) {
+                        tracing::info!("Using cache for user {}", user.login);
                         results.push(user.clone());
                     } else {
                         params.push(("id", id));
@@ -173,25 +175,27 @@ impl TwitchApi {
             }
         }
 
-        let response = self
-            .client
-            .get("https://api.twitch.tv/helix/users")
-            .headers((*self.headers).clone())
-            .query(&params)
-            .send()
-            .await?;
+        if !params.is_empty() {
+            let response = self
+                .client
+                .get("https://api.twitch.tv/helix/users")
+                .headers((*self.headers).clone())
+                .query(&params)
+                .send()
+                .await?;
 
-        tracing::info!("GET {}: {}", response.url(), response.status());
+            tracing::info!("GET {}: {}", response.url(), response.status());
 
-        let api_results = response.json::<UsersResponse>().await?.data;
+            let api_results = response.json::<UsersResponse>().await?.data;
 
-        if api_results.len() != 0 {
-            let mut users_cache = self.users_cache.write().unwrap();
+            if api_results.len() != 0 {
+                let mut users_cache = self.users_cache.write().unwrap();
 
-            users_cache.extend(api_results.clone());
+                users_cache.extend(api_results.clone());
+            }
+
+            results.extend(api_results);
         }
-
-        results.extend(api_results);
 
         Ok(results)
     }

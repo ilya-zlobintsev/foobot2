@@ -79,7 +79,7 @@ impl HelperDef for TwitchUserHelper {
             .first()
             .ok_or_else(|| RenderError::new("user not found"))?;
 
-        tracing::info!("Twitch user: {:?}", user);
+        tracing::debug!("Twitch user: {:?}", user);
 
         Ok(ScopedJson::Derived(serde_json::to_value(user).unwrap()))
     }
