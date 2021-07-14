@@ -45,18 +45,27 @@ async fn main() {
         Ok(twitch) => {
             handles.push(twitch.clone().run().await);
 
-            channels
+            let twitch_api = command_handler.twitch_api.as_ref().unwrap();
+
+            let channel_ids: Vec<&str> = channels
                 .iter()
                 .filter_map(|channel| {
                     if channel.platform == "twitch" {
-                        Some(channel.channel.clone())
+                        Some(channel.channel.as_str())
                     } else {
                         None
                     }
                 })
-                .for_each(|channel| {
-                    twitch.join_channel(channel);
-                });
+                .collect();
+
+            let twitch_channels = twitch_api
+                .get_users(None, Some(&channel_ids))
+                .await
+                .expect("Failed to get users");
+
+            for channel in twitch_channels {
+                twitch.join_channel(channel.login);
+            }
         }
         Err(e) => {
             tracing::error!("Error loading Twitch: {:?}", e);

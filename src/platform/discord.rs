@@ -23,7 +23,7 @@ impl Discord {
             let content = content.to_owned();
 
             let command_handler = self.command_handler.clone();
-
+            
             tokio::spawn(async move {
                 let context = DiscordExecutionContext {
                     msg: &msg,

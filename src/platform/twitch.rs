@@ -26,6 +26,8 @@ pub struct Twitch {
 
 impl Twitch {
     pub fn join_channel(&self, channel: String) {
+        tracing::info!("Joining channel {}", channel);
+
         let client = self.client.read().unwrap();
         let client = client.as_ref().unwrap();
 
@@ -36,7 +38,9 @@ impl Twitch {
         if let Some(message_text) = msg.get_content().strip_prefix(&self.command_prefix) {
             let message_text = message_text.to_owned();
 
-            tracing::debug!("Recieved a command at {:?}", Instant::now());
+            let recieved_instant = Instant::now();
+
+            tracing::debug!("Recieved a command at {:?}", recieved_instant);
 
             let client = self.client.read().unwrap().as_ref().unwrap().clone();
 
@@ -48,6 +52,11 @@ impl Twitch {
                 let response = command_handler
                     .handle_command_message(&message_text, context)
                     .await;
+
+                tracing::debug!(
+                    "Command took {}ms to process",
+                    recieved_instant.elapsed().as_millis()
+                );
 
                 if let Some(response) = response {
                     tracing::info!("Replying with {}", response);
@@ -166,7 +175,7 @@ impl TwitchMessage for PrivmsgMessage {
     }
 
     fn get_channel(&self) -> Option<&str> {
-        Some(&self.channel_login)
+        Some(&self.channel_id)
     }
 
     fn get_content(&self) -> &str {
@@ -221,7 +230,7 @@ impl<T: TwitchMessage + std::marker::Sync> ExecutionContext for TwitchExecutionC
 
     fn get_channel(&self) -> ChannelIdentifier {
         match self.msg.get_channel() {
-            Some(channel) => ChannelIdentifier::TwitchChannelName(channel.to_owned()),
+            Some(channel) => ChannelIdentifier::TwitchChannelID(channel.to_owned()),
             None => ChannelIdentifier::Anonymous,
         }
     }

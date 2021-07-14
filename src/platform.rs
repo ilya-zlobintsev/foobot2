@@ -104,7 +104,7 @@ pub enum UserIdentifierError {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum ChannelIdentifier {
-    TwitchChannelName(String),
+    TwitchChannelID(String),
     DiscordGuildID(String),
     Anonymous, // Used for DMs and such
 }
@@ -112,7 +112,7 @@ pub enum ChannelIdentifier {
 impl ChannelIdentifier {
     pub fn new(platform: &str, id: String) -> anyhow::Result<Self> {
         match platform {
-            "twitch" => Ok(Self::TwitchChannelName(id)),
+            "twitch" => Ok(Self::TwitchChannelID(id)),
             "discord_guild" => Ok(Self::DiscordGuildID(id.parse()?)),
             _ => Err(anyhow::anyhow!("invalid platform")),
         }
@@ -120,7 +120,7 @@ impl ChannelIdentifier {
 
     pub fn get_platform_name(&self) -> Option<&str> {
         match self {
-            ChannelIdentifier::TwitchChannelName(_) => Some("twitch"),
+            ChannelIdentifier::TwitchChannelID(_) => Some("twitch"),
             ChannelIdentifier::DiscordGuildID(_) => Some("discord_guild"),
             ChannelIdentifier::Anonymous => None,
         }
@@ -128,7 +128,7 @@ impl ChannelIdentifier {
 
     pub fn get_channel(&self) -> Option<&str> {
         match self {
-            ChannelIdentifier::TwitchChannelName(name) => Some(&name),
+            ChannelIdentifier::TwitchChannelID(id) => Some(&id),
             ChannelIdentifier::DiscordGuildID(id) => Some(&id),
             ChannelIdentifier::Anonymous => None,
         }

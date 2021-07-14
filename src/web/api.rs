@@ -31,7 +31,7 @@ pub async fn get_permissions(
 
     match db.get_channel_by_id(channel_id.parse().expect("Invalid ID"))? {
         Some(channel) => match ChannelIdentifier::new(&channel.platform, channel.channel)? {
-            ChannelIdentifier::TwitchChannelName(twitch_channel) => {
+            ChannelIdentifier::TwitchChannelID(channel_id) => {
                 let twitch_id = db
                     .get_user_by_id(web_session.user_id)?
                     .ok_or_else(|| ApiError::InvalidUser)?
@@ -45,17 +45,18 @@ pub async fn get_permissions(
                     .as_ref()
                     .ok_or_else(|| ApiError::GenericError("Twitch not configured".to_string()))?;
 
-                match twitch_api
-                    .get_channel_mods(&twitch_channel)
-                    .await?
-                    .contains(
-                        &twitch_api
-                            .get_users(None, Some(&vec![&twitch_id]))
-                            .await?
-                            .first()
-                            .unwrap()
-                            .display_name,
-                    ) {
+                let users_response = twitch_api.get_users(None, Some(&vec![&channel_id])).await?;
+
+                let channel_login = &users_response.first().expect("User not found").login;
+
+                match twitch_api.get_channel_mods(&channel_login).await?.contains(
+                    &twitch_api
+                        .get_users(None, Some(&vec![&twitch_id]))
+                        .await?
+                        .first()
+                        .unwrap()
+                        .display_name,
+                ) {
                     true => Ok("channel_mod".to_owned()),
                     false => Ok("none".to_owned()),
                 }
