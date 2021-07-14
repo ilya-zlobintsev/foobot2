@@ -61,7 +61,9 @@ impl ChatPlatform for Discord {
     async fn run(self) -> tokio::task::JoinHandle<()> {
         let scheme = ShardScheme::Auto;
 
-        let (cluster, mut events) = Cluster::builder(&self.token, Intents::DIRECT_MESSAGES)
+        let intents = Intents::GUILD_MESSAGES | Intents::DIRECT_MESSAGES;
+
+        let (cluster, mut events) = Cluster::builder(&self.token, intents)
             .shard_scheme(scheme)
             .build()
             .await
