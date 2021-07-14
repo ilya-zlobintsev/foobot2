@@ -39,9 +39,20 @@
     <div>
         <p><b>Name: </b>{{ parent_context.session.username }}</p>
         <p><b>User ID: </b>{{ user.id }}</p>
-        <p><b>Twitch ID: </b>{{ user.twitch_id }}</p>
-        <p><b>Discord ID: </b>{{ user.discord_id }}</p>
-        <p><b>Name: </b>{{ parent_context.session.username }}</p>
+        <p><b>Twitch ID: </b>
+        {{ #with (user.twitch_id) }} 
+        {{ this }} 
+        {{ else }}
+        <a href="/authenticate/twitch">Connect</a>
+        {{ /with }}
+        </p>
+        <p><b>Discord ID: </b>
+        {{ #with (user.discord_id) }} 
+        {{ this }} 
+        {{ else }}
+        <a href="/authenticate/discord">Connect</a>
+        {{ /with }}
+        </p>
         <p><b>Spotify: </b>
             {{ #if spotify_connected }}
             Connected (<a href="/authenticate/spotify/disconnect">Disconnect</a>)

@@ -207,24 +207,6 @@ impl CommandHandler {
                         None,
                     )
                 }
-                // TODO: Confirm identity
-                "merge" => {
-                    let identifier_string = arguments.first().ok_or_else(|| {
-                        CommandError::MissingArgument(
-                            "user identifier: must be in the form of `platform:id`".to_string(),
-                        )
-                    })?;
-
-                    let other_identifier = UserIdentifier::from_string(identifier_string)?;
-
-                    let other = self.db.get_user(&other_identifier)?.ok_or_else(|| {
-                        CommandError::InvalidArgument("user not found".to_string())
-                    })?;
-
-                    self.db.merge_users(user.clone(), other);
-
-                    (Some("sucessfully merged users".to_string()), None)
-                }
                 _ => match self
                     .db
                     .get_command(&execution_context.get_channel(), command)?

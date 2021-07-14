@@ -175,7 +175,7 @@ impl TwitchApi {
             }
         }
 
-        if !params.is_empty() {
+        if !params.is_empty() || (logins.is_none() && ids.is_none()) {
             let response = self
                 .client
                 .get("https://api.twitch.tv/helix/users")

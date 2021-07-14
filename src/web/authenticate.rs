@@ -18,7 +18,7 @@ use crate::{
         Database,
     },
     platform::UserIdentifier,
-    web::template_context::LayoutContext,
+    web::{template_context::LayoutContext},
 };
 
 use super::template_context::AuthenticateContext;
@@ -63,6 +63,7 @@ pub async fn twitch_redirect(
     client: &State<Client>,
     code: &str,
     jar: &CookieJar<'_>,
+    current_session: Option<WebSession>,
 ) -> Redirect {
     let db = &cmd.db;
     let twitch_api = &cmd.twitch_api.as_ref().expect("Twitch not configured");
@@ -112,9 +113,19 @@ pub async fn twitch_redirect(
         .get_or_create_user(&UserIdentifier::TwitchID(twitch_user.id))
         .expect("DB error");
 
-    let cookie = create_user_session(db, user.id, twitch_user.display_name);
+    if let Some(web_session) = current_session {
+        let current_user = cmd
+            .db
+            .get_user_by_id(web_session.user_id)
+            .expect("DB Error")
+            .unwrap();
 
-    jar.add_private(cookie);
+        cmd.db.merge_users(current_user, user);
+    } else {
+        let cookie = create_user_session(db, user.id, twitch_user.display_name);
+
+        jar.add_private(cookie);
+    }
 
     Redirect::found("/profile")
 }
@@ -134,6 +145,7 @@ pub async fn discord_redirect(
     cmd: &State<CommandHandler>,
     code: String,
     jar: &CookieJar<'_>,
+    current_session: Option<WebSession>,
 ) -> Redirect {
     let db = &cmd.db;
 
@@ -188,9 +200,19 @@ pub async fn discord_redirect(
         .get_or_create_user(&UserIdentifier::DiscordID(discord_user.id))
         .expect("DB Error");
 
-    let cookie = create_user_session(db, user.id, discord_user.username);
+    if let Some(web_session) = current_session {
+        let current_user = cmd
+            .db
+            .get_user_by_id(web_session.user_id)
+            .expect("DB Error")
+            .unwrap();
 
-    jar.add_private(cookie);
+        cmd.db.merge_users(current_user, user);
+    } else {
+        let cookie = create_user_session(db, user.id, discord_user.username);
+
+        jar.add_private(cookie);
+    }
 
     Redirect::found("/profile")
 }
