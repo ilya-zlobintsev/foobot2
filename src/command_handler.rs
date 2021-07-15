@@ -7,7 +7,7 @@ pub mod twitch_api;
 
 use crate::database::DatabaseError;
 use crate::database::{models::User, Database};
-use crate::platform::{ExecutionContext, Permissions, UserIdentifier, UserIdentifierError};
+use crate::platform::{ExecutionContext, Permissions, UserIdentifierError};
 
 use core::fmt;
 use std::env::{self, VarError};
@@ -21,13 +21,14 @@ use tokio::task;
 
 use owm_api::OwmApi;
 use twitch_api::TwitchApi;
-
-use self::lastfm_api::LastFMApi;
+use discord_api::DiscordApi;
+use lastfm_api::LastFMApi;
 
 #[derive(Clone)]
 pub struct CommandHandler {
     pub db: Database,
     pub twitch_api: Option<TwitchApi>,
+    pub discord_api: Option<DiscordApi>,
     startup_time: Arc<Instant>,
     template_registry: Arc<Handlebars<'static>>,
     cooldowns: Arc<RwLock<Vec<(u64, String)>>>, // User id and command
@@ -44,6 +45,11 @@ impl CommandHandler {
                 tracing::info!("TWICTH_OAUTH missing! Skipping Twitch initialization");
                 None
             }
+        };
+
+        let discord_api = match env::var("DISCORD_TOKEN") {
+            Ok(token) => Some(DiscordApi::new(&token)),
+            Err(_) => None,
         };
 
         let mut template_registry = Handlebars::new();
@@ -93,6 +99,7 @@ impl CommandHandler {
             twitch_api,
             startup_time: Arc::new(Instant::now()),
             template_registry: Arc::new(template_registry),
+            discord_api,
             cooldowns,
         }
     }

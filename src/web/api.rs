@@ -6,6 +6,7 @@ use rocket::{Response, State};
 
 use crate::database::models::WebSession;
 use crate::database::DatabaseError;
+use crate::platform::Permissions;
 use crate::{command_handler::CommandHandler, platform::ChannelIdentifier};
 
 #[post("/user/lastfm", data = "<name>")]
@@ -26,7 +27,7 @@ pub async fn get_permissions(
     channel_id: &str,
     web_session: WebSession,
     cmd: &State<CommandHandler>,
-) -> Result<String, ApiError> {
+) -> Result<Permissions, ApiError> {
     let db = &cmd.db;
 
     match db.get_channel_by_id(channel_id.parse().expect("Invalid ID"))? {
@@ -37,7 +38,7 @@ pub async fn get_permissions(
                     .ok_or_else(|| ApiError::InvalidUser)?
                     .twitch_id
                     .ok_or_else(|| {
-                        ApiError::GenericError("No registered on this platform".to_string())
+                        ApiError::GenericError("Not registered on this platform".to_string())
                     })?;
 
                 let twitch_api = cmd
@@ -57,16 +58,34 @@ pub async fn get_permissions(
                         .unwrap()
                         .display_name,
                 ) {
-                    true => Ok("channel_mod".to_owned()),
-                    false => Ok("none".to_owned()),
+                    true => Ok(Permissions::ChannelMod),
+                    false => Ok(Permissions::Default),
                 }
             }
             ChannelIdentifier::DiscordGuildID(guild_id) => {
-                todo!()
+                let user_id = db
+                    .get_user_by_id(web_session.user_id)?
+                    .ok_or_else(|| ApiError::InvalidUser)?
+                    .discord_id
+                    .ok_or_else(|| ApiError::InvalidUser)?
+                    .parse()
+                    .unwrap();
+
+                let discord_api = cmd.discord_api.as_ref().unwrap();
+
+                match discord_api
+                    .get_permissions_in_guild(user_id, guild_id.parse().unwrap())
+                    .await
+                    .map_err(|_| ApiError::GenericError("discord error".to_string()))?
+                    .contains(twilight_model::guild::Permissions::ADMINISTRATOR)
+                {
+                    true => Ok(Permissions::ChannelMod),
+                    false => Ok(Permissions::Default),
+                }
             }
             _ => unimplemented!(),
         },
-        None => Ok("none".to_owned()),
+        None => Ok(Permissions::Default),
     }
 }
 

@@ -18,7 +18,7 @@ use crate::{
         Database,
     },
     platform::UserIdentifier,
-    web::{template_context::LayoutContext},
+    web::template_context::LayoutContext,
 };
 
 use super::template_context::AuthenticateContext;
@@ -189,7 +189,7 @@ pub async fn discord_redirect(
         auth_info.access_token
     );
 
-    let discord_api = DiscordApi::init(&auth_info.access_token);
+    let discord_api = DiscordApi::new(&auth_info.access_token);
 
     let discord_user = discord_api
         .get_self_user()
@@ -197,7 +197,7 @@ pub async fn discord_redirect(
         .expect("Discord API Error");
 
     let user = db
-        .get_or_create_user(&UserIdentifier::DiscordID(discord_user.id))
+        .get_or_create_user(&UserIdentifier::DiscordID(discord_user.id.0.to_string()))
         .expect("DB Error");
 
     if let Some(web_session) = current_session {
@@ -209,7 +209,7 @@ pub async fn discord_redirect(
 
         cmd.db.merge_users(current_user, user);
     } else {
-        let cookie = create_user_session(db, user.id, discord_user.username);
+        let cookie = create_user_session(db, user.id, discord_user.name);
 
         jar.add_private(cookie);
     }

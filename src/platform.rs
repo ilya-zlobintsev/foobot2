@@ -4,6 +4,7 @@ pub mod twitch;
 use crate::command_handler::CommandHandler;
 
 use async_trait::async_trait;
+use rocket::Response;
 use tokio::task::JoinHandle;
 
 use serde::{Deserialize, Serialize};
@@ -155,6 +156,12 @@ impl Permissions {
 impl PartialEq for Permissions {
     fn eq(&self, other: &Self) -> bool {
         self == other
+    }
+}
+
+impl<'r> rocket::response::Responder<'r, 'static> for Permissions {
+    fn respond_to(self, request: &'r rocket::Request<'_>) -> rocket::response::Result<'static> {
+        Response::build_from(self.to_string().respond_to(request)?).ok()
     }
 }
 

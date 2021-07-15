@@ -1,3 +1,5 @@
+use crate::platform::Permissions;
+
 use super::api::{get_permissions, ApiError};
 use super::*;
 
@@ -42,8 +44,9 @@ pub async fn add_command(
     channel_id: String,
 ) -> Result<Redirect, ApiError> {
     let permissions = get_permissions(&channel_id, session, cmd).await?;
+    
 
-    if permissions == "channel_mod" {
+    if permissions == Permissions::ChannelMod {
         cmd.db.add_command_to_channel_id(
             channel_id.parse().unwrap(),
             &command_form.cmd_trigger,
