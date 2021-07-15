@@ -189,7 +189,7 @@ pub async fn discord_redirect(
         auth_info.access_token
     );
 
-    let discord_api = DiscordApi::new(&auth_info.access_token);
+    let discord_api = DiscordApi::new(&format!("Bearer {}", auth_info.access_token));
 
     let discord_user = discord_api
         .get_self_user()
