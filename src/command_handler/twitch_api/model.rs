@@ -46,7 +46,6 @@ pub struct User {
 #[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct IvrModInfo {
-    pub ttl: i64,
     pub mods: Vec<Mod>,
     pub vips: Vec<Vip>,
 }

@@ -45,24 +45,32 @@
         }
 
         .user {
-            display: block;
+            display: flex;
             text-decoration: none;
+            column-gap: 5px;
+            align-items: center;
 
             margin-top: 16px;
             margin-bottom: 16px;
             margin-left: 32px;
             margin-right: 32px;
 
-            padding-left: 40px;
-            padding-right: 40px;
-            padding-top: 12px;
-            padding-bottom: 12px;
+            padding-left: 32px;
+            padding-right: 32px;
 
             white-space: nowrap;
             text-decoration: none;
             background-color: rgb(73, 73, 230);
-            color: white;
             border-radius: 5px;
+        }
+
+        .user a:visited {
+            color: #4fddc5;
+        }
+
+        .logout {
+            margin-top: auto;
+            margin-bottom: auto;
         }
 
         footer {
@@ -73,7 +81,7 @@
             text-align: center;
             margin-bottom: 20px;
         }
-        
+
         footer a {
             color: white;
         }
@@ -87,9 +95,12 @@
             <li><a href="/channels">Channels</a></lia>
         </ul>
         {{ #with parent_context.session }}
-        <p class="user">Logged in as <a class="profile" href="/profile"><b>{{ username
-                    }}</b></a></p>
-        <a class="logout" href="/authenticate/logout"><img src="/static/logout.png" alt="Log out" /></a>
+        <div class="user">
+            <p>Logged in as</p>
+            <a class="profile" href="/profile"><b>{{ username }}</b></a>
+            <a class="logout" href="/authenticate/logout"><img src="/static/logout.svg" alt="Log out" height="16"
+                    width="16" /></a>
+        </div>
         {{ else }}
         <a class="user" href="/authenticate"><b>Login</b></a>
         {{ /with }}

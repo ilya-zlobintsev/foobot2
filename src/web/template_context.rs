@@ -21,6 +21,7 @@ pub struct CommandsContext {
     pub parent_context: LayoutContext,
     pub channel: String,
     pub commands: Vec<Command>,
+    pub moderator: bool,
 }
 
 #[derive(Serialize)]

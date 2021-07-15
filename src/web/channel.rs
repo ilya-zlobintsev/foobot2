@@ -1,6 +1,6 @@
-use crate::platform::Permissions;
+use crate::platform::{ChannelIdentifier, Permissions};
 
-use super::api::{get_permissions, ApiError};
+use super::api::ApiError;
 use super::*;
 
 use rocket::{catch, form::Form, get, post, response::Redirect, Request, State};
@@ -23,6 +23,21 @@ pub async fn commands_page(
     session: Option<WebSession>,
     channel_id: String,
 ) -> Html<Template> {
+    let moderator = {
+        if let Some(session) = &session {
+            let permissions = get_permissions(&channel_id, session.user_id, cmd)
+                .await
+                .expect("Failed to get permissions");
+
+            tracing::info!("User permissions: {:?}", permissions);
+
+            permissions == Permissions::ChannelMod
+        } else {
+            false
+        }
+    };
+    tracing::debug!("Moderator: {}", moderator);
+
     Html(Template::render(
         "commands",
         &CommandsContext {
@@ -32,6 +47,7 @@ pub async fn commands_page(
                 .db
                 .get_commands(channel_id.parse().unwrap())
                 .expect("Failed to get commands"),
+            moderator,
         },
     ))
 }
@@ -43,8 +59,7 @@ pub async fn add_command(
     session: WebSession,
     channel_id: String,
 ) -> Result<Redirect, ApiError> {
-    let permissions = get_permissions(&channel_id, session, cmd).await?;
-    
+    let permissions = get_permissions(&channel_id, session.user_id, cmd).await?;
 
     if permissions == Permissions::ChannelMod {
         cmd.db.add_command_to_channel_id(
@@ -66,4 +81,70 @@ pub async fn not_found(_: &Request<'_>) -> Redirect {
 pub struct AddCommandForm {
     pub cmd_trigger: String,
     pub cmd_action: String,
+}
+
+pub async fn get_permissions(
+    channel_id: &str,
+    user_id: u64,
+    cmd: &CommandHandler,
+) -> Result<Permissions, ApiError> {
+    let db = &cmd.db;
+
+    match db.get_channel_by_id(channel_id.parse().expect("Invalid ID"))? {
+        Some(channel) => match ChannelIdentifier::new(&channel.platform, channel.channel)? {
+            ChannelIdentifier::TwitchChannelID(channel_id) => {
+                let twitch_id = db
+                    .get_user_by_id(user_id)?
+                    .ok_or_else(|| ApiError::InvalidUser)?
+                    .twitch_id
+                    .ok_or_else(|| {
+                        ApiError::GenericError("Not registered on this platform".to_string())
+                    })?;
+
+                let twitch_api = cmd
+                    .twitch_api
+                    .as_ref()
+                    .ok_or_else(|| ApiError::GenericError("Twitch not configured".to_string()))?;
+
+                let users_response = twitch_api.get_users(None, Some(&vec![&channel_id])).await?;
+
+                let channel_login = &users_response.first().expect("User not found").login;
+
+                match twitch_api.get_channel_mods(&channel_login).await?.contains(
+                    &twitch_api
+                        .get_users(None, Some(&vec![&twitch_id]))
+                        .await?
+                        .first()
+                        .unwrap()
+                        .display_name,
+                ) {
+                    true => Ok(Permissions::ChannelMod),
+                    false => Ok(Permissions::Default),
+                }
+            }
+            ChannelIdentifier::DiscordGuildID(guild_id) => {
+                let user_id = db
+                    .get_user_by_id(user_id)?
+                    .ok_or_else(|| ApiError::InvalidUser)?
+                    .discord_id
+                    .ok_or_else(|| ApiError::InvalidUser)?
+                    .parse()
+                    .unwrap();
+
+                let discord_api = cmd.discord_api.as_ref().unwrap();
+
+                match discord_api
+                    .get_permissions_in_guild(user_id, guild_id.parse().unwrap())
+                    .await
+                    .map_err(|_| ApiError::GenericError("discord error".to_string()))?
+                    .contains(twilight_model::guild::Permissions::ADMINISTRATOR)
+                {
+                    true => Ok(Permissions::ChannelMod),
+                    false => Ok(Permissions::Default),
+                }
+            }
+            ChannelIdentifier::Anonymous => Ok(Permissions::Default),
+        },
+        None => Ok(Permissions::Default),
+    }
 }

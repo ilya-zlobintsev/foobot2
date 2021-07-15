@@ -4,7 +4,6 @@ pub mod twitch;
 use crate::command_handler::CommandHandler;
 
 use async_trait::async_trait;
-use rocket::Response;
 use tokio::task::JoinHandle;
 
 use serde::{Deserialize, Serialize};
@@ -136,7 +135,7 @@ impl ChannelIdentifier {
     }
 }
 
-#[derive(Debug, Eq, Serialize, Deserialize, Clone)]
+#[derive(Debug, PartialEq, Eq, Serialize, Deserialize, Clone)]
 pub enum Permissions {
     Default,
     ChannelMod,
@@ -150,18 +149,6 @@ impl Permissions {
             Permissions::ChannelMod => "channel_mod".to_string(),
             Permissions::Admin => "admin".to_string(),
         }
-    }
-}
-
-impl PartialEq for Permissions {
-    fn eq(&self, other: &Self) -> bool {
-        self == other
-    }
-}
-
-impl<'r> rocket::response::Responder<'r, 'static> for Permissions {
-    fn respond_to(self, request: &'r rocket::Request<'_>) -> rocket::response::Result<'static> {
-        Response::build_from(self.to_string().respond_to(request)?).ok()
     }
 }
 

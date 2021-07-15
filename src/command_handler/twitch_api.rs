@@ -271,13 +271,15 @@ impl TwitchApi {
 
         let lookup = response.json::<IvrModInfo>().await?;
 
-        tracing::debug!("{:?}", lookup);
-
         let mut mods = vec![channel_login.to_owned()];
+
 
         for moderator in lookup.mods {
             mods.push(moderator.login);
         }
+
+        tracing::debug!("{:?}", mods);
+
 
         // Err(_) => self.get_channel_mods_from_irc(channel_login).await?,
 
