@@ -31,7 +31,7 @@ pub async fn commands_page(
 
             tracing::info!("User permissions: {:?}", permissions);
 
-            permissions == Permissions::ChannelMod
+            permissions == Permissions::ChannelMod || permissions == Permissions::Admin
         } else {
             false
         }
@@ -88,18 +88,26 @@ pub async fn get_permissions(
     user_id: u64,
     cmd: &CommandHandler,
 ) -> Result<Permissions, ApiError> {
-    let db = &cmd.db;
+    let user = cmd
+        .db
+        .get_user_by_id(user_id)?
+        .ok_or_else(|| ApiError::InvalidUser)?;
+    
+    if let Ok(Some(admin_user)) = cmd.db.get_admin_user() {
+        if user.id == admin_user.id {
+            return Ok(Permissions::Admin)
+        }
+    }
 
-    match db.get_channel_by_id(channel_id.parse().expect("Invalid ID"))? {
+    match cmd
+        .db
+        .get_channel_by_id(channel_id.parse().expect("Invalid ID"))?
+    {
         Some(channel) => match ChannelIdentifier::new(&channel.platform, channel.channel)? {
             ChannelIdentifier::TwitchChannelID(channel_id) => {
-                let twitch_id = db
-                    .get_user_by_id(user_id)?
-                    .ok_or_else(|| ApiError::InvalidUser)?
-                    .twitch_id
-                    .ok_or_else(|| {
-                        ApiError::GenericError("Not registered on this platform".to_string())
-                    })?;
+                let twitch_id = user.twitch_id.ok_or_else(|| {
+                    ApiError::GenericError("Not registered on this platform".to_string())
+                })?;
 
                 let twitch_api = cmd
                     .twitch_api
@@ -123,9 +131,7 @@ pub async fn get_permissions(
                 }
             }
             ChannelIdentifier::DiscordGuildID(guild_id) => {
-                let user_id = db
-                    .get_user_by_id(user_id)?
-                    .ok_or_else(|| ApiError::InvalidUser)?
+                let user_id = user
                     .discord_id
                     .ok_or_else(|| ApiError::InvalidUser)?
                     .parse()

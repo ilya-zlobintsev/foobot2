@@ -10,11 +10,7 @@ use std::{
 };
 
 use self::models::*;
-use crate::{
-    command_handler::spotify_api::SpotifyApi,
-    database::schema::*,
-    platform::{ChannelIdentifier, UserIdentifier},
-};
+use crate::{command_handler::spotify_api::SpotifyApi, database::schema::*, platform::{ChannelIdentifier, UserIdentifier, UserIdentifierError}};
 use diesel::mysql::MysqlConnection;
 use diesel::{
     r2d2::{self, ConnectionManager, Pool},
@@ -195,6 +191,17 @@ impl Database {
             }
         } else {
             Ok(None)
+        }
+    }
+
+    pub fn get_admin_user(&self) -> Result<Option<User>, DatabaseError> {
+        match env::var("ADMIN_USER") {
+            Ok(s) => {
+                let admin_identifier = UserIdentifier::from_string(&s)?;
+
+                Ok(self.get_user(&admin_identifier)?)
+            }
+            Err(_) => Ok(None),
         }
     }
 
@@ -565,6 +572,12 @@ pub enum DatabaseError {
 impl From<diesel::result::Error> for DatabaseError {
     fn from(e: diesel::result::Error) -> Self {
         Self::DieselError(e)
+    }
+}
+
+impl From<UserIdentifierError> for DatabaseError {
+    fn from(_: UserIdentifierError) -> Self {
+        Self::InvalidValue
     }
 }
 
