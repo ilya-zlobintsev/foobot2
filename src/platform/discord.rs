@@ -19,6 +19,10 @@ impl Discord {
     async fn handle_msg(&self, msg: MessageCreate, http: Client) {
         tracing::debug!("{:?}", msg);
         if let Some(content) = msg.content.strip_prefix(&self.prefix) {
+            http.create_typing_trigger(msg.channel_id)
+                .await
+                .expect("Failed to create typing trigger");
+
             let content = content.to_owned();
 
             let command_handler = self.command_handler.clone();
