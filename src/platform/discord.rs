@@ -4,7 +4,6 @@ use futures::StreamExt;
 use twilight_gateway::{cluster::ShardScheme, Cluster, Event, Intents};
 use twilight_http::Client;
 use twilight_model::{gateway::payload::MessageCreate, guild::Permissions};
-use twilight_util::permission_calculator::PermissionCalculator;
 
 use crate::command_handler::CommandHandler;
 
@@ -23,11 +22,11 @@ impl Discord {
             let content = content.to_owned();
 
             let command_handler = self.command_handler.clone();
-            
+
             tokio::spawn(async move {
                 let context = DiscordExecutionContext {
                     msg: &msg,
-                    http: http.clone(),
+                    cmd: &command_handler,
                 };
 
                 if let Some(response) = command_handler
@@ -103,7 +102,7 @@ impl ChatPlatform for Discord {
 
 pub struct DiscordExecutionContext<'a> {
     msg: &'a MessageCreate,
-    http: Client,
+    cmd: &'a CommandHandler,
 }
 
 #[async_trait]
@@ -111,38 +110,14 @@ impl ExecutionContext for DiscordExecutionContext<'_> {
     async fn get_permissions_internal(&self) -> super::Permissions {
         match self.msg.guild_id {
             Some(guild_id) => {
-                let guild_member = self
-                    .http
-                    .guild_member(guild_id, self.msg.author.id)
+                let permissions = self
+                    .cmd
+                    .discord_api
+                    .as_ref()
+                    .unwrap()
+                    .get_permissions_in_guild(self.msg.author.id.0, guild_id.0)
                     .await
-                    .expect("Failed to get guild member")
-                    .expect("Not a guild member");
-
-                let guild_roles = self
-                    .http
-                    .roles(guild_id)
-                    .await
-                    .expect("Failed to get guild roles");
-
-                let mut member_roles = Vec::new();
-
-                for role in guild_member.roles {
-                    let role = guild_roles
-                        .iter()
-                        .find(|guild_role| guild_role.id == role)
-                        .expect("Failed to get role");
-
-                    member_roles.push((role.id, role.permissions));
-                }
-
-                let permissions_calculator = PermissionCalculator::new(
-                    guild_id,
-                    self.msg.author.id,
-                    Permissions::VIEW_CHANNEL,
-                    &member_roles,
-                );
-
-                let permissions = permissions_calculator.root();
+                    .expect("Failed to get permissions");
 
                 if permissions.contains(Permissions::ADMINISTRATOR) {
                     crate::platform::Permissions::ChannelMod
