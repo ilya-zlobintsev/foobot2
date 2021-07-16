@@ -1,28 +1,26 @@
 pub mod models;
 mod schema;
 
-use std::{
-    collections::HashMap,
-    env,
-    fmt::Display,
-    sync::{Arc, RwLock},
-    time::Duration,
-};
+use std::collections::HashMap;
+use std::env;
+use std::fmt::Display;
+use std::sync::{Arc, RwLock};
+use std::time::Duration;
 
 use self::models::*;
-use crate::{command_handler::spotify_api::SpotifyApi, database::schema::*, platform::{ChannelIdentifier, UserIdentifier, UserIdentifierError}};
+use crate::command_handler::spotify_api::SpotifyApi;
+use crate::database::schema::*;
+use crate::platform::{ChannelIdentifier, UserIdentifier, UserIdentifierError};
+
+use dashmap::DashMap;
 use diesel::mysql::MysqlConnection;
-use diesel::{
-    r2d2::{self, ConnectionManager, Pool},
-    sql_query,
-};
-use diesel::{
-    sql_types::{BigInt, Unsigned},
-    ConnectionError,
-};
-use diesel::{EqAll, QueryDsl};
+use diesel::r2d2::{self, ConnectionManager, Pool};
+use diesel::sql_types::{BigInt, Unsigned};
+use diesel::ConnectionError;
+use diesel::{sql_query, EqAll, QueryDsl};
 use diesel::{ExpressionMethods, RunQueryDsl};
 use passwords::PasswordGenerator;
+
 use reqwest::Client;
 use tokio::time;
 
@@ -37,7 +35,7 @@ const BUILTIN_COMMANDS: &'static [&'static str] = &[
 #[derive(Clone)]
 pub struct Database {
     conn_pool: Pool<ConnectionManager<MysqlConnection>>,
-    web_sessions_cache: Arc<RwLock<HashMap<String, WebSession>>>,
+    web_sessions_cache: Arc<DashMap<String, WebSession>>,
 }
 
 impl Database {
@@ -51,7 +49,7 @@ impl Database {
             .run_pending_migrations(MIGRATIONS)
             .expect("Failed to run migrations");
 
-        let web_sessions_cache = Arc::new(RwLock::new(HashMap::new()));
+        let web_sessions_cache = Arc::new(DashMap::new());
 
         Ok(Self {
             conn_pool,
@@ -68,9 +66,6 @@ impl Database {
                 time::sleep(Duration::from_secs(3600)).await;
 
                 tracing::info!("Clearing web sessions cache");
-
-                let mut web_sessions_cache =
-                    web_sessions_cache.write().expect("Failed to lock cache");
 
                 web_sessions_cache.clear();
             }
@@ -493,16 +488,9 @@ impl Database {
         &self,
         session_id: &str,
     ) -> Result<Option<WebSession>, diesel::result::Error> {
-        let cache = self
-            .web_sessions_cache
-            .read()
-            .expect("Failed to lock cache");
-
-        match &cache.get(session_id) {
+        match self.web_sessions_cache.get(session_id) {
             Some(session) => Ok(Some(session.clone().clone())),
             None => {
-                drop(cache);
-
                 let mut conn = self.conn_pool.get().unwrap();
 
                 match web_sessions::table
@@ -512,12 +500,8 @@ impl Database {
                     .next()
                 {
                     Some(session) => {
-                        let mut cache = self
-                            .web_sessions_cache
-                            .write()
-                            .expect("Failed to lock cache");
-
-                        cache.insert(session_id.to_owned(), session.clone());
+                        self.web_sessions_cache
+                            .insert(session_id.to_owned(), session.clone());
 
                         tracing::debug!("Inserted session {} into cache", session_id);
 

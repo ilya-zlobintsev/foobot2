@@ -48,3 +48,5 @@ sha2 = "0.9"
 hex = "0.4"
 
 psutil = "3.2"
+
+dashmap = "4.0"
