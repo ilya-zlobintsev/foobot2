@@ -25,13 +25,14 @@ pub async fn commands_page(
 ) -> Html<Template> {
     let moderator = {
         if let Some(session) = &session {
-            let permissions = get_permissions(&channel_id, session.user_id, cmd)
-                .await
-                .expect("Failed to get permissions");
+            match get_permissions(&channel_id, session.user_id, cmd).await {
+                Ok(permissions) => {
+                    tracing::info!("User permissions: {:?}", permissions);
 
-            tracing::info!("User permissions: {:?}", permissions);
-
-            permissions == Permissions::ChannelMod || permissions == Permissions::Admin
+                    permissions == Permissions::ChannelMod || permissions == Permissions::Admin
+                }
+                None => false,
+            }
         } else {
             false
         }
@@ -92,16 +93,16 @@ pub async fn get_permissions(
         .db
         .get_user_by_id(user_id)?
         .ok_or_else(|| ApiError::InvalidUser)?;
-    
+
     if let Ok(Some(admin_user)) = cmd.db.get_admin_user() {
         if user.id == admin_user.id {
-            return Ok(Permissions::Admin)
+            return Ok(Permissions::Admin);
         }
     }
 
     match cmd
         .db
-        .get_channel_by_id(channel_id.parse().expect("Invalid ID"))?
+        .get_channel_by_id(channel_id.parse().expect("Invalid Channel ID"))?
     {
         Some(channel) => match ChannelIdentifier::new(&channel.platform, channel.channel)? {
             ChannelIdentifier::TwitchChannelID(channel_id) => {
