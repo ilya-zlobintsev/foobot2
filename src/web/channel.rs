@@ -31,7 +31,7 @@ pub async fn commands_page(
 
                     permissions == Permissions::ChannelMod || permissions == Permissions::Admin
                 }
-                None => false,
+                Err(_) => false,
             }
         } else {
             false
