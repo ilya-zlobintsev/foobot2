@@ -19,10 +19,10 @@ use handlebars::Handlebars;
 use inquiry_helper::*;
 use tokio::task;
 
-use owm_api::OwmApi;
-use twitch_api::TwitchApi;
 use discord_api::DiscordApi;
 use lastfm_api::LastFMApi;
+use owm_api::OwmApi;
+use twitch_api::TwitchApi;
 
 #[derive(Clone)]
 pub struct CommandHandler {

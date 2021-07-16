@@ -55,10 +55,10 @@ impl DiscordApi {
                 tracing::debug!("Using cached permissions");
 
                 Ok(permissions.clone())
-            },
+            }
             None => {
                 drop(permissions_cache);
-                
+
                 tracing::debug!("Querying user permissions");
 
                 let user_id = UserId(user_id);

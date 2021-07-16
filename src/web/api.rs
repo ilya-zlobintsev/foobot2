@@ -3,9 +3,9 @@ use rocket::response::Responder;
 use rocket::response::{self};
 use rocket::{Response, State};
 
+use crate::command_handler::CommandHandler;
 use crate::database::models::WebSession;
 use crate::database::DatabaseError;
-use crate::{command_handler::CommandHandler};
 
 #[post("/user/lastfm", data = "<name>")]
 pub async fn set_lastfm_name(

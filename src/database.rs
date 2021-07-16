@@ -434,6 +434,8 @@ impl Database {
     pub fn merge_users(&self, mut user: User, other: User) -> User {
         let mut conn = self.conn_pool.get().unwrap();
 
+        self.users_cache.remove(&other.id);
+
         sql_query("REPLACE INTO user_data(user_id, name, value) SELECT ?, name, value FROM user_data WHERE user_id = ?").bind::<Unsigned<BigInt>, _>(user.id).bind::<Unsigned<BigInt>, _>(other.id).execute(&mut conn).expect("Failed to run replace query");
 
         diesel::delete(&other)
@@ -446,6 +448,10 @@ impl Database {
             .set(&user)
             .execute(&mut conn)
             .expect("Failed to update");
+
+        self.users_cache.remove(&user.id);
+
+        self.user_identifiers_cache.clear();
 
         user
     }
