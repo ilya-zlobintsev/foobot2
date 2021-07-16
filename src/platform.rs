@@ -59,7 +59,7 @@ impl From<VarError> for ChatPlatformError {
     }
 }
 
-#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq, Hash)]
 pub enum UserIdentifier {
     TwitchID(String),
     DiscordID(String),

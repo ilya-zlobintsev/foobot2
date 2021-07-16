@@ -1,10 +1,9 @@
 pub mod models;
 mod schema;
 
-use std::collections::HashMap;
 use std::env;
 use std::fmt::Display;
-use std::sync::{Arc, RwLock};
+use std::sync::Arc;
 use std::time::Duration;
 
 use self::models::*;
@@ -36,6 +35,8 @@ const BUILTIN_COMMANDS: &'static [&'static str] = &[
 pub struct Database {
     conn_pool: Pool<ConnectionManager<MysqlConnection>>,
     web_sessions_cache: Arc<DashMap<String, WebSession>>,
+    users_cache: Arc<DashMap<u64, User>>,
+    user_identifiers_cache: Arc<DashMap<UserIdentifier, u64>>, // Caches the user IDs
 }
 
 impl Database {
@@ -50,28 +51,37 @@ impl Database {
             .expect("Failed to run migrations");
 
         let web_sessions_cache = Arc::new(DashMap::new());
+        let users_cache = Arc::new(DashMap::new());
+        let user_identifiers_cache = Arc::new(DashMap::new());
 
         Ok(Self {
             conn_pool,
             web_sessions_cache,
+            users_cache,
+            user_identifiers_cache,
         })
     }
 
     pub fn start_cron(&self) {
-        let conn_pool = self.conn_pool.clone();
         let web_sessions_cache = self.web_sessions_cache.clone();
+        let users_cache = self.users_cache.clone();
+        let user_identifiers_cache = self.user_identifiers_cache.clone();
 
         tokio::spawn(async move {
             loop {
                 time::sleep(Duration::from_secs(3600)).await;
 
-                tracing::info!("Clearing web sessions cache");
+                tracing::info!("Clearing caches");
 
                 web_sessions_cache.clear();
+                users_cache.clear();
+                user_identifiers_cache.clear();
             }
         });
 
         {
+            let conn_pool = self.conn_pool.clone();
+
             if let Ok(client_id) = env::var("SPOTIFY_CLIENT_ID") {
                 if let Ok(client_secret) = env::var("SPOTIFY_CLIENT_SECRET") {
                     tokio::spawn(async move {
@@ -338,26 +348,57 @@ impl Database {
         &self,
         user_identifier: &UserIdentifier,
     ) -> Result<Option<User>, diesel::result::Error> {
-        let mut conn = self.conn_pool.get().unwrap();
+        match self.user_identifiers_cache.get(user_identifier) {
+            Some(id) => self.get_user_by_id(*id),
+            None => {
+                let mut conn = self.conn_pool.get().unwrap();
 
-        let query = users::table.into_boxed();
+                let query = users::table.into_boxed();
 
-        let query = match user_identifier {
-            UserIdentifier::TwitchID(user_id) => query.filter(users::twitch_id.eq(Some(user_id))),
-            UserIdentifier::DiscordID(user_id) => query.filter(users::discord_id.eq(Some(user_id))),
-        };
+                let query = match user_identifier {
+                    UserIdentifier::TwitchID(user_id) => {
+                        query.filter(users::twitch_id.eq(Some(user_id)))
+                    }
+                    UserIdentifier::DiscordID(user_id) => {
+                        query.filter(users::discord_id.eq(Some(user_id)))
+                    }
+                };
 
-        Ok(query.load(&mut conn)?.into_iter().next())
+                match query.load::<User>(&mut conn)?.into_iter().next() {
+                    Some(user) => {
+                        self.user_identifiers_cache
+                            .insert(user_identifier.clone(), user.id);
+
+                        Ok(Some(user))
+                    }
+                    None => Ok(None),
+                }
+            }
+        }
     }
 
     pub fn get_user_by_id(&self, user_id: u64) -> Result<Option<User>, diesel::result::Error> {
-        let mut conn = self.conn_pool.get().unwrap();
+        match self.users_cache.get(&user_id) {
+            Some(user) => Ok(Some(user.clone())),
+            None => {
+                let mut conn = self.conn_pool.get().unwrap();
 
-        Ok(users::table
-            .filter(users::id.eq_all(user_id))
-            .load(&mut conn)?
-            .into_iter()
-            .next())
+                match users::table
+                    .filter(users::id.eq_all(user_id))
+                    .load::<User>(&mut conn)?
+                    .into_iter()
+                    .next()
+                {
+                    Some(user) => {
+                        tracing::debug!("Cached user {}", user_id);
+                        self.users_cache.insert(user_id, user.clone());
+
+                        Ok(Some(user))
+                    }
+                    None => Ok(None),
+                }
+            }
+        }
     }
 
     pub fn get_or_create_user(
@@ -489,7 +530,7 @@ impl Database {
         session_id: &str,
     ) -> Result<Option<WebSession>, diesel::result::Error> {
         match self.web_sessions_cache.get(session_id) {
-            Some(session) => Ok(Some(session.clone().clone())),
+            Some(session) => Ok(Some(session.clone())),
             None => {
                 let mut conn = self.conn_pool.get().unwrap();
 
