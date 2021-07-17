@@ -17,6 +17,7 @@ use std::time::{Duration, Instant};
 
 use handlebars::Handlebars;
 use inquiry_helper::*;
+use tokio::process::Command;
 use tokio::task;
 
 use discord_api::DiscordApi;
@@ -213,6 +214,36 @@ impl CommandHandler {
                         )?,
                         None,
                     )
+                }
+                "sh" | "shell" => {
+                    let allow_shell =
+                        env::var("ALLOW_SHELL").map_err(|_| CommandError::NoPermissions)?;
+
+                    match &allow_shell as &str {
+                        "1" => match execution_context.get_permissions().await {
+                            Permissions::Admin => {
+                                let mut arguments = arguments.into_iter();
+
+                                let program = arguments.next().ok_or_else(|| {
+                                    CommandError::MissingArgument("program".to_string())
+                                })?;
+
+                                let output = Command::new(program)
+                                    .args(arguments)
+                                    .output()
+                                    .await
+                                    .map(|o| String::from_utf8_lossy(&o.stdout).into_owned())
+                                    .unwrap_or_else(|e| e.to_string())
+                                    .replace("\n", " ")
+                                    .trim()
+                                    .to_owned();
+
+                                (Some(output), None)
+                            }
+                            _ => return Err(CommandError::NoPermissions),
+                        },
+                        _ => return Err(CommandError::NoPermissions),
+                    }
                 }
                 _ => match self
                     .db
