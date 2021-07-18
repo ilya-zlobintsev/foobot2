@@ -21,11 +21,11 @@ pub async fn index(cmd: &State<CommandHandler>, session: Option<WebSession>) -> 
 pub async fn commands_page(
     cmd: &State<CommandHandler>,
     session: Option<WebSession>,
-    channel_id: String,
+    channel_id: u64,
 ) -> Html<Template> {
     let moderator = {
         if let Some(session) = &session {
-            match get_permissions(&channel_id, session.user_id, cmd).await {
+            match get_permissions(channel_id, session.user_id, cmd).await {
                 Ok(permissions) => {
                     tracing::info!("User permissions: {:?}", permissions);
 
@@ -43,10 +43,10 @@ pub async fn commands_page(
         "commands",
         &CommandsContext {
             parent_context: LayoutContext::new_with_auth(session),
-            channel: channel_id.clone(),
+            channel: channel_id,
             commands: cmd
                 .db
-                .get_commands(channel_id.parse().unwrap())
+                .get_commands(channel_id)
                 .expect("Failed to get commands"),
             moderator,
         },
@@ -54,20 +54,19 @@ pub async fn commands_page(
 }
 
 #[post("/<channel_id>/commands", data = "<command_form>")]
-pub async fn add_command(
-    command_form: Form<AddCommandForm>,
+pub async fn update_command(
+    command_form: Form<CommandForm>,
     cmd: &State<CommandHandler>,
     session: WebSession,
-    channel_id: String,
+    channel_id: u64,
 ) -> Result<Redirect, ApiError> {
-    let permissions = get_permissions(&channel_id, session.user_id, cmd).await?;
+    tracing::info!("{:?}", command_form);
 
-    if permissions == Permissions::ChannelMod {
-        cmd.db.add_command_to_channel_id(
-            channel_id.parse().unwrap(),
-            &command_form.cmd_trigger,
-            &command_form.cmd_action,
-        )?;
+    let permissions = get_permissions(channel_id, session.user_id, cmd).await?;
+
+    if permissions >= Permissions::ChannelMod {
+        cmd.db
+            .update_command(channel_id, &command_form.trigger, &command_form.action)?;
     }
 
     Ok(Redirect::to(format!("/channels/{}/commands", channel_id)))
@@ -78,14 +77,14 @@ pub async fn not_found(_: &Request<'_>) -> Redirect {
     Redirect::to("/channels")
 }
 
-#[derive(FromForm)]
-pub struct AddCommandForm {
-    pub cmd_trigger: String,
-    pub cmd_action: String,
+#[derive(FromForm, Debug)]
+pub struct CommandForm {
+    pub trigger: String,
+    pub action: String,
 }
 
 pub async fn get_permissions(
-    channel_id: &str,
+    channel_id: u64,
     user_id: u64,
     cmd: &CommandHandler,
 ) -> Result<Permissions, ApiError> {
@@ -102,7 +101,7 @@ pub async fn get_permissions(
 
     match cmd
         .db
-        .get_channel_by_id(channel_id.parse().expect("Invalid Channel ID"))?
+        .get_channel_by_id(channel_id)?
     {
         Some(channel) => match ChannelIdentifier::new(&channel.platform, channel.channel)? {
             ChannelIdentifier::TwitchChannelID(channel_id) => {

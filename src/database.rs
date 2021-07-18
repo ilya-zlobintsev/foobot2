@@ -313,6 +313,25 @@ impl Database {
         self.add_command_to_channel(channel, command_name, command_action)
     }
 
+    pub fn update_command(
+        &self,
+        channel_id: u64,
+        command_name: &str,
+        command_action: &str,
+    ) -> Result<(), DatabaseError> {
+        let mut conn = self.conn_pool.get().unwrap();
+
+        let command = commands::table
+            .filter(commands::channel_id.eq(channel_id))
+            .filter(commands::name.eq(command_name));
+
+        diesel::update(command)
+            .set(commands::action.eq(command_action))
+            .execute(&mut conn)?;
+
+        Ok(())
+    }
+
     pub fn delete_command(
         &self,
         channel_identifier: &ChannelIdentifier,

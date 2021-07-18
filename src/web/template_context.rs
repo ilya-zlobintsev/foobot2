@@ -19,7 +19,7 @@ pub struct ChannelsContext {
 #[derive(Serialize)]
 pub struct CommandsContext {
     pub parent_context: LayoutContext,
-    pub channel: String,
+    pub channel: u64,
     pub commands: Vec<Command>,
     pub moderator: bool,
 }

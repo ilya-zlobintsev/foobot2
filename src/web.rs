@@ -40,7 +40,7 @@ pub async fn run(command_handler: CommandHandler) -> JoinHandle<()> {
             .mount("/", routes![index])
             .mount(
                 "/channels",
-                routes![channel::index, channel::commands_page, channel::add_command],
+                routes![channel::index, channel::commands_page, channel::update_command],
             )
             .mount(
                 "/authenticate",

@@ -8,6 +8,7 @@ use tokio::task::JoinHandle;
 
 use serde::{Deserialize, Serialize};
 
+use std::cmp::Ordering;
 use std::env::{self, VarError};
 use std::fmt;
 
@@ -152,17 +153,22 @@ impl Permissions {
     }
 }
 
-/*impl PartialOrd for Permissions {
+impl PartialOrd for Permissions {
     fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
         match self {
-            Permissions::BotAdmin => match other {
-                Permissions::BotAdmin => Some(Ordering::Equal),
-                Permissions::ChannelMod => Some(Ordering::Greater),
-            }
+            Permissions::Admin => match other {
+                Permissions::Admin => Some(Ordering::Equal),
+                Permissions::ChannelMod | Permissions::Default => Some(Ordering::Greater),
+            },
             Permissions::ChannelMod => match other {
-                Permissions::BotAdmin => Some(Ordering::Less),
+                Permissions::Admin => Some(Ordering::Less),
                 Permissions::ChannelMod => Some(Ordering::Equal),
-            }
+                Permissions::Default => Some(Ordering::Greater),
+            },
+            Permissions::Default => match other {
+                Permissions::ChannelMod | Permissions::Admin => Some(Ordering::Less),
+                Permissions::Default => Some(Ordering::Equal),
+            },
         }
     }
-}*/
+}
