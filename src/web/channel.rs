@@ -1,4 +1,7 @@
-use crate::platform::{ChannelIdentifier, Permissions};
+use crate::{
+    database::models::NewCommand,
+    platform::{ChannelIdentifier, Permissions},
+};
 
 use super::api::ApiError;
 use super::*;
@@ -65,11 +68,31 @@ pub async fn update_command(
     let permissions = get_permissions(channel_id, session.user_id, cmd).await?;
 
     if permissions >= Permissions::ChannelMod {
-        cmd.db
-            .update_command(channel_id, &command_form.trigger, &command_form.action)?;
+        cmd.db.update_command(NewCommand {
+            name: &command_form.trigger,
+            action: &command_form.action,
+            permissions: None,
+            channel_id,
+            cooldown: 5,
+        })?;
     }
 
     Ok(Redirect::to(format!("/channels/{}/commands", channel_id)))
+}
+
+#[delete("/<channel_id>/commands", data = "<trigger>")]
+pub async fn delete_command(
+    channel_id: u64,
+    session: WebSession,
+    cmd: &State<CommandHandler>,
+    trigger: &str,
+) -> Result<(), ApiError> {
+    let permissions = get_permissions(channel_id, session.user_id, cmd).await?;
+
+    if permissions >= Permissions::ChannelMod {
+        cmd.db.delete_command(channel_id, trigger)?;
+    }
+    Ok(())
 }
 
 #[catch(404)]
@@ -99,10 +122,7 @@ pub async fn get_permissions(
         }
     }
 
-    match cmd
-        .db
-        .get_channel_by_id(channel_id)?
-    {
+    match cmd.db.get_channel_by_id(channel_id)? {
         Some(channel) => match ChannelIdentifier::new(&channel.platform, channel.channel)? {
             ChannelIdentifier::TwitchChannelID(channel_id) => {
                 let twitch_id = user.twitch_id.ok_or_else(|| {

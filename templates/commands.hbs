@@ -13,14 +13,31 @@
         }
         else {
             document.getElementById("command-dialog-title").innerHTML = "Add command";
-        } 
-        
+        }
+
 
         document.getElementById("command-dialog").style.display = "flex";
     }
 
     function closeCommandEditDialog() {
         document.getElementById("command-dialog").style.display = "none";
+    }
+
+    async function deleteCommand(command_trigger) {
+        if (confirm("Are you sure you want to delete the command \"" + command_trigger + "\"?")) {
+            const url = window.location.href;
+
+            const options = {
+                method: "DELETE",
+                body: command_trigger,
+                credentails: "same-origin"
+            }
+
+            await fetch(url, options);
+
+            window.location.reload();
+        }
+
     }
 </script>
 
@@ -98,8 +115,9 @@
         background-color: rgba(0, 0, 0, 0.8);
     }
 
-    .modal-fader.active {
-        display: block;
+    #add-command-button {
+        margin: 20px;
+        min-width: 15%;
     }
 </style>
 
@@ -138,7 +156,7 @@
                         <button type="button" onclick="showCommandEditDialog('{{ this.name }}')">
                             <img src="/static/edit.svg" height="16" />
                         </button>
-                        <button type="button">
+                        <button type="button" onclick="deleteCommand('{{ this.name }}')">
                             <img src="/static/cancel.svg" height="16" />
                         </button>
                     </div>
@@ -148,6 +166,9 @@
             {{/each}}
         </tbody>
     </table>
+    {{ #if moderator }}
+    <button type="button" id="add-command-button" onclick="showCommandEditDialog(null)">Add command</button>
+    {{ /if }}
 </section>
 
 <div id="command-dialog">

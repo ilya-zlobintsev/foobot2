@@ -9,7 +9,7 @@ use std::time::Duration;
 use self::models::*;
 use crate::command_handler::spotify_api::SpotifyApi;
 use crate::database::schema::*;
-use crate::platform::{ChannelIdentifier, UserIdentifier, UserIdentifierError};
+use crate::platform::{ChannelIdentifier, Permissions, UserIdentifier, UserIdentifierError};
 
 use dashmap::DashMap;
 use diesel::mysql::MysqlConnection;
@@ -162,7 +162,7 @@ impl Database {
         channels::table.order(channels::id).load(&mut conn)
     }
 
-    pub fn get_channel(
+    pub fn get_or_create_channel(
         &self,
         channel_identifier: &ChannelIdentifier,
     ) -> Result<Option<Channel>, diesel::result::Error> {
@@ -191,7 +191,7 @@ impl Database {
                         .execute(&mut conn)
                         .expect("Failed to create channel");
 
-                    self.get_channel(&channel_identifier)
+                    self.get_or_create_channel(&channel_identifier)
                 }
             }
         } else {
@@ -265,35 +265,30 @@ impl Database {
             .load::<Command>(&mut conn)
     }
 
-    pub fn add_command(
-        &self,
-        channel_identifier: &ChannelIdentifier,
-        command_name: &str,
-        command_action: &str,
-    ) -> Result<(), DatabaseError> {
-        match self.get_channel(channel_identifier)? {
-            Some(channel) => self.add_command_to_channel(channel, command_name, command_action),
-            None => Err(DatabaseError::NotAllowed),
-        }
-    }
-
     pub fn add_command_to_channel(
         &self,
-        channel: Channel,
-        command_name: &str,
-        command_action: &str,
+        channel_identifier: &ChannelIdentifier,
+        trigger: &str,
+        action: &str,
     ) -> Result<(), DatabaseError> {
-        match BUILTIN_COMMANDS.contains(&command_name) {
+        let channel_id = self.get_or_create_channel(channel_identifier)?.unwrap().id;
+
+        self.add_command(NewCommand {
+            name: trigger,
+            action,
+            permissions: None,
+            channel_id,
+            cooldown: 5,
+        })
+    }
+
+    fn add_command(&self, command: NewCommand) -> Result<(), DatabaseError> {
+        match BUILTIN_COMMANDS.contains(&command.name) {
             false => {
                 let mut conn = self.conn_pool.get().unwrap();
 
                 diesel::insert_into(commands::table)
-                    .values(&NewCommand {
-                        name: command_name,
-                        action: command_action,
-                        permissions: None,
-                        channel_id: channel.id,
-                    })
+                    .values(&command)
                     .execute(&mut conn)?;
 
                 Ok(())
@@ -302,64 +297,39 @@ impl Database {
         }
     }
 
-    pub fn add_command_to_channel_id(
-        &self,
-        channel_id: u64,
-        command_name: &str,
-        command_action: &str,
-    ) -> Result<(), DatabaseError> {
-        let channel = self.get_channel_by_id(channel_id)?.unwrap();
-
-        self.add_command_to_channel(channel, command_name, command_action)
-    }
-
-    pub fn update_command(
-        &self,
-        channel_id: u64,
-        command_name: &str,
-        command_action: &str,
-    ) -> Result<(), DatabaseError> {
+    pub fn update_command(&self, command: NewCommand) -> Result<(), DatabaseError> {
         let mut conn = self.conn_pool.get().unwrap();
 
-        let command = commands::table
-            .filter(commands::channel_id.eq(channel_id))
-            .filter(commands::name.eq(command_name));
-
-        diesel::update(command)
-            .set(commands::action.eq(command_action))
+        diesel::replace_into(commands::table)
+            .values(&command)
             .execute(&mut conn)?;
 
         Ok(())
     }
 
-    pub fn delete_command(
+    pub fn delete_command_from_channel(
         &self,
         channel_identifier: &ChannelIdentifier,
         command_name: &str,
     ) -> Result<(), DatabaseError> {
+        let channel = self.get_or_create_channel(channel_identifier)?.unwrap();
+
+        self.delete_command(channel.id, command_name)
+    }
+
+    pub fn delete_command(&self, channel_id: u64, command_name: &str) -> Result<(), DatabaseError> {
         let mut conn = self.conn_pool.get().unwrap();
 
-        if let Some(channel) = channel_identifier.get_channel() {
-            diesel::delete(
-                commands::table
-                    .filter(
-                        commands::channel_id.eq_any(
-                            channels::table
-                                .filter(
-                                    channels::platform
-                                        .eq_all(channel_identifier.get_platform_name().unwrap()),
-                                )
-                                .filter(channels::channel.eq_all(channel))
-                                .select(channels::id),
-                        ),
-                    )
-                    .filter(commands::name.eq_all(command_name)),
-            )
-            .execute(&mut conn)?;
+        let affected = diesel::delete(
+            commands::table
+                .filter(commands::channel_id.eq(channel_id))
+                .filter(commands::name.eq_all(command_name)),
+        )
+        .execute(&mut conn)?;
 
-            Ok(())
-        } else {
-            Err(DatabaseError::InvalidValue)
+        match affected {
+            0 => Err(DatabaseError::InvalidValue),
+            _ => Ok(()),
         }
     }
 

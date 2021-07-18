@@ -57,6 +57,7 @@ pub struct NewCommand<'a> {
     pub action: &'a str,
     pub permissions: Option<&'a str>,
     pub channel_id: u64,
+    pub cooldown: u64,
 }
 
 #[derive(Queryable, Insertable, Debug, PartialEq, Eq)]

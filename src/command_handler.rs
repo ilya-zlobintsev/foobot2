@@ -373,7 +373,7 @@ impl CommandHandler {
                 "{}/channels/{}/commands",
                 env::var("BASE_URL")?,
                 self.db
-                    .get_channel(&execution_context.get_channel())?
+                    .get_or_create_channel(&execution_context.get_channel())?
                     .ok_or_else(|| CommandError::InvalidArgument(
                         "can't add commands outside of channels".to_string()
                     ))?
@@ -398,7 +398,7 @@ impl CommandHandler {
                                 ));
                             }
 
-                            match self.db.add_command(
+                            match self.db.add_command_to_channel(
                                 &execution_context.get_channel(),
                                 command_name,
                                 &command_action,
@@ -420,7 +420,7 @@ impl CommandHandler {
 
                             match self
                                 .db
-                                .delete_command(&execution_context.get_channel(), command_name)
+                                .delete_command_from_channel(&execution_context.get_channel(), command_name)
                             {
                                 Ok(()) => Ok(Some("Command succesfully removed".to_string())),
                                 Err(e) => Err(CommandError::DatabaseError(e)),
