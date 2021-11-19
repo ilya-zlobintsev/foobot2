@@ -29,7 +29,13 @@ const TWITCH_SCOPES: &[&'static str] = &[""];
 const DISCORD_SCOPES: &'static str = "identify";
 const SPOTIFY_SCOPES: &[&'static str] = &["user-read-playback-state", "user-read-recently-played"];
 
-const TWITCH_BOT_SCOPES: &[&'static str] = &["chat:read", "chat:edit", "whispers:read", "whispers:edit", "channel:moderate"];
+const TWITCH_BOT_SCOPES: &[&'static str] = &[
+    "chat:read",
+    "chat:edit",
+    "whispers:read",
+    "whispers:edit",
+    "channel:moderate",
+];
 
 #[get("/")]
 pub async fn index(session: Option<WebSession>) -> Html<Template> {
@@ -70,7 +76,7 @@ pub async fn authenticate_twitch_bot(
             tracing::info!("Authenticating the bot (Twitch):");
 
             let client_id = TwitchApi::get_client_id().expect("Twitch client ID not specified");
-            
+
             let uri = AuthPlatform::Twitch.construct_uri(
                 &client_id,
                 &TWITCH_BOT_SCOPES.join("%20"),
@@ -96,8 +102,10 @@ pub async fn twitch_redirect(
     jar: &CookieJar<'_>,
     current_session: Option<WebSession>,
 ) -> Redirect {
-    let auth_info = trade_twitch_code(&cmd.db, client, code).await.expect("Failed to get tokens");
-    
+    let auth_info = trade_twitch_code(&cmd.db, client, code)
+        .await
+        .expect("Failed to get tokens");
+
     tracing::info!(
         "User authenticated with access token {}",
         auth_info.access_token
@@ -109,7 +117,8 @@ pub async fn twitch_redirect(
 
     let twitch_user = twitch_api.get_self_user().await.unwrap();
 
-    let user = cmd.db
+    let user = cmd
+        .db
         .get_or_create_user(&UserIdentifier::TwitchID(twitch_user.id))
         .expect("DB error");
 
@@ -135,23 +144,34 @@ pub async fn twitch_bot_redirect(
     cmd: &State<CommandHandler>,
     client: &State<Client>,
     code: &str,
-    jar: &CookieJar<'_>,
-    current_session: Option<WebSession>,
-) -> Redirect {
-    let auth_response = trade_twitch_code(&cmd.db, client, code).await.expect("Failed to get Twitch auth response");
-    
-    let current = Utc::now();
-    
-    cmd.db.save_token(&UserAccessToken{
-        access_token: auth_response.access_token,
-        refresh_token: auth_response.refresh_token,
-        created_at: current,
-        expires_at: Some(current + Duration::seconds(auth_response.expires_in)),
-    }).expect("Failed to save token");
-    
-    tracing::info!("Successfully authenticated the bot and saved the token!");
-    
-    Redirect::found("/profile")
+    current_session: WebSession,
+) -> Result<Redirect, status::Unauthorized<&'static str>> {
+    if let Ok(Some(admin_user)) = cmd.db.get_admin_user() {
+        if admin_user.id == current_session.user_id {
+            let auth_response = trade_twitch_code(&cmd.db, client, code)
+                .await
+                .expect("Failed to get Twitch auth response");
+
+            let current = Utc::now();
+
+            cmd.db
+                .save_token(&UserAccessToken {
+                    access_token: auth_response.access_token,
+                    refresh_token: auth_response.refresh_token,
+                    created_at: current,
+                    expires_at: Some(current + Duration::seconds(auth_response.expires_in)),
+                })
+                .expect("Failed to save token");
+
+            tracing::info!("Successfully authenticated the bot and saved the token!");
+
+            Ok(Redirect::found("/profile"))
+        } else {
+            Err(status::Unauthorized(Some("Not admin user!")))
+        }
+    } else {
+        Err(status::Unauthorized(Some("Admin user not configured!")))
+    }
 }
 
 async fn trade_twitch_code(
