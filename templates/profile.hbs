@@ -28,10 +28,17 @@
         padding: 20px;
         margin-right: auto;
         margin-left: auto;
+        
+        display: flex;
+        justify-content: center;
     }
 
     div {
         text-align: center;
+    }
+    
+    a:link, a:visited {
+        color: lightblue;
     }
 </style>
 
@@ -40,18 +47,18 @@
         <p><b>Name: </b>{{ parent_context.session.username }}</p>
         <p><b>User ID: </b>{{ user.id }}</p>
         <p><b>Twitch ID: </b>
-        {{ #with (user.twitch_id) }} 
-        {{ this }} 
-        {{ else }}
-        <a href="/authenticate/twitch">Connect</a>
-        {{ /with }}
+            {{ #with (user.twitch_id) }}
+            {{ this }}
+            {{ else }}
+            <a href="/authenticate/twitch">Connect</a>
+            {{ /with }}
         </p>
         <p><b>Discord ID: </b>
-        {{ #with (user.discord_id) }} 
-        {{ this }} 
-        {{ else }}
-        <a href="/authenticate/discord">Connect</a>
-        {{ /with }}
+            {{ #with (user.discord_id) }}
+            {{ this }}
+            {{ else }}
+            <a href="/authenticate/discord">Connect</a>
+            {{ /with }}
         </p>
         <p><b>Spotify: </b>
             {{ #if spotify_connected }}
@@ -71,6 +78,12 @@
             <button type="button" onclick="setLastfmName()">Set</button>
         </p>
     </div>
+    {{ #if admin }}
+    <div>
+        <p>Admin options:</p>
+        <a href="/authenticate/twitch/bot">Authenticate bot (Twitch)</a>
+    </div>
+    {{ /if }}
 </section>
 
 {{/inline}}

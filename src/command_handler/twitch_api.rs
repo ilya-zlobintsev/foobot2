@@ -1,10 +1,11 @@
 pub mod model;
 
 use std::collections::HashMap;
-use std::env;
+use std::env::{self, var};
 use std::sync::{Arc, RwLock};
 use std::time::Duration;
 
+use futures::TryFutureExt;
 use reqwest::{header::HeaderMap, Client};
 use serde_json::json;
 use tokio::task;
@@ -137,9 +138,9 @@ impl TwitchApi {
             .unwrap()
     }
 
-    pub fn get_client_id(&self) -> &str {
+    /*pub fn get_client_id(&self) -> &str {
         self.headers.get("Client-Id").unwrap().to_str().unwrap()
-    }
+    }*/
 
     pub async fn get_users(
         &self,
@@ -222,7 +223,7 @@ impl TwitchApi {
             "Authorization",
             format!("OAuth {}", self.get_oauth()).parse().unwrap(),
         );
-        headers.insert("Client", self.get_client_id().to_owned().parse().unwrap());
+        headers.insert("Client", Self::get_client_id().unwrap().parse().unwrap());
 
         let mut payload = HashMap::new();
         // params.insert("channelID", channel_id);
@@ -371,6 +372,15 @@ impl TwitchApi {
 
         Ok(())
     }
+    
+    pub fn get_client_id() -> Option<String> {
+        env::var("TWITCH_CLIENT_ID").ok()
+    }
+
+    pub fn get_client_secret() -> Option<String> {
+        env::var("TWITCH_CLIENT_SECRET").ok()
+    }
+
 
     // This terrible abomination has to exist because twitch doesn't provide an endpoint for this that doesn't require channel auth
     // /// Returns the list of logins of channel moderators. Don't expect this to be efficient

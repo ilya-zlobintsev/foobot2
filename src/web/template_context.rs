@@ -31,6 +31,7 @@ pub struct AuthenticateContext {
 
 #[derive(Serialize)]
 pub struct ProfileContext {
+    pub admin: bool,
     pub user: User,
     pub spotify_connected: bool,
     pub parent_context: LayoutContext,

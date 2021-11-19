@@ -24,6 +24,7 @@ use reqwest::Client;
 use tokio::time;
 
 use diesel_migrations::{embed_migrations, EmbeddedMigrations, MigrationHarness};
+use twitch_irc::login::UserAccessToken;
 pub const MIGRATIONS: EmbeddedMigrations = embed_migrations!();
 
 const BUILTIN_COMMANDS: &'static [&'static str] = &[
@@ -31,7 +32,7 @@ const BUILTIN_COMMANDS: &'static [&'static str] = &[
     "checkcmd",
 ];
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct Database {
     conn_pool: Pool<ConnectionManager<MysqlConnection>>,
     web_sessions_cache: Arc<DashMap<String, WebSession>>,
@@ -445,6 +446,28 @@ impl Database {
         user
     }
 
+    pub fn get_auth(&self, key: &str) -> Result<Option<String>, DatabaseError> {
+        let mut conn = self.conn_pool.get().unwrap();
+
+        Ok(auth::table
+            .filter(auth::name.eq_all(key))
+            .select(auth::value)
+            .load(&mut conn)?
+            .into_iter()
+            .next()
+            .unwrap_or_default())
+    }
+
+    pub fn set_auth(&self, key: &str, value: &str) -> Result<(), DatabaseError> {
+        let mut conn = self.conn_pool.get().unwrap();
+
+        diesel::replace_into(auth::table)
+            .values((auth::name.eq(key), auth::value.eq(value)))
+            .execute(&mut conn)?;
+
+        Ok(())
+    }
+
     fn get_user_data_value(
         &self,
         user_id: u64,
@@ -579,6 +602,19 @@ impl Database {
             .execute(&mut conn)?;
 
         Ok(session.session_id)
+    }
+
+    pub fn save_token(&self, token: &UserAccessToken) -> Result<(), DatabaseError> {
+        self.set_auth("twitch_access_token", &token.access_token)?;
+        self.set_auth("twitch_refresh_token", &token.refresh_token)?;
+
+        self.set_auth("twitch_created_at", &token.created_at.to_rfc3339())?;
+
+        if let Some(expires_at) = token.expires_at {
+            self.set_auth("twitch_expires_at", &expires_at.to_rfc3339())?;
+        }
+
+        Ok(())
     }
 }
 

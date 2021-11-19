@@ -1,5 +1,5 @@
 mod api;
-mod authenticate;
+pub mod authenticate;
 mod channel;
 mod errors;
 mod profile;
@@ -52,7 +52,9 @@ pub async fn run(command_handler: CommandHandler) -> JoinHandle<()> {
                 routes![
                     authenticate::index,
                     authenticate::authenticate_twitch,
+                    authenticate::authenticate_twitch_bot,
                     authenticate::twitch_redirect,
+                    authenticate::twitch_bot_redirect,
                     authenticate::authenticate_discord,
                     authenticate::discord_redirect,
                     authenticate::authenticate_spotify,

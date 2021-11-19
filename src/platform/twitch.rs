@@ -1,27 +1,31 @@
-use std::sync::{Arc, RwLock};
+use std::{
+    env,
+    sync::{Arc, RwLock},
+};
 
 use async_trait::async_trait;
+use chrono::{DateTime, FixedOffset, Utc};
 use std::time::Instant;
 use tokio::task::{self, JoinHandle};
 use twitch_irc::{
-    login::StaticLoginCredentials,
+    login::{RefreshingLoginCredentials, StaticLoginCredentials, TokenStorage, UserAccessToken},
     message::{Badge, PrivmsgMessage, ServerMessage, TwitchUserBasics, WhisperMessage},
     ClientConfig, SecureTCPTransport, TwitchIRCClient,
 };
 
 use crate::{
     command_handler::{twitch_api::TwitchApi, CommandHandler},
+    database::{Database, DatabaseError},
     platform::{ChannelIdentifier, ExecutionContext, Permissions},
 };
 
-use super::{ChatPlatform, UserIdentifier};
+use super::{ChatPlatform, ChatPlatformError, UserIdentifier};
 
 #[derive(Clone)]
 pub struct Twitch {
-    client: Arc<RwLock<Option<TwitchIRCClient<SecureTCPTransport, StaticLoginCredentials>>>>,
+    client: Arc<RwLock<Option<TwitchIRCClient<SecureTCPTransport, RefreshingLoginCredentials<Database>>>>>,
     command_handler: CommandHandler,
     command_prefix: String,
-    credentials: StaticLoginCredentials,
 }
 
 impl Twitch {
@@ -84,40 +88,31 @@ impl Twitch {
 #[async_trait]
 impl ChatPlatform for Twitch {
     async fn init(command_handler: CommandHandler) -> Result<Box<Self>, super::ChatPlatformError> {
-        let credentials = match &command_handler.twitch_api {
-            Some(twitch_api) => {
-                let oauth = twitch_api.get_oauth();
-
-                let login = TwitchApi::validate_oauth(oauth).await?.login;
-
-                tracing::info!("Logging into Twitch as {}", login);
-
-                StaticLoginCredentials::new(login, Some(oauth.to_string()))
-            }
-            None => {
-                tracing::info!("Twitch API not initialized! Connecting to twitch anonymously");
-
-                StaticLoginCredentials::anonymous()
-            }
-        };
-
         let command_prefix = Self::get_prefix();
 
         Ok(Box::new(Self {
             client: Arc::new(RwLock::new(None)),
             command_handler,
             command_prefix,
-            credentials,
         }))
     }
 
     async fn run(self) -> JoinHandle<()> {
+
+        let login = env::var("TWITCH_LOGIN_NAME").expect("TWITCH_LOGIN_NAME missing");
+        let client_id = TwitchApi::get_client_id().expect("Twitch client id missing");
+        let client_secret = env::var("TWITCH_CLIENT_SECRET").expect("TWITCH_CLIENT_SECRET missing");
+
+        let credentials =
+            RefreshingLoginCredentials::new(login, client_id, client_secret, self.command_handler.db.clone());
+
+
+        let config = ClientConfig::new_simple(credentials);
+
         tracing::info!("Connected to Twitch");
 
-        let config = ClientConfig::new_simple(self.credentials.clone());
-
         let (mut incoming_messages, client) =
-            TwitchIRCClient::<SecureTCPTransport, StaticLoginCredentials>::new(config);
+            TwitchIRCClient::new(config);
 
         *self.client.write().unwrap() = Some(client.clone());
 
@@ -151,6 +146,45 @@ impl ChatPlatform for Twitch {
 
         sender
     }*/
+}
+
+#[async_trait]
+impl TokenStorage for Database {
+    type LoadError = DatabaseError;
+    type UpdateError = DatabaseError;
+
+    async fn load_token(&mut self) -> Result<UserAccessToken, Self::LoadError> {
+        let access_token = self.get_auth("twitch_access_token")?.unwrap_or_default();
+        let refresh_token = self.get_auth("twitch_refresh_token")?.unwrap_or_default();
+
+        let created_at = DateTime::from_utc(
+            DateTime::parse_from_rfc3339(&self.get_auth("twitch_created_at")?.unwrap_or_default())
+                .expect("Failed to parse time")
+                .naive_utc(),
+            Utc,
+        );
+
+        let expires_at = match self.get_auth("twitch_expires_at")? {
+            Some(date) => Some(DateTime::from_utc(
+                DateTime::parse_from_rfc3339(&date)
+                    .expect("Failed to parse time")
+                    .naive_utc(),
+                Utc,
+            )),
+            None => None,
+        };
+
+        Ok(UserAccessToken {
+            access_token,
+            refresh_token,
+            created_at,
+            expires_at,
+        })
+    }
+
+    async fn update_token(&mut self, token: &UserAccessToken) -> Result<(), Self::UpdateError> {
+        self.save_token(token)
+    }
 }
 
 pub trait TwitchMessage {

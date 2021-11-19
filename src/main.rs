@@ -45,26 +45,29 @@ async fn main() {
         Ok(twitch) => {
             handles.push(twitch.clone().run().await);
 
-            let twitch_api = command_handler.twitch_api.as_ref().unwrap();
+            match command_handler.twitch_api.as_ref() {
+                Some(twitch_api) => {
+                    let channel_ids: Vec<&str> = channels
+                        .iter()
+                        .filter_map(|channel| {
+                            if channel.platform == "twitch" {
+                                Some(channel.channel.as_str())
+                            } else {
+                                None
+                            }
+                        })
+                        .collect();
 
-            let channel_ids: Vec<&str> = channels
-                .iter()
-                .filter_map(|channel| {
-                    if channel.platform == "twitch" {
-                        Some(channel.channel.as_str())
-                    } else {
-                        None
+                    let twitch_channels = twitch_api
+                        .get_users(None, Some(&channel_ids))
+                        .await
+                        .expect("Failed to get users");
+
+                    for channel in twitch_channels {
+                        twitch.join_channel(channel.login);
                     }
-                })
-                .collect();
-
-            let twitch_channels = twitch_api
-                .get_users(None, Some(&channel_ids))
-                .await
-                .expect("Failed to get users");
-
-            for channel in twitch_channels {
-                twitch.join_channel(channel.login);
+                }
+                None => tracing::info!("Twitch API not initialized, skipping"),
             }
         }
         Err(e) => {
