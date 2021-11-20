@@ -1,10 +1,10 @@
 pipeline:
   publish-docker:
     image: plugins/docker
-    username: ${DOCKER_USERNAME}
-    password: ${DOCKER_PASSWORD}
-    email: ${DOCKER_EMAIL}
     repo: ilyazzz/foobot2
     tags:
       - latest
-    secrets: [ DOCKER_USERNAME, DOCKER_PASSWORD, DOCKER_EMAIL ]
+    username:
+      from_secret: DOCKER_USERNAME
+    password:
+      from_secret: DOCKER_PASSWORD
