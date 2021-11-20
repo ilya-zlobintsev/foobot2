@@ -12,11 +12,11 @@ RUN mkdir src
 RUN echo "fn main() {}" > src/main.rs
 RUN cargo build --release
 
+COPY src migrations ./
+
 # We need to touch our real main.rs file or else docker will use
 # the cached one.
-COPY . .
 RUN touch src/main.rs
-
 
 RUN cargo build --release
 
@@ -28,8 +28,6 @@ RUN apt-get install --assume-yes libmariadb-dev-compat ca-certificates openssl
 WORKDIR /app
 
 COPY --from=builder /build/target/release/foobot2 .
-COPY static ./static
-COPY templates ./templates
-COPY Rocket.toml .
+COPY static templates Rocket.toml ./
 
 CMD ["/app/foobot2"]
