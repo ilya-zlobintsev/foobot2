@@ -56,6 +56,7 @@ impl ChatPlatform for Irc {
             nickname: env::var("IRC_NICKNAME").ok(),
             nick_password: env::var("IRC_PASSWORD").ok(),
             server: env::var("IRC_SERVER").ok(),
+            alt_nicks: vec!["foobot_alt_nick".to_owned()],
             channels: {
                 match env::var("IRC_CHANNELS") {
                     Ok(channels) => {
@@ -119,7 +120,7 @@ impl ExecutionContext for IrcExecutionContext<'_> {
     }
 
     fn get_channel(&self) -> ChannelIdentifier {
-        ChannelIdentifier::IrcChannel(self.0.prefix.as_ref().unwrap().to_string())
+        ChannelIdentifier::IrcChannel(self.0.response_target().unwrap().to_owned())
     }
 
     fn get_user_identifier(&self) -> UserIdentifier {
