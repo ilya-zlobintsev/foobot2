@@ -7,3 +7,4 @@ pipeline:
     repo: ilyazzz/foobot2
     tags:
       - latest
+    secrets: [ DOCKER_USERNAME, DOCKER_PASSWORD, DOCKER_EMAIL ]
