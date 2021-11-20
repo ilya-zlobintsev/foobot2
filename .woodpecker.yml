@@ -1,0 +1,9 @@
+pipeline:
+  publish-docker:
+    image: plugins/docker
+    username: ${DOCKER_USERNAME}
+    password: ${DOCKER_PASSWORD}
+    email: ${DOCKER_EMAIL}
+    repo: ilyazzz/foobot2
+    tags:
+      - latest
