@@ -1,5 +1,5 @@
 pipeline:
-  publish-docker:
+  build-push:
     image: docker
     commands:
       - echo $DOCKER_PASSWORD | docker login -u $DOCKER_USERNAME --password-stdin
@@ -8,3 +8,18 @@ pipeline:
     secrets: [ DOCKER_USERNAME, DOCKER_PASSWORD ]
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
+        
+  deploy:
+    image: appleboy/drone-ssh
+    host:
+      from_secret: ssh_host
+    username:
+      from_secret: ssh_user
+    port:
+      from_secret: ssh_port
+    key:
+      from_secret: ssh_key
+    script:
+      - cd $DEPLOY_PATH
+      - docker compose pull
+      - docker compose up -d
