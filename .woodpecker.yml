@@ -11,15 +11,13 @@ pipeline:
         
   deploy:
     image: appleboy/drone-ssh
-    host:
-      from_secret: ssh_host
-    username:
-      from_secret: ssh_user
-    port:
-      from_secret: ssh_port
-    key:
-      from_secret: ssh_key
+    host: ${SSH_HOST}
+    port: 22
+    key_path: /root/.ssh/id_rsa
+    secrets: [ ssh_host, ssh_username ]
+    volumes:
+      - /root/.ssh/id_rsa:/root/.ssh/id_rsa
     script:
-      - cd $DEPLOY_PATH
+      - cd ~/docker/foobot/
       - docker compose pull
       - docker compose up -d
