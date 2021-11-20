@@ -10,12 +10,12 @@ use twilight_util::permission_calculator::PermissionCalculator;
 
 #[derive(Clone, Debug)]
 pub struct DiscordApi {
-    http: Client,
+    http: Arc<Client>,
     permissions_cache: Arc<RwLock<HashMap<(u64, u64), Permissions>>>, // (guild_id, user_id)
 }
 
 impl DiscordApi {
-    pub fn new(token: &str) -> Self {
+    pub fn new(token: String) -> Self {
         let permissions_cache = Arc::new(RwLock::new(HashMap::new()));
 
         {
@@ -34,13 +34,13 @@ impl DiscordApi {
         }
 
         Self {
-            http: Client::new(token),
+            http: Arc::new(Client::new(token)),
             permissions_cache,
         }
     }
 
-    pub async fn get_self_user(&self) -> Result<CurrentUser, twilight_http::Error> {
-        self.http.current_user().await
+    pub async fn get_self_user(&self) -> anyhow::Result<CurrentUser> {
+        Ok(self.http.current_user().exec().await?.model().await?)
     }
 
     pub async fn get_permissions_in_guild(
@@ -61,20 +61,26 @@ impl DiscordApi {
 
                 tracing::debug!("Querying user permissions");
 
-                let user_id = UserId(user_id);
-                let guild_id = GuildId(guild_id);
+                let user_id = UserId::new(user_id).unwrap();
+                let guild_id = GuildId::new(guild_id).unwrap();
 
                 let guild_member = self
                     .http
                     .guild_member(guild_id, user_id)
+                    .exec()
                     .await?
-                    .expect("Not a guild member");
+                    .model()
+                    .await
+                    .unwrap();
 
                 let guild_roles = self
                     .http
                     .roles(guild_id)
+                    .exec()
+                    .await?
+                    .model()
                     .await
-                    .expect("Failed to get guild roles");
+                    .unwrap();
 
                 let mut member_roles = Vec::new();
 
@@ -98,7 +104,7 @@ impl DiscordApi {
 
                 let mut permissions_cache = self.permissions_cache.write().await;
 
-                permissions_cache.insert((guild_id.0, user_id.0), permissions);
+                permissions_cache.insert((guild_id.get(), user_id.get()), permissions);
 
                 Ok(permissions)
             }

@@ -1,9 +1,9 @@
-use std::env;
+use std::{env, sync::Arc};
 
 use futures::StreamExt;
 use twilight_gateway::{cluster::ShardScheme, Cluster, Event, Intents};
 use twilight_http::Client;
-use twilight_model::{gateway::payload::MessageCreate, guild::Permissions};
+use twilight_model::{gateway::payload::incoming::MessageCreate, guild::Permissions};
 
 use crate::command_handler::CommandHandler;
 
@@ -16,12 +16,10 @@ pub struct Discord {
 }
 
 impl Discord {
-    async fn handle_msg(&self, msg: MessageCreate, http: Client) {
+    async fn handle_msg(&self, msg: MessageCreate, http: Arc<Client>) {
         tracing::debug!("{:?}", msg);
         if let Some(content) = msg.content.strip_prefix(&self.prefix) {
-            http.create_typing_trigger(msg.channel_id)
-                .await
-                .expect("Failed to create typing trigger");
+            http.create_typing_trigger(msg.channel_id).exec().await.expect("Failed to create Discord typing trigger");
 
             let content = content.to_owned();
 
@@ -39,8 +37,9 @@ impl Discord {
                 {
                     http.create_message(msg.channel_id)
                         .reply(msg.id)
-                        .content(response)
+                        .content(&response)
                         .expect("Failed to construct message")
+                        .exec()
                         .await
                         .expect("Failed to reply in Discord");
                 }
@@ -73,14 +72,12 @@ impl ChatPlatform for Discord {
             .expect("Failed to connect to Discord");
 
         {
-            let cluster = cluster.clone();
-
             tokio::spawn(async move {
                 cluster.up().await;
             });
         }
 
-        let http = Client::new(&self.token);
+        let http = Arc::new(Client::new(self.token.clone()));
 
         tokio::spawn(async move {
             while let Some((_, event)) = events.next().await {
@@ -124,7 +121,7 @@ impl ExecutionContext for DiscordExecutionContext<'_> {
                     .discord_api
                     .as_ref()
                     .unwrap()
-                    .get_permissions_in_guild(self.msg.author.id.0, guild_id.0)
+                    .get_permissions_in_guild(self.msg.author.id.get(), guild_id.get())
                     .await
                     .expect("Failed to get permissions");
 

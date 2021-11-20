@@ -46,7 +46,7 @@ impl CommandHandler {
         };
 
         let discord_api = match env::var("DISCORD_TOKEN") {
-            Ok(token) => Some(DiscordApi::new(&token)),
+            Ok(token) => Some(DiscordApi::new(token)),
             Err(_) => None,
         };
 
