@@ -4,7 +4,8 @@ pipeline:
     repo: ilyazzz/foobot2
     tags:
       - latest
-    username:
-      from_secret: DOCKER_USERNAME
-    password:
-      from_secret: DOCKER_PASSWORD
+    secrets:
+      - source: DOCKER_USERNAME
+        target: plugin_username
+      - source: DOCKER_PASSWORD
+        target: plugin_password
