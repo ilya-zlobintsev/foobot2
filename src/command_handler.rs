@@ -154,6 +154,11 @@ impl CommandHandler {
                     )),
                     Some(5),
                 ),
+                "help" => (
+                    self.edit_cmds("commands", vec![], execution_context)
+                        .await?,
+                    Some(5),
+                ),
                 "cmd" | "command" | "commands" => (
                     self.edit_cmds(command, arguments, execution_context)
                         .await?,
@@ -161,16 +166,8 @@ impl CommandHandler {
                 ),
                 // Old commands for convenience
                 "addcmd" | "cmdadd" => (
-                    self.edit_cmds(
-                        "command",
-                        {
-                            let mut arguments = arguments;
-                            arguments.insert(0, "add");
-                            arguments
-                        },
-                        execution_context,
-                    )
-                    .await?,
+                    self.edit_cmds("command", vec!["add"], execution_context)
+                        .await?,
                     Some(1),
                 ),
                 "delcmd" | "cmddel" => (
