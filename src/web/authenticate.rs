@@ -109,7 +109,7 @@ pub async fn twitch_redirect(
         auth_info.access_token
     );
 
-    let twitch_api = TwitchApi::init(&auth_info.access_token)
+    let twitch_api = TwitchApi::init_with_token(&auth_info.access_token)
         .await
         .expect("Failed to initialize Twitch API");
 

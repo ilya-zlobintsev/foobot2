@@ -37,13 +37,10 @@ pub struct CommandHandler {
 
 impl CommandHandler {
     pub async fn init(db: Database) -> Self {
-        let twitch_api = match db.get_auth("twitch_access_token").expect("DB error") {
-            Some(oauth) => match TwitchApi::init(&oauth).await {
-                Ok(api) => Some(api),
-                Err(_) => None,
-            },
-            None => {
-                tracing::info!("twitch_access_token missing! Skipping Twitch initialization");
+        let twitch_api = match TwitchApi::init().await {
+            Ok(api) => Some(api),
+            Err(e) => {
+                tracing::info!("Failed to initialize Twitch API: {}", e);
                 None
             }
         };

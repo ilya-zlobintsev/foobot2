@@ -5,7 +5,9 @@ use async_trait::async_trait;
 use chrono::{DateTime, Utc};
 use std::time::Instant;
 use tokio::task::{self, JoinHandle};
-use twitch_irc::login::{RefreshingLoginCredentials, TokenStorage, UserAccessToken};
+use twitch_irc::login::{
+    LoginCredentials, RefreshingLoginCredentials, TokenStorage, UserAccessToken,
+};
 use twitch_irc::message::{Badge, PrivmsgMessage, ServerMessage, TwitchUserBasics, WhisperMessage};
 use twitch_irc::{ClientConfig, SecureTCPTransport, TwitchIRCClient};
 
@@ -27,15 +29,6 @@ pub struct Twitch {
 }
 
 impl Twitch {
-    pub fn join_channel(&self, channel: String) {
-        tracing::info!("Joining channel {}", channel);
-
-        let client = self.client.read().unwrap();
-        let client = client.as_ref().unwrap();
-
-        client.join(channel);
-    }
-
     async fn handle_message<T: 'static + TwitchMessage + Send + Sync>(&self, msg: T) {
         if let Some(message_text) = msg.get_content().strip_prefix(&self.command_prefix) {
             let message_text = message_text.to_owned();
@@ -107,13 +100,49 @@ impl ChatPlatform for Twitch {
             self.command_handler.clone(),
         );
 
-        let config = ClientConfig::new_simple(credentials);
+        let credentials_pair = credentials
+            .get_credentials()
+            .await
+            .expect("Failed to get credentials");
 
-        tracing::info!("Connected to Twitch");
+        let config = ClientConfig::new_simple(credentials);
 
         let (mut incoming_messages, client) = TwitchIRCClient::new(config);
 
+        tracing::info!("Connected to Twitch");
+
         *self.client.write().unwrap() = Some(client.clone());
+
+        let twitch_api = self
+            .command_handler
+            .twitch_api
+            .as_ref()
+            .expect("Twitch API is not initialized");
+
+        twitch_api.set_bearer_token(&credentials_pair.token.expect("Token missing"));
+
+        let channels = self.command_handler.db.get_channels().unwrap();
+
+        let channel_ids: Vec<&str> = channels
+            .iter()
+            .filter_map(|channel| {
+                if channel.platform == "twitch" {
+                    Some(channel.channel.as_str())
+                } else {
+                    None
+                }
+            })
+            .collect();
+
+        let twitch_channels = twitch_api
+            .get_users(None, Some(&channel_ids))
+            .await
+            .expect("Failed to get users");
+
+        for channel in twitch_channels {
+            tracing::info!("Joining channel {}", channel.login);
+            client.join(channel.login);
+        }
 
         tokio::spawn(async move {
             while let Some(message) = incoming_messages.recv().await {

@@ -21,20 +21,17 @@ pub struct TwitchApi {
 }
 
 impl TwitchApi {
-    pub async fn init(access_token: &str) -> Result<Self, reqwest::Error> {
-        let oauth = match access_token.strip_prefix("oauth:") {
-            Some(res) => res,
-            None => access_token,
-        };
-
-        let validation = Self::validate_oauth(oauth).await?;
-
+    pub async fn init() -> anyhow::Result<Self> {
         let mut headers = HeaderMap::new();
 
-        headers.insert("Client-Id", validation.client_id.parse().unwrap());
         headers.insert(
-            "Authorization",
-            format!("Bearer {}", oauth).parse().unwrap(),
+            "Client-Id",
+            Self::get_client_id()
+                .ok_or_else(|| {
+                    anyhow::Error::msg("Twitch client ID not specified! Twitch API not initialized")
+                })?
+                .parse()
+                .unwrap(),
         );
         headers.insert("Content-Type", "application/json".parse().unwrap());
 
@@ -47,12 +44,7 @@ impl TwitchApi {
             client: Client::new(),
             moderators_cache,
             users_cache,
-            app_access_token: match env::var("TWITCH_CLIENT_SECRET") {
-                Ok(secret) => Some(Arc::new(
-                    Self::get_app_token(&validation.client_id, &secret).await?,
-                )),
-                Err(_) => None,
-            },
+            app_access_token: None,
         };
 
         /*if let Some(_) = twitch_api.app_access_token {
@@ -66,6 +58,14 @@ impl TwitchApi {
         twitch_api.start_cron().await;
 
         Ok(twitch_api)
+    }
+
+    pub async fn init_with_token(access_token: &str) -> anyhow::Result<Self> {
+        let api = Self::init().await?;
+
+        api.set_bearer_token(access_token);
+
+        Ok(api)
     }
 
     // TODO
