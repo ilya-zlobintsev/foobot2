@@ -169,6 +169,7 @@ pub async fn get_permissions(
                     false => Ok(Permissions::Default),
                 }
             }
+            ChannelIdentifier::IrcChannel(_) => Ok(Permissions::Default), // TODO
             ChannelIdentifier::Anonymous => Ok(Permissions::Default),
         },
         None => Ok(Permissions::Default),

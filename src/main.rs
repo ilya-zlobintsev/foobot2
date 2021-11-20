@@ -15,6 +15,7 @@ use command_handler::CommandHandler;
 use database::Database;
 
 use platform::discord::Discord;
+use platform::irc::Irc;
 use platform::twitch::Twitch;
 use platform::ChatPlatform;
 
@@ -62,6 +63,13 @@ async fn main() {
             tracing::error!("Error loading Discord: {:?}", e);
         }
     };
+
+    match Irc::init(command_handler.clone()).await {
+        Ok(irc) => handles.push(irc.run().await),
+        Err(e) => {
+            tracing::error!("Error loading IRC: {:?}", e);
+        }
+    }
 
     join_all(handles).await;
 }

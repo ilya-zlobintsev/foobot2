@@ -52,3 +52,5 @@ psutil = { version = "3.2" , default-features = false, features = ["memory"] }
 dashmap = "4.0"
 
 chrono = "0.4"
+
+irc = "0.15"

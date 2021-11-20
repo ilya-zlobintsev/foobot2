@@ -1,4 +1,5 @@
 pub mod discord;
+pub mod irc;
 pub mod twitch;
 
 use crate::command_handler::CommandHandler;
@@ -64,6 +65,7 @@ impl From<VarError> for ChatPlatformError {
 pub enum UserIdentifier {
     TwitchID(String),
     DiscordID(String),
+    IrcName(String),
 }
 
 impl fmt::Display for UserIdentifier {
@@ -71,6 +73,7 @@ impl fmt::Display for UserIdentifier {
         match self {
             UserIdentifier::TwitchID(id) => f.write_str(&format!("twitch:{}", id)),
             UserIdentifier::DiscordID(id) => f.write_str(&format!("discord:{}", id)),
+            UserIdentifier::IrcName(name) => f.write_str(&format!("irc:{}", name)),
         }
     }
 }
@@ -107,6 +110,7 @@ pub enum UserIdentifierError {
 pub enum ChannelIdentifier {
     TwitchChannelID(String),
     DiscordGuildID(String),
+    IrcChannel(String),
     Anonymous, // Used for DMs and such
 }
 
@@ -123,6 +127,7 @@ impl ChannelIdentifier {
         match self {
             ChannelIdentifier::TwitchChannelID(_) => Some("twitch"),
             ChannelIdentifier::DiscordGuildID(_) => Some("discord_guild"),
+            ChannelIdentifier::IrcChannel(_) => Some("irc"),
             ChannelIdentifier::Anonymous => None,
         }
     }
@@ -131,6 +136,7 @@ impl ChannelIdentifier {
         match self {
             ChannelIdentifier::TwitchChannelID(id) => Some(&id),
             ChannelIdentifier::DiscordGuildID(id) => Some(&id),
+            ChannelIdentifier::IrcChannel(channel) => Some(&channel),
             ChannelIdentifier::Anonymous => None,
         }
     }

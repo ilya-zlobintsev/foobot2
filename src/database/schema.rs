@@ -28,6 +28,7 @@ table! {
         id -> Unsigned<Bigint>,
         twitch_id -> Nullable<Text>,
         discord_id -> Nullable<Text>,
+        irc_name -> Nullable<Text>,
     }
 }
 

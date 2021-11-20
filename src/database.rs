@@ -352,6 +352,7 @@ impl Database {
                     UserIdentifier::DiscordID(user_id) => {
                         query.filter(users::discord_id.eq(Some(user_id)))
                     }
+                    UserIdentifier::IrcName(name) => query.filter(users::irc_name.eq(Some(name))),
                 };
 
                 match query.load::<User>(&mut conn)?.into_iter().next() {
@@ -404,10 +405,17 @@ impl Database {
                     UserIdentifier::TwitchID(user_id) => NewUser {
                         twitch_id: Some(&user_id),
                         discord_id: None,
+                        irc_name: None,
                     },
                     UserIdentifier::DiscordID(user_id) => NewUser {
                         twitch_id: None,
                         discord_id: Some(&user_id),
+                        irc_name: None,
+                    },
+                    UserIdentifier::IrcName(name) => NewUser {
+                        twitch_id: None,
+                        discord_id: None,
+                        irc_name: Some(name),
                     },
                 };
 

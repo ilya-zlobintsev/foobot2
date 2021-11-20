@@ -149,7 +149,6 @@ impl ChatPlatform for Twitch {
                 match message {
                     ServerMessage::Privmsg(pm) => self.handle_message(pm).await,
                     ServerMessage::Whisper(whisper) => self.handle_message(whisper).await,
-                    // ServerMessage::Whisper(_) => {}
                     _ => (),
                 }
             }
