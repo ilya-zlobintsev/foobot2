@@ -2,7 +2,7 @@ pipeline:
   publish-docker:
     image: docker
     commands:
-      - docker login -u $DOCKER_USERNAME -p $DOCKER_PASSWORD
+      - echo $DOCKER_PASSWORD | docker login -u $DOCKER_USERNAME --password-stdin
       - docker build -t docker.io/ilyazzz/foobot2 .
       - docker push docker.io/ilyazzz/foobot2
     secrets: [ DOCKER_USERNAME, DOCKER_PASSWORD ]
