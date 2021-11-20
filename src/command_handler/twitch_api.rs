@@ -1,11 +1,10 @@
 pub mod model;
 
 use std::collections::HashMap;
-use std::env::{self, var};
+use std::env;
 use std::sync::{Arc, RwLock};
 use std::time::Duration;
 
-use futures::TryFutureExt;
 use reqwest::{header::HeaderMap, Client};
 use serde_json::json;
 use tokio::task;
@@ -201,7 +200,6 @@ impl TwitchApi {
             .next()
             .unwrap())
     }
-
 
     pub async fn get_channel_mods(
         &self,

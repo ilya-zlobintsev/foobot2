@@ -112,7 +112,10 @@ pub struct DiscordExecutionContext<'a> {
 #[async_trait]
 impl ExecutionContext for DiscordExecutionContext<'_> {
     async fn get_permissions_internal(&self) -> super::Permissions {
-        tracing::info!("Querying permissions for Discord user {}", self.msg.author.id);
+        tracing::info!(
+            "Querying permissions for Discord user {}",
+            self.msg.author.id
+        );
 
         match self.msg.guild_id {
             Some(guild_id) => {

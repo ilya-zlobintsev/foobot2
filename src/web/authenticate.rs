@@ -2,14 +2,12 @@ use std::{collections::HashMap, env};
 
 use chrono::{Duration, Utc};
 use reqwest::Client;
-use rocket::{
-    get,
-    http::{Cookie, CookieJar, SameSite},
-    response::{content::Html, status, Redirect},
-    State,
-};
+use rocket::get;
+use rocket::http::{Cookie, CookieJar, SameSite};
+use rocket::response::{content::Html, status, Redirect};
+use rocket::State;
 use rocket_dyn_templates::Template;
-use twitch_irc::login::{TokenStorage, UserAccessToken};
+use twitch_irc::login::UserAccessToken;
 
 use crate::{
     command_handler::{
@@ -102,7 +100,7 @@ pub async fn twitch_redirect(
     jar: &CookieJar<'_>,
     current_session: Option<WebSession>,
 ) -> Redirect {
-    let auth_info = trade_twitch_code(&cmd.db, client, code)
+    let auth_info = trade_twitch_code(client, code)
         .await
         .expect("Failed to get tokens");
 
@@ -148,7 +146,7 @@ pub async fn twitch_bot_redirect(
 ) -> Result<Redirect, status::Unauthorized<&'static str>> {
     if let Ok(Some(admin_user)) = cmd.db.get_admin_user() {
         if admin_user.id == current_session.user_id {
-            let auth_response = trade_twitch_code(&cmd.db, client, code)
+            let auth_response = trade_twitch_code(client, code)
                 .await
                 .expect("Failed to get Twitch auth response");
 
@@ -175,7 +173,6 @@ pub async fn twitch_bot_redirect(
 }
 
 async fn trade_twitch_code(
-    db: &Database,
     client: &Client,
     code: &str,
 ) -> Result<TwitchAuthenticationResponse, anyhow::Error> {

@@ -418,10 +418,10 @@ impl CommandHandler {
                                 CommandError::MissingArgument("command name".to_string())
                             })?;
 
-                            match self
-                                .db
-                                .delete_command_from_channel(&execution_context.get_channel(), command_name)
-                            {
+                            match self.db.delete_command_from_channel(
+                                &execution_context.get_channel(),
+                                command_name,
+                            ) {
                                 Ok(()) => Ok(Some("Command succesfully removed".to_string())),
                                 Err(e) => Err(CommandError::DatabaseError(e)),
                             }

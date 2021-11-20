@@ -1,25 +1,19 @@
-use std::{
-    env,
-    sync::{Arc, RwLock},
-};
+use std::env;
+use std::sync::{Arc, RwLock};
 
 use async_trait::async_trait;
-use chrono::{DateTime, FixedOffset, Utc};
+use chrono::{DateTime, Utc};
 use std::time::Instant;
 use tokio::task::{self, JoinHandle};
-use twitch_irc::{
-    login::{RefreshingLoginCredentials, StaticLoginCredentials, TokenStorage, UserAccessToken},
-    message::{Badge, PrivmsgMessage, ServerMessage, TwitchUserBasics, WhisperMessage},
-    ClientConfig, SecureTCPTransport, TwitchIRCClient,
-};
+use twitch_irc::login::{RefreshingLoginCredentials, TokenStorage, UserAccessToken};
+use twitch_irc::message::{Badge, PrivmsgMessage, ServerMessage, TwitchUserBasics, WhisperMessage};
+use twitch_irc::{ClientConfig, SecureTCPTransport, TwitchIRCClient};
 
-use crate::{
-    command_handler::{twitch_api::TwitchApi, CommandHandler},
-    database::{Database, DatabaseError},
-    platform::{ChannelIdentifier, ExecutionContext, Permissions},
-};
+use crate::command_handler::{twitch_api::TwitchApi, CommandHandler};
+use crate::database::DatabaseError;
+use crate::platform::{ChannelIdentifier, ExecutionContext};
 
-use super::{ChatPlatform, ChatPlatformError, UserIdentifier};
+use super::{ChatPlatform, Permissions, UserIdentifier};
 
 #[derive(Clone)]
 pub struct Twitch {
@@ -194,7 +188,7 @@ impl TokenStorage for CommandHandler {
 
     async fn update_token(&mut self, token: &UserAccessToken) -> Result<(), Self::UpdateError> {
         tracing::info!("Refreshed Twitch token!");
-        
+
         self.twitch_api
             .as_ref()
             .expect("Tried to update Twitch tokens but the API is not initialized")

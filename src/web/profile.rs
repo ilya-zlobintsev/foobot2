@@ -32,7 +32,7 @@ pub fn profile(
         .db
         .get_lastfm_name(session.user_id)
         .expect("Missing user id");
-    
+
     let mut admin = false;
 
     if let Ok(Some(admin_user)) = cmd.db.get_admin_user() {

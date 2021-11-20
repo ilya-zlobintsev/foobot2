@@ -9,7 +9,7 @@ use std::time::Duration;
 use self::models::*;
 use crate::command_handler::spotify_api::SpotifyApi;
 use crate::database::schema::*;
-use crate::platform::{ChannelIdentifier, Permissions, UserIdentifier, UserIdentifierError};
+use crate::platform::{ChannelIdentifier, UserIdentifier, UserIdentifierError};
 
 use dashmap::DashMap;
 use diesel::mysql::MysqlConnection;
@@ -622,7 +622,6 @@ impl Database {
 pub enum DatabaseError {
     DieselError(diesel::result::Error),
     InvalidValue,
-    NotAllowed,
 }
 
 impl From<diesel::result::Error> for DatabaseError {
@@ -645,7 +644,6 @@ impl Display for DatabaseError {
             match self {
                 DatabaseError::DieselError(e) => format!("Database error: {}", e),
                 DatabaseError::InvalidValue => "Invalid value".to_string(),
-                DatabaseError::NotAllowed => "Not allowed!".to_string(),
             }
         )
     }

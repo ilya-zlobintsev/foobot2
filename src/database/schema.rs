@@ -52,11 +52,4 @@ joinable!(commands -> channels (channel_id));
 joinable!(user_data -> users (user_id));
 joinable!(web_sessions -> users (user_id));
 
-allow_tables_to_appear_in_same_query!(
-    auth,
-    channels,
-    commands,
-    users,
-    user_data,
-    web_sessions,
-);
+allow_tables_to_appear_in_same_query!(auth, channels, commands, users, user_data, web_sessions,);
