@@ -8,7 +8,7 @@ use twilight_model::id::{GuildId, UserId};
 use twilight_model::user::CurrentUser;
 use twilight_util::permission_calculator::PermissionCalculator;
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct DiscordApi {
     http: Client,
     permissions_cache: Arc<RwLock<HashMap<(u64, u64), Permissions>>>, // (guild_id, user_id)

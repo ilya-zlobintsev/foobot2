@@ -25,7 +25,7 @@ use lastfm_api::LastFMApi;
 use owm_api::OwmApi;
 use twitch_api::TwitchApi;
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct CommandHandler {
     pub db: Database,
     pub twitch_api: Option<TwitchApi>,

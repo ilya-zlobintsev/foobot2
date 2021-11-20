@@ -23,7 +23,11 @@ use super::{ChatPlatform, ChatPlatformError, UserIdentifier};
 
 #[derive(Clone)]
 pub struct Twitch {
-    client: Arc<RwLock<Option<TwitchIRCClient<SecureTCPTransport, RefreshingLoginCredentials<Database>>>>>,
+    client: Arc<
+        RwLock<
+            Option<TwitchIRCClient<SecureTCPTransport, RefreshingLoginCredentials<CommandHandler>>>,
+        >,
+    >,
     command_handler: CommandHandler,
     command_prefix: String,
 }
@@ -98,21 +102,22 @@ impl ChatPlatform for Twitch {
     }
 
     async fn run(self) -> JoinHandle<()> {
-
         let login = env::var("TWITCH_LOGIN_NAME").expect("TWITCH_LOGIN_NAME missing");
         let client_id = TwitchApi::get_client_id().expect("Twitch client id missing");
         let client_secret = env::var("TWITCH_CLIENT_SECRET").expect("TWITCH_CLIENT_SECRET missing");
 
-        let credentials =
-            RefreshingLoginCredentials::new(login, client_id, client_secret, self.command_handler.db.clone());
-
+        let credentials = RefreshingLoginCredentials::new(
+            login,
+            client_id,
+            client_secret,
+            self.command_handler.clone(),
+        );
 
         let config = ClientConfig::new_simple(credentials);
 
         tracing::info!("Connected to Twitch");
 
-        let (mut incoming_messages, client) =
-            TwitchIRCClient::new(config);
+        let (mut incoming_messages, client) = TwitchIRCClient::new(config);
 
         *self.client.write().unwrap() = Some(client.clone());
 
@@ -149,22 +154,27 @@ impl ChatPlatform for Twitch {
 }
 
 #[async_trait]
-impl TokenStorage for Database {
+impl TokenStorage for CommandHandler {
     type LoadError = DatabaseError;
     type UpdateError = DatabaseError;
 
     async fn load_token(&mut self) -> Result<UserAccessToken, Self::LoadError> {
-        let access_token = self.get_auth("twitch_access_token")?.unwrap_or_default();
-        let refresh_token = self.get_auth("twitch_refresh_token")?.unwrap_or_default();
+        let access_token = self.db.get_auth("twitch_access_token")?.unwrap_or_default();
+        let refresh_token = self
+            .db
+            .get_auth("twitch_refresh_token")?
+            .unwrap_or_default();
 
         let created_at = DateTime::from_utc(
-            DateTime::parse_from_rfc3339(&self.get_auth("twitch_created_at")?.unwrap_or_default())
-                .expect("Failed to parse time")
-                .naive_utc(),
+            DateTime::parse_from_rfc3339(
+                &self.db.get_auth("twitch_created_at")?.unwrap_or_default(),
+            )
+            .expect("Failed to parse time")
+            .naive_utc(),
             Utc,
         );
 
-        let expires_at = match self.get_auth("twitch_expires_at")? {
+        let expires_at = match self.db.get_auth("twitch_expires_at")? {
             Some(date) => Some(DateTime::from_utc(
                 DateTime::parse_from_rfc3339(&date)
                     .expect("Failed to parse time")
@@ -183,7 +193,14 @@ impl TokenStorage for Database {
     }
 
     async fn update_token(&mut self, token: &UserAccessToken) -> Result<(), Self::UpdateError> {
-        self.save_token(token)
+        tracing::info!("Refreshed Twitch token!");
+        
+        self.twitch_api
+            .as_ref()
+            .expect("Tried to update Twitch tokens but the API is not initialized")
+            .set_bearer_token(&token.access_token);
+
+        self.db.save_token(token)
     }
 }
 

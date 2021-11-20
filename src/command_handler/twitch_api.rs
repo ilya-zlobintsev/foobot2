@@ -12,9 +12,9 @@ use tokio::task;
 
 use model::*;
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct TwitchApi {
-    headers: Arc<HeaderMap>,
+    headers: Arc<RwLock<HeaderMap>>,
     client: Client,
     moderators_cache: Arc<RwLock<HashMap<String, Vec<String>>>>,
     users_cache: Arc<RwLock<Vec<User>>>,
@@ -44,7 +44,7 @@ impl TwitchApi {
         let users_cache = Arc::new(RwLock::new(Vec::new()));
 
         let twitch_api = TwitchApi {
-            headers: Arc::new(headers),
+            headers: Arc::new(RwLock::new(headers)),
             client: Client::new(),
             moderators_cache,
             users_cache,
@@ -128,16 +128,6 @@ impl TwitchApi {
         Ok(response.json().await?)
     }
 
-    pub fn get_oauth(&self) -> &str {
-        self.headers
-            .get("Authorization")
-            .unwrap()
-            .to_str()
-            .unwrap()
-            .strip_prefix("Bearer ")
-            .unwrap()
-    }
-
     /*pub fn get_client_id(&self) -> &str {
         self.headers.get("Client-Id").unwrap().to_str().unwrap()
     }*/
@@ -177,10 +167,12 @@ impl TwitchApi {
         }
 
         if !params.is_empty() || (logins.is_none() && ids.is_none()) {
+            let headers = self.headers.read().unwrap().clone();
+
             let response = self
                 .client
                 .get("https://api.twitch.tv/helix/users")
-                .headers((*self.headers).clone())
+                .headers(headers)
                 .query(&params)
                 .send()
                 .await?;
@@ -210,41 +202,6 @@ impl TwitchApi {
             .unwrap())
     }
 
-    pub async fn run_ad(
-        &self,
-        channel_login: &str,
-        duration: u8,
-    ) -> Result<String, reqwest::Error> {
-        let users = self.get_users(Some(&vec![channel_login]), None).await?;
-        let channel_id = &users.first().unwrap().id;
-
-        let mut headers = HeaderMap::new();
-        headers.insert(
-            "Authorization",
-            format!("OAuth {}", self.get_oauth()).parse().unwrap(),
-        );
-        headers.insert("Client", Self::get_client_id().unwrap().parse().unwrap());
-
-        let mut payload = HashMap::new();
-        // params.insert("channelID", channel_id);
-        // params.insert("channelLogin", channel_login.to_owned());
-        payload.insert("length", duration.to_string());
-
-        let url = format!(
-            "https://api.twitch.tv/v5/channels/{}/commercial",
-            channel_id
-        );
-
-        Ok(self
-            .client
-            .post(&url)
-            .headers(headers)
-            .json(&payload)
-            .send()
-            .await?
-            .text()
-            .await?)
-    }
 
     pub async fn get_channel_mods(
         &self,
@@ -290,7 +247,7 @@ impl TwitchApi {
     }
 
     fn get_app_access_headers(&self) -> HeaderMap {
-        let mut headers = (*self.headers).clone();
+        let mut headers = (*self.headers.read().unwrap()).clone();
 
         headers.insert(
             "Authorization",
@@ -305,6 +262,15 @@ impl TwitchApi {
         );
 
         headers
+    }
+
+    pub fn set_bearer_token(&self, token: &str) {
+        let mut headers = self.headers.write().expect("Failed to lock headers");
+
+        headers.insert(
+            "Authorization",
+            format!("Bearer {}", token).parse().unwrap(),
+        );
     }
 
     pub async fn create_eventsub_subscription(
@@ -372,7 +338,7 @@ impl TwitchApi {
 
         Ok(())
     }
-    
+
     pub fn get_client_id() -> Option<String> {
         env::var("TWITCH_CLIENT_ID").ok()
     }
@@ -380,7 +346,6 @@ impl TwitchApi {
     pub fn get_client_secret() -> Option<String> {
         env::var("TWITCH_CLIENT_SECRET").ok()
     }
-
 
     // This terrible abomination has to exist because twitch doesn't provide an endpoint for this that doesn't require channel auth
     // /// Returns the list of logins of channel moderators. Don't expect this to be efficient
