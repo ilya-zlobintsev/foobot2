@@ -1,11 +1,10 @@
 pipeline:
   publish-docker:
-    image: plugins/docker
-    repo: ilyazzz/foobot2
-    tags:
-      - latest
-    secrets:
-      - source: DOCKER_USERNAME
-        target: plugin_username
-      - source: DOCKER_PASSWORD
-        target: plugin_password
+    image: docker
+    commands:
+      - docker login -u $DOCKER_USERNAME -p $DOCKER_PASSWORD
+      - docker build -t docker.io/ilyazzz/foobot2 .
+      - docker push docker.io/ilyazzz/foobot2
+    secrets: [ DOCKER_USERNAME, DOCKER_PASSWORD ]
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
