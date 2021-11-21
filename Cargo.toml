@@ -32,7 +32,7 @@ twilight-gateway = "0.7"
 twilight-cache-inmemory = "0.7"
 twilight-util = { version = "0.7", features = ["permission-calculator"] }
 
-handlebars = "4.0"
+handlebars = "4.1"
 
 rocket = { version = "0.5.0-rc.1", features = ["secrets"] }
 rocket_dyn_templates = { version = "0.1.0-rc.1", features = ["handlebars"] }
