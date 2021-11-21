@@ -1,10 +1,12 @@
 use std::env;
-use std::sync::{Arc, RwLock};
+use std::sync::{Arc};
 
 use async_trait::async_trait;
 use chrono::{DateTime, Utc};
 use dashmap::DashMap;
-use std::time::Instant;
+use tokio::sync::Mutex;
+use tokio::time::sleep;
+use std::time::{Duration, Instant};
 use tokio::task::{self, JoinHandle};
 use twitch_irc::login::{
     LoginCredentials, RefreshingLoginCredentials, TokenStorage, UserAccessToken,
@@ -21,7 +23,7 @@ use super::{ChatPlatform, Permissions, UserIdentifier};
 #[derive(Clone)]
 pub struct Twitch {
     client: Arc<
-        RwLock<
+        Mutex<
             Option<TwitchIRCClient<SecureTCPTransport, RefreshingLoginCredentials<CommandHandler>>>,
         >,
     >,
@@ -33,7 +35,9 @@ pub struct Twitch {
 impl Twitch {
     async fn handle_message<T: 'static + TwitchMessage + Send + Sync>(&self, msg: T) {
         if msg.get_sender().id == "82008718" && msg.get_content() == "pajaS 🚨 ALERT" {
-            let client = self.client.read().unwrap().as_ref().unwrap().clone();
+            let client = self.client.lock().await;
+
+            let client = client.as_ref().unwrap();
 
             client
                 .privmsg("pajlada".to_owned(), "Weirdga 👉 🚨".to_owned())
@@ -48,7 +52,7 @@ impl Twitch {
 
             tracing::debug!("Recieved a command at {:?}", recieved_instant);
 
-            let client = self.client.read().unwrap().as_ref().unwrap().clone();
+            let client = self.client.clone();
 
             let Self {
                 command_handler,
@@ -74,11 +78,23 @@ impl Twitch {
                     if let Some(last_msg) = last_messages.get(channel) {
                         if *last_msg == response {
                             tracing::info!("Detected same matching message, adding an empty character");
-                            response.push(char::from_u32(0x000E0000).unwrap());
+                            
+                            let magic_char = char::from_u32(0x000E0000).unwrap();
+                            
+                            if response.ends_with(magic_char) {
+                                response.remove(response.len() - 1);
+                            } else {
+                                response.push(magic_char);
+                            }
+
                         }
                     }
                     
                     last_messages.insert(channel.to_string(), response.clone());
+                    
+                    let client_guard = client.lock().await;
+                    
+                    let client = client_guard.as_ref().unwrap();
 
                     tracing::info!("Replying with {}", response);
 
@@ -96,6 +112,8 @@ impl Twitch {
                             .await
                             .expect("Failed to say");
                     }
+                    
+                    sleep(Duration::from_secs(1)).await; // This is needed to adhere to the twitch rate limits
                 }
             });
         }
@@ -108,7 +126,7 @@ impl ChatPlatform for Twitch {
         let command_prefix = Self::get_prefix();
 
         Ok(Box::new(Self {
-            client: Arc::new(RwLock::new(None)),
+            client: Arc::new(Mutex::new(None)),
             command_handler,
             command_prefix,
             last_messages: Arc::new(DashMap::new()),
@@ -138,7 +156,7 @@ impl ChatPlatform for Twitch {
 
         tracing::info!("Connected to Twitch");
 
-        *self.client.write().unwrap() = Some(client.clone());
+        *self.client.lock().await = Some(client.clone());
 
         let twitch_api = self
             .command_handler
