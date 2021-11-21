@@ -114,6 +114,33 @@ impl TwitchApi {
                 users_cache.clear();
             }
         });
+
+        task::spawn(async move {
+            let client = Client::new();
+
+            let user_id = env::var("SUPINIC_USER_ID").unwrap_or_default();
+            let pass = env::var("SUPINIC_PASSWORD").unwrap_or_default();
+
+            loop {
+                tracing::info!("Pinging Supinic API");
+
+                match client
+                    .put("https://supinic.com/api/bot-program/bot/active")
+                    .header("Authorization", format!("Basic {}:{}", user_id, pass))
+                    .send()
+                    .await
+                {
+                    Ok(response) => {
+                        if !response.status().is_success() {
+                            tracing::info!("Supinic API error: {:?}", response.text().await);
+                        }
+                    }
+                    Err(e) => tracing::warn!("Failed to ping Supinic API! {:?}", e),
+                }
+
+                tokio::time::sleep(Duration::from_secs(3600)).await;
+            }
+        });
     }
 
     pub async fn validate_oauth(oauth: &str) -> Result<ValidationResponse, reqwest::Error> {
