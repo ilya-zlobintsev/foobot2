@@ -3,6 +3,7 @@ use std::sync::{Arc, RwLock};
 
 use async_trait::async_trait;
 use chrono::{DateTime, Utc};
+use dashmap::DashMap;
 use std::time::Instant;
 use tokio::task::{self, JoinHandle};
 use twitch_irc::login::{
@@ -26,6 +27,7 @@ pub struct Twitch {
     >,
     command_handler: CommandHandler,
     command_prefix: String,
+    last_messages: Arc<DashMap<String, String>>,
 }
 
 impl Twitch {
@@ -48,7 +50,11 @@ impl Twitch {
 
             let client = self.client.read().unwrap().as_ref().unwrap().clone();
 
-            let command_handler = self.command_handler.clone();
+            let Self {
+                command_handler,
+                last_messages,
+                ..
+            } = self.clone();
 
             task::spawn(async move {
                 let context = TwitchExecutionContext { msg: &msg };
@@ -62,7 +68,18 @@ impl Twitch {
                     recieved_instant.elapsed().as_millis()
                 );
 
-                if let Some(response) = response {
+                if let Some(mut response) = response {
+                    let channel = msg.get_channel().unwrap_or(&msg.get_sender().login);
+
+                    if let Some(last_msg) = last_messages.get(channel) {
+                        if *last_msg == response {
+                            tracing::info!("Detected same matching message, adding an empty character");
+                            response.push(char::from_u32(0x000E0000).unwrap());
+                        }
+                    }
+                    
+                    last_messages.insert(channel.to_string(), response.clone());
+
                     tracing::info!("Replying with {}", response);
 
                     if let Some(pm) = msg.get_privmsg() {
@@ -73,7 +90,7 @@ impl Twitch {
                     } else {
                         client
                             .privmsg(
-                                msg.get_sender().login.clone(),
+                                channel.to_string(),
                                 format!("/w {} {}", msg.get_sender().login, response),
                             )
                             .await
@@ -94,6 +111,7 @@ impl ChatPlatform for Twitch {
             client: Arc::new(RwLock::new(None)),
             command_handler,
             command_prefix,
+            last_messages: Arc::new(DashMap::new()),
         }))
     }
 
