@@ -30,6 +30,15 @@ pub struct Twitch {
 
 impl Twitch {
     async fn handle_message<T: 'static + TwitchMessage + Send + Sync>(&self, msg: T) {
+        if msg.get_sender().id == "82008718" && msg.get_content() == "pajaS 🚨 ALERT" {
+            let client = self.client.read().unwrap().as_ref().unwrap().clone();
+
+            client
+                .privmsg("pajlada".to_owned(), "Weirdga 👉 🚨".to_owned())
+                .await
+                .unwrap();
+        }
+
         if let Some(message_text) = msg.get_content().strip_prefix(&self.command_prefix) {
             let message_text = message_text.to_owned();
 
