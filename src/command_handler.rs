@@ -216,14 +216,14 @@ impl CommandHandler {
                     match &allow_shell as &str {
                         "1" => match execution_context.get_permissions().await {
                             Permissions::Admin => {
-                                let mut arguments = arguments.into_iter();
+                                let mut cmd = Command::new("sh");
+                                
+                                cmd.arg("-c")
+                                    .arg(format!("{}", arguments.join(" ")));
+                                
+                                tracing::info!("Running command {:?}", cmd);
 
-                                let program = arguments.next().ok_or_else(|| {
-                                    CommandError::MissingArgument("program".to_string())
-                                })?;
-
-                                let output = Command::new(program)
-                                    .args(arguments)
+                                let output = cmd
                                     .output()
                                     .await
                                     .map(|o| String::from_utf8_lossy(&o.stdout).into_owned())
