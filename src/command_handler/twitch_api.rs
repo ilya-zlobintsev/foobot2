@@ -273,7 +273,7 @@ impl TwitchApi {
 
     fn get_app_access_headers(&self) -> HeaderMap {
         let mut headers = (*self.headers.read().unwrap()).clone();
-
+        
         headers.insert(
             "Authorization",
             format!(
@@ -291,11 +291,19 @@ impl TwitchApi {
 
     pub fn set_bearer_token(&self, token: &str) {
         let mut headers = self.headers.write().expect("Failed to lock headers");
+        
+        tracing::info!("Updating Twitch API token...");
+
+        tracing::info!("Old headers: {:?}", headers);
 
         headers.insert(
             "Authorization",
             format!("Bearer {}", token).parse().unwrap(),
         );
+
+        tracing::info!("New headers: {:?}", headers);
+        
+        tracing::info!("Bearer token for Twitch API calls updated!");
     }
 
     pub async fn create_eventsub_subscription(
