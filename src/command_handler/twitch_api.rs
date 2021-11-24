@@ -217,19 +217,30 @@ impl<C: LoginCredentials> TwitchApi<C> {
                 .await?;
 
             tracing::info!("GET {}: {}", response.url(), response.status());
+            
+            let status = response.status();
 
-            let api_results = response.json::<UsersResponse>().await?.data;
+            match status.is_success() {
+                true => {
+                    let api_results = response.json::<UsersResponse>().await?.data;
 
-            if api_results.len() != 0 {
-                let mut users_cache = self.users_cache.write().unwrap();
+                    if api_results.len() != 0 {
+                        let mut users_cache = self.users_cache.write().unwrap();
 
-                users_cache.extend(api_results.clone());
+                        users_cache.extend(api_results.clone());
+                    }
+
+                    results.extend(api_results);
+
+                    Ok(results)
+                }
+                false => {
+                    Err(anyhow!("Response code {}", status))
+                }
             }
-
-            results.extend(api_results);
+        } else {
+            Ok(results)
         }
-
-        Ok(results)
     }
 
     async fn get_token(&self) -> anyhow::Result<String> {

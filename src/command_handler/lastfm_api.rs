@@ -1,5 +1,6 @@
 use std::sync::Arc;
-
+use anyhow::anyhow;
+use http::StatusCode;
 use reqwest::Client;
 use serde::{Deserialize, Serialize};
 
@@ -17,10 +18,7 @@ impl LastFMApi {
         }
     }
 
-    pub async fn get_recent_tracks(
-        &self,
-        user: &str,
-    ) -> Result<RecentTracksResponse, reqwest::Error> {
+    pub async fn get_recent_tracks(&self, user: &str) -> anyhow::Result<RecentTracksResponse> {
         let response = self
             .client
             .get("https://ws.audioscrobbler.com/2.0/?")
@@ -35,7 +33,10 @@ impl LastFMApi {
 
         tracing::info!("GET {}: {}", response.url(), response.status());
 
-        response.json().await
+        match response.status() {
+            StatusCode::OK => Ok(response.json().await?),
+            status => Err(anyhow!("status code: {}", status)),
+        }
     }
 }
 
