@@ -206,17 +206,24 @@ impl CommandHandler {
                     Some(1),
                 ),
                 "debug" | "check" => {
-                    let action = arguments.join(" ");
+                    if execution_context.get_permissions().await >= Permissions::ChannelMod {
+                        let action = arguments.join(" ");
 
-                    (
-                        self.execute_command_action(
-                            action,
-                            execution_context,
-                            user.clone(),
-                            &arguments,
-                        )?,
-                        None,
-                    )
+                        (
+                            self.execute_command_action(
+                                action,
+                                execution_context,
+                                user.clone(),
+                                &arguments,
+                            )?,
+                            None,
+                        )
+                    } else {
+                        (
+                            Some("Debug is only available to mods and higher!".to_owned()),
+                            Some(5),
+                        )
+                    }
                 }
                 "sh" | "shell" => {
                     let allow_shell =
