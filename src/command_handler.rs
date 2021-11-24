@@ -223,10 +223,9 @@ impl CommandHandler {
                         "1" => match execution_context.get_permissions().await {
                             Permissions::Admin => {
                                 let mut cmd = Command::new("sh");
-                                
-                                cmd.arg("-c")
-                                    .arg(format!("{}", arguments.join(" ")));
-                                
+
+                                cmd.arg("-c").arg(format!("{}", arguments.join(" ")));
+
                                 tracing::info!("Running command {:?}", cmd);
 
                                 let output = cmd

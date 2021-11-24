@@ -13,19 +13,24 @@ pub struct Discord {
     token: String,
     command_handler: CommandHandler,
     prefix: String,
+    self_mention: String,
 }
 
 impl Discord {
     async fn handle_msg(&self, msg: MessageCreate, http: Arc<Client>) {
         tracing::debug!("{:?}", msg);
-        if let Some(content) = msg.content.strip_prefix(&self.prefix) {
-            http.create_typing_trigger(msg.channel_id)
-                .exec()
-                .await
-                .expect("Failed to create Discord typing trigger");
 
-            let content = content.to_owned();
+        let mut content = String::new();
 
+        if let Some(text) = msg.content.strip_prefix(&self.prefix) {
+            content = text.to_owned();
+        }
+
+        if let Some(text) = msg.content.strip_prefix(&self.self_mention) {
+            content = text.to_owned();
+        }
+
+        if !content.is_empty() {
             let command_handler = self.command_handler.clone();
 
             tokio::spawn(async move {
@@ -60,6 +65,10 @@ impl ChatPlatform for Discord {
             token,
             command_handler,
             prefix: Self::get_prefix(),
+            self_mention: format!(
+                "<@!{}>",
+                env::var("DISCORD_CLIENT_ID").expect("DISCORD_CLIENT_ID not specified")
+            ),
         }))
     }
 

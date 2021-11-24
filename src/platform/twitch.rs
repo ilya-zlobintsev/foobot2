@@ -1,13 +1,13 @@
 use std::env;
-use std::sync::{Arc};
+use std::sync::Arc;
 
 use async_trait::async_trait;
 use chrono::{DateTime, Utc};
 use dashmap::DashMap;
-use tokio::sync::Mutex;
-use tokio::time::sleep;
 use std::time::{Duration, Instant};
+use tokio::sync::Mutex;
 use tokio::task::{self, JoinHandle};
+use tokio::time::sleep;
 use twitch_irc::login::{
     LoginCredentials, RefreshingLoginCredentials, TokenStorage, UserAccessToken,
 };
@@ -30,6 +30,7 @@ pub struct Twitch {
     command_handler: CommandHandler,
     command_prefix: String,
     last_messages: Arc<DashMap<String, String>>,
+    login: String,
 }
 
 impl Twitch {
@@ -45,9 +46,17 @@ impl Twitch {
                 .unwrap();
         }
 
-        if let Some(message_text) = msg.get_content().strip_prefix(&self.command_prefix) {
-            let message_text = message_text.to_owned();
+        let mut message_text = String::new();
 
+        if let Some(text) = msg.get_content().strip_prefix(&self.command_prefix) {
+            message_text = text.to_owned();
+        }
+
+        if let Some(text) = msg.get_content().strip_prefix(&self.login) {
+            message_text = text.to_owned();
+        }
+
+        if !message_text.is_empty() {
             let recieved_instant = Instant::now();
 
             tracing::debug!("Recieved a command at {:?}", recieved_instant);
@@ -77,23 +86,24 @@ impl Twitch {
 
                     if let Some(last_msg) = last_messages.get(channel) {
                         if *last_msg == response {
-                            tracing::info!("Detected same matching message, adding an empty character");
-                            
+                            tracing::info!(
+                                "Detected same matching message, adding an empty character"
+                            );
+
                             let magic_char = char::from_u32(0x000E0000).unwrap();
-                            
+
                             if response.ends_with(magic_char) {
                                 response.remove(response.len() - 1);
                             } else {
                                 response.push(magic_char);
                             }
-
                         }
                     }
-                    
+
                     last_messages.insert(channel.to_string(), response.clone());
-                    
+
                     let client_guard = client.lock().await;
-                    
+
                     let client = client_guard.as_ref().unwrap();
 
                     tracing::info!("Replying with {}", response);
@@ -112,7 +122,7 @@ impl Twitch {
                             .await
                             .expect("Failed to say");
                     }
-                    
+
                     sleep(Duration::from_secs(1)).await; // This is needed to adhere to the twitch rate limits
                 }
             });
@@ -130,16 +140,16 @@ impl ChatPlatform for Twitch {
             command_handler,
             command_prefix,
             last_messages: Arc::new(DashMap::new()),
+            login: env::var("TWITCH_LOGIN_NAME").expect("TWITCH_LOGIN_NAME missing"),
         }))
     }
 
     async fn run(self) -> JoinHandle<()> {
-        let login = env::var("TWITCH_LOGIN_NAME").expect("TWITCH_LOGIN_NAME missing");
         let client_id = TwitchApi::get_client_id().expect("Twitch client id missing");
         let client_secret = env::var("TWITCH_CLIENT_SECRET").expect("TWITCH_CLIENT_SECRET missing");
 
         let credentials = RefreshingLoginCredentials::new(
-            login,
+            self.login.clone(),
             client_id,
             client_secret,
             self.command_handler.clone(),
