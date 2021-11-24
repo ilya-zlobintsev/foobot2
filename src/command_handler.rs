@@ -166,7 +166,13 @@ impl CommandHandler {
                 ),
                 // Old commands for convenience
                 "addcmd" | "cmdadd" => (
-                    self.edit_cmds("command", vec!["add"], execution_context)
+                    self.edit_cmds("command", 
+                        {
+                            let mut arguments = arguments;
+                            arguments.insert(0, "add");
+                            arguments
+                        },
+                        execution_context)
                         .await?,
                     Some(1),
                 ),
