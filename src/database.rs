@@ -11,6 +11,7 @@ use crate::command_handler::spotify_api::SpotifyApi;
 use crate::database::schema::*;
 use crate::platform::{ChannelIdentifier, UserIdentifier, UserIdentifierError};
 
+use chrono::{DateTime, Utc};
 use dashmap::DashMap;
 use diesel::mysql::MysqlConnection;
 use diesel::r2d2::{self, ConnectionManager, Pool};
@@ -24,7 +25,7 @@ use reqwest::Client;
 use tokio::time;
 
 use diesel_migrations::{embed_migrations, EmbeddedMigrations, MigrationHarness};
-use twitch_irc::login::UserAccessToken;
+use twitch_irc::login::{TokenStorage, UserAccessToken};
 pub const MIGRATIONS: EmbeddedMigrations = embed_migrations!();
 
 const BUILTIN_COMMANDS: &'static [&'static str] = &[
@@ -654,5 +655,51 @@ impl Display for DatabaseError {
                 DatabaseError::InvalidValue => "Invalid value".to_string(),
             }
         )
+    }
+}
+
+impl std::error::Error for DatabaseError {
+    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
+        None
+    }
+}
+
+#[async_trait]
+impl TokenStorage for Database {
+    type LoadError = anyhow::Error;
+    type UpdateError = anyhow::Error;
+
+    async fn load_token(&mut self) -> Result<UserAccessToken, Self::LoadError> {
+        let access_token = self.get_auth("twitch_access_token")?.unwrap_or_default();
+        let refresh_token = self.get_auth("twitch_refresh_token")?.unwrap_or_default();
+
+        let created_at = DateTime::from_utc(
+            DateTime::parse_from_rfc3339(&self.get_auth("twitch_created_at")?.unwrap_or_default())?
+                .naive_utc(),
+            Utc,
+        );
+
+        let expires_at = match self.get_auth("twitch_expires_at")? {
+            Some(date) => Some(DateTime::from_utc(
+                DateTime::parse_from_rfc3339(&date)?.naive_utc(),
+                Utc,
+            )),
+            None => None,
+        };
+
+        Ok(UserAccessToken {
+            access_token,
+            refresh_token,
+            created_at,
+            expires_at,
+        })
+    }
+
+    async fn update_token(&mut self, token: &UserAccessToken) -> Result<(), Self::UpdateError> {
+        tracing::info!("Refreshed Twitch token!");
+
+        self.save_token(token)?;
+
+        Ok(())
     }
 }

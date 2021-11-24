@@ -40,12 +40,14 @@ async fn main() {
 
     handles.push(web_handle);
 
-    match Twitch::init(command_handler.clone()).await {
-        Ok(twitch) => {
-            handles.push(twitch.clone().run().await);
+    match &command_handler.twitch_api {
+        Some(twitch_api) => {
+            let twitch = Twitch::init(command_handler.clone()).await.unwrap();
+
+            handles.push(twitch.run().await);
         }
-        Err(e) => {
-            tracing::error!("Error loading Twitch: {:?}", e);
+        None => {
+            tracing::info!("Twitch API not initialized! Not connecting to chat.");
         }
     }
 

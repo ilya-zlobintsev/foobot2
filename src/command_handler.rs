@@ -24,11 +24,12 @@ use discord_api::DiscordApi;
 use lastfm_api::LastFMApi;
 use owm_api::OwmApi;
 use twitch_api::TwitchApi;
+use twitch_irc::login::RefreshingLoginCredentials;
 
 #[derive(Clone, Debug)]
 pub struct CommandHandler {
     pub db: Database,
-    pub twitch_api: Option<TwitchApi>,
+    pub twitch_api: Option<TwitchApi<RefreshingLoginCredentials<Database>>>,
     pub discord_api: Option<DiscordApi>,
     startup_time: Arc<Instant>,
     template_registry: Arc<Handlebars<'static>>,
@@ -37,7 +38,7 @@ pub struct CommandHandler {
 
 impl CommandHandler {
     pub async fn init(db: Database) -> Self {
-        let twitch_api = match TwitchApi::init().await {
+        let twitch_api = match TwitchApi::init_refreshing(db.clone()).await {
             Ok(api) => Some(api),
             Err(e) => {
                 tracing::info!("Failed to initialize Twitch API: {}", e);
@@ -166,14 +167,16 @@ impl CommandHandler {
                 ),
                 // Old commands for convenience
                 "addcmd" | "cmdadd" => (
-                    self.edit_cmds("command", 
+                    self.edit_cmds(
+                        "command",
                         {
                             let mut arguments = arguments;
                             arguments.insert(0, "add");
                             arguments
                         },
-                        execution_context)
-                        .await?,
+                        execution_context,
+                    )
+                    .await?,
                     Some(1),
                 ),
                 "delcmd" | "cmddel" => (

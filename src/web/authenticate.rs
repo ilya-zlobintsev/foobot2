@@ -9,6 +9,7 @@ use rocket::State;
 use rocket_dyn_templates::Template;
 use twitch_irc::login::UserAccessToken;
 
+use crate::command_handler::twitch_api;
 use crate::{
     command_handler::{
         discord_api::DiscordApi, spotify_api::SpotifyApi, twitch_api::TwitchApi, CommandHandler,
@@ -58,7 +59,7 @@ pub async fn logout(jar: &CookieJar<'_>) -> Redirect {
 pub async fn authenticate_twitch() -> Redirect {
     tracing::info!("Authenticating with Twitch...");
 
-    let client_id = TwitchApi::get_client_id().expect("Twitch client ID not specified");
+    let client_id = twitch_api::get_client_id().expect("Twitch client ID not specified");
 
     Redirect::to(AuthPlatform::Twitch.construct_uri(&client_id, &TWITCH_SCOPES.join(" "), false))
 }
@@ -73,7 +74,7 @@ pub async fn authenticate_twitch_bot(
         if admin_user.id == current_session.user_id {
             tracing::info!("Authenticating the bot (Twitch):");
 
-            let client_id = TwitchApi::get_client_id().expect("Twitch client ID not specified");
+            let client_id = twitch_api::get_client_id().expect("Twitch client ID not specified");
 
             let uri = AuthPlatform::Twitch.construct_uri(
                 &client_id,
@@ -176,8 +177,9 @@ async fn trade_twitch_code(
     client: &Client,
     code: &str,
 ) -> Result<TwitchAuthenticationResponse, anyhow::Error> {
-    let client_id = TwitchApi::get_client_id().expect("Twitch client ID not specified");
-    let client_secret = TwitchApi::get_client_secret().expect("Twitch client secret not specified");
+    let client_id = twitch_api::get_client_id().expect("Twitch client ID not specified");
+    let client_secret =
+        twitch_api::get_client_secret().expect("Twitch client secret not specified");
 
     let redirect_uri = format!(
         "{}/authenticate/twitch/redirect",

@@ -2,20 +2,17 @@ use std::env;
 use std::sync::Arc;
 
 use async_trait::async_trait;
-use chrono::{DateTime, Utc};
 use dashmap::DashMap;
 use std::time::{Duration, Instant};
 use tokio::sync::Mutex;
 use tokio::task::{self, JoinHandle};
 use tokio::time::sleep;
-use twitch_irc::login::{
-    LoginCredentials, RefreshingLoginCredentials, TokenStorage, UserAccessToken,
-};
+use twitch_irc::login::RefreshingLoginCredentials;
 use twitch_irc::message::{Badge, PrivmsgMessage, ServerMessage, TwitchUserBasics, WhisperMessage};
 use twitch_irc::{ClientConfig, SecureTCPTransport, TwitchIRCClient};
 
-use crate::command_handler::{twitch_api::TwitchApi, CommandHandler};
-use crate::database::DatabaseError;
+use crate::command_handler::CommandHandler;
+use crate::database::Database;
 use crate::platform::{ChannelIdentifier, ExecutionContext};
 
 use super::{ChatPlatform, Permissions, UserIdentifier};
@@ -23,9 +20,7 @@ use super::{ChatPlatform, Permissions, UserIdentifier};
 #[derive(Clone)]
 pub struct Twitch {
     client: Arc<
-        Mutex<
-            Option<TwitchIRCClient<SecureTCPTransport, RefreshingLoginCredentials<CommandHandler>>>,
-        >,
+        Mutex<Option<TwitchIRCClient<SecureTCPTransport, RefreshingLoginCredentials<Database>>>>,
     >,
     command_handler: CommandHandler,
     command_prefix: String,
@@ -145,36 +140,19 @@ impl ChatPlatform for Twitch {
     }
 
     async fn run(self) -> JoinHandle<()> {
-        let client_id = TwitchApi::get_client_id().expect("Twitch client id missing");
-        let client_secret = env::var("TWITCH_CLIENT_SECRET").expect("TWITCH_CLIENT_SECRET missing");
-
-        let credentials = RefreshingLoginCredentials::new(
-            self.login.clone(),
-            client_id,
-            client_secret,
-            self.command_handler.clone(),
-        );
-
-        let credentials_pair = credentials
-            .get_credentials()
-            .await
-            .expect("Failed to get credentials");
-
-        let config = ClientConfig::new_simple(credentials);
-
-        let (mut incoming_messages, client) = TwitchIRCClient::new(config);
-
-        tracing::info!("Connected to Twitch");
-
-        *self.client.lock().await = Some(client.clone());
-
         let twitch_api = self
             .command_handler
             .twitch_api
             .as_ref()
             .expect("Twitch API is not initialized");
 
-        twitch_api.set_bearer_token(&credentials_pair.token.expect("Token missing"));
+        let config = ClientConfig::new_simple(twitch_api.credentials.clone());
+
+        let (mut incoming_messages, client) = TwitchIRCClient::new(config);
+
+        tracing::info!("Connected to Twitch");
+
+        *self.client.lock().await = Some(client.clone());
 
         let channels = self.command_handler.db.get_channels().unwrap();
 
@@ -189,14 +167,16 @@ impl ChatPlatform for Twitch {
             })
             .collect();
 
-        let twitch_channels = twitch_api
-            .get_users(None, Some(&channel_ids))
-            .await
-            .expect("Failed to get users");
-
-        for channel in twitch_channels {
-            tracing::info!("Joining channel {}", channel.login);
-            client.join(channel.login);
+        match twitch_api.get_users(None, Some(&channel_ids)).await {
+            Ok(twitch_channels) => {
+                for channel in twitch_channels {
+                    tracing::info!("Joining channel {}", channel.login);
+                    client.join(channel.login);
+                }
+            }
+            Err(e) => {
+                tracing::warn!("Failed to fetch channels {:?}", e);
+            }
         }
 
         tokio::spawn(async move {
@@ -228,57 +208,6 @@ impl ChatPlatform for Twitch {
 
         sender
     }*/
-}
-
-#[async_trait]
-impl TokenStorage for CommandHandler {
-    type LoadError = DatabaseError;
-    type UpdateError = DatabaseError;
-
-    async fn load_token(&mut self) -> Result<UserAccessToken, Self::LoadError> {
-        let access_token = self.db.get_auth("twitch_access_token")?.unwrap_or_default();
-        let refresh_token = self
-            .db
-            .get_auth("twitch_refresh_token")?
-            .unwrap_or_default();
-
-        let created_at = DateTime::from_utc(
-            DateTime::parse_from_rfc3339(
-                &self.db.get_auth("twitch_created_at")?.unwrap_or_default(),
-            )
-            .expect("Failed to parse time")
-            .naive_utc(),
-            Utc,
-        );
-
-        let expires_at = match self.db.get_auth("twitch_expires_at")? {
-            Some(date) => Some(DateTime::from_utc(
-                DateTime::parse_from_rfc3339(&date)
-                    .expect("Failed to parse time")
-                    .naive_utc(),
-                Utc,
-            )),
-            None => None,
-        };
-
-        Ok(UserAccessToken {
-            access_token,
-            refresh_token,
-            created_at,
-            expires_at,
-        })
-    }
-
-    async fn update_token(&mut self, token: &UserAccessToken) -> Result<(), Self::UpdateError> {
-        tracing::info!("Refreshed Twitch token!");
-
-        self.twitch_api
-            .as_ref()
-            .expect("Tried to update Twitch tokens but the API is not initialized")
-            .set_bearer_token(&token.access_token);
-
-        self.db.save_token(token)
-    }
 }
 
 pub trait TwitchMessage {

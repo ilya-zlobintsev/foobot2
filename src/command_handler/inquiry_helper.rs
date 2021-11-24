@@ -8,6 +8,7 @@ use handlebars::{
 };
 use rand::{thread_rng, Rng};
 use serde::{Deserialize, Serialize};
+use twitch_irc::login::RefreshingLoginCredentials;
 
 use crate::database::{models::User, Database};
 use crate::platform::UserIdentifier;
@@ -23,7 +24,7 @@ pub struct InquiryContext {
 }
 
 pub struct TwitchUserHelper {
-    pub twitch_api: TwitchApi,
+    pub twitch_api: TwitchApi<RefreshingLoginCredentials<Database>>,
 }
 
 impl HelperDef for TwitchUserHelper {

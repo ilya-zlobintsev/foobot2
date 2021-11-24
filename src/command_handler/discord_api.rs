@@ -111,7 +111,3 @@ impl DiscordApi {
         }
     }
 }
-
-enum CacheKind {
-    GuildPermissions { guild_id: u64, user_id: u64 },
-}

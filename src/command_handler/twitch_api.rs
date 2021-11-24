@@ -1,50 +1,72 @@
 pub mod model;
 
+use anyhow::anyhow;
 use std::collections::HashMap;
 use std::env;
 use std::sync::{Arc, RwLock};
 use std::time::Duration;
 
 use reqwest::{header::HeaderMap, Client};
-use serde_json::json;
 use tokio::task;
 
 use model::*;
+use twitch_irc::login::{LoginCredentials, RefreshingLoginCredentials, StaticLoginCredentials};
+
+use crate::database::Database;
 
 #[derive(Clone, Debug)]
-pub struct TwitchApi {
-    headers: Arc<RwLock<HeaderMap>>,
+pub struct TwitchApi<C: LoginCredentials> {
+    pub credentials: C,
     client: Client,
     moderators_cache: Arc<RwLock<HashMap<String, Vec<String>>>>,
     users_cache: Arc<RwLock<Vec<User>>>,
     app_access_token: Option<Arc<String>>,
+    headers: HeaderMap,
 }
 
-impl TwitchApi {
-    pub async fn init() -> anyhow::Result<Self> {
+impl TwitchApi<RefreshingLoginCredentials<Database>> {
+    pub async fn init_refreshing(db: Database) -> anyhow::Result<Self> {
+        let login = env::var("TWITCH_LOGIN_NAME")?;
+
+        let client_id = env::var("TWITCH_CLIENT_ID")?;
+        let client_secret = env::var("TWITCH_CLIENT_SECRET")?;
+
+        let credentials = RefreshingLoginCredentials::new(login, client_id, client_secret, db);
+
+        Self::init(credentials).await
+    }
+}
+
+impl TwitchApi<StaticLoginCredentials> {
+    pub async fn init_with_token(access_token: &str) -> anyhow::Result<Self> {
+        Self::init(StaticLoginCredentials::new(
+            String::new(),
+            Some(access_token.to_owned()),
+        ))
+        .await
+    }
+}
+
+impl<C: LoginCredentials> TwitchApi<C> {
+    pub async fn init(credentials: C) -> anyhow::Result<Self> {
         let mut headers = HeaderMap::new();
 
         headers.insert(
             "Client-Id",
-            Self::get_client_id()
-                .ok_or_else(|| {
-                    anyhow::Error::msg("Twitch client ID not specified! Twitch API not initialized")
-                })?
-                .parse()
-                .unwrap(),
+            get_client_id().expect("Client ID missing").parse().unwrap(),
         );
-        headers.insert("Content-Type", "application/json".parse().unwrap());
 
         let moderators_cache = Arc::new(RwLock::new(HashMap::new()));
 
         let users_cache = Arc::new(RwLock::new(Vec::new()));
 
         let twitch_api = TwitchApi {
-            headers: Arc::new(RwLock::new(headers)),
+            credentials,
             client: Client::new(),
             moderators_cache,
             users_cache,
             app_access_token: None,
+            headers,
         };
 
         /*if let Some(_) = twitch_api.app_access_token {
@@ -58,14 +80,6 @@ impl TwitchApi {
         twitch_api.start_cron().await;
 
         Ok(twitch_api)
-    }
-
-    pub async fn init_with_token(access_token: &str) -> anyhow::Result<Self> {
-        let api = Self::init().await?;
-
-        api.set_bearer_token(access_token);
-
-        Ok(api)
     }
 
     // TODO
@@ -162,7 +176,7 @@ impl TwitchApi {
         &self,
         logins: Option<&Vec<&str>>,
         ids: Option<&Vec<&str>>,
-    ) -> Result<Vec<User>, reqwest::Error> {
+    ) -> anyhow::Result<Vec<User>> {
         let mut results = Vec::new();
 
         let mut params: Vec<(&str, &str)> = Vec::new();
@@ -193,12 +207,11 @@ impl TwitchApi {
         }
 
         if !params.is_empty() || (logins.is_none() && ids.is_none()) {
-            let headers = self.headers.read().unwrap().clone();
-
             let response = self
                 .client
                 .get("https://api.twitch.tv/helix/users")
-                .headers(headers)
+                .headers(self.headers.clone())
+                .bearer_auth(self.get_token().await?)
                 .query(&params)
                 .send()
                 .await?;
@@ -219,7 +232,17 @@ impl TwitchApi {
         Ok(results)
     }
 
-    pub async fn get_self_user(&self) -> Result<User, reqwest::Error> {
+    async fn get_token(&self) -> anyhow::Result<String> {
+        Ok(self
+            .credentials
+            .get_credentials()
+            .await
+            .map_err(|_| anyhow!("Unable to get credentials"))?
+            .token
+            .ok_or_else(|| anyhow!("Token missing"))?)
+    }
+
+    pub async fn get_self_user(&self) -> anyhow::Result<User> {
         Ok(self
             .get_users(None, None)
             .await?
@@ -270,116 +293,6 @@ impl TwitchApi {
 
         Ok(mods)
     }
-
-    fn get_app_access_headers(&self) -> HeaderMap {
-        let mut headers = (*self.headers.read().unwrap()).clone();
-
-        headers.insert(
-            "Authorization",
-            format!(
-                "Bearer {}",
-                self.app_access_token
-                    .as_ref()
-                    .expect("App access token missing")
-            )
-            .parse()
-            .unwrap(),
-        );
-
-        headers
-    }
-
-    pub fn set_bearer_token(&self, token: &str) {
-        let mut headers = self.headers.write().expect("Failed to lock headers");
-
-        tracing::info!("Updating Twitch API token...");
-
-        tracing::info!("Old headers: {:?}", headers);
-
-        headers.insert(
-            "Authorization",
-            format!("Bearer {}", token).parse().unwrap(),
-        );
-
-        tracing::info!("New headers: {:?}", headers);
-
-        tracing::info!("Bearer token for Twitch API calls updated!");
-    }
-
-    pub async fn create_eventsub_subscription(
-        &self,
-        sub: EventsubSubscriptionType,
-        secret: &str,
-    ) -> Result<(), reqwest::Error> {
-        let body = json!({
-            "type": sub.get_name(),
-            "version": sub.get_version(),
-            "condition": sub.get_condition(),
-            "transport": {
-                "method": "webhook",
-                "callback": format!("{}/webhooks/twitch", std::env::var("BASE_URL").expect("no base url")),
-                "secret": secret
-            }
-        }).to_string();
-
-        tracing::info!("Creating EventSub subscription {}", body);
-
-        let pending_response = self
-            .client
-            .post("https://api.twitch.tv/helix/eventsub/subscriptions")
-            .headers(self.get_app_access_headers())
-            .body(body)
-            .send()
-            .await?;
-
-        tracing::info!(
-            "POST {}: {}",
-            pending_response.url(),
-            pending_response.status()
-        );
-
-        let text = pending_response.text().await?;
-
-        tracing::info!("{}", text);
-
-        Ok(())
-    }
-
-    pub async fn list_eventsub_subscriptions(
-        &self,
-    ) -> Result<EventsubSubscriptionList, reqwest::Error> {
-        Ok(self
-            .client
-            .get("https://api.twitch.tv/helix/eventsub/subscriptions")
-            .headers(self.get_app_access_headers())
-            .send()
-            .await?
-            .json()
-            .await?)
-    }
-
-    pub async fn delete_eventsub_subscription(&self, sub_id: &str) -> Result<(), reqwest::Error> {
-        assert!(self
-            .client
-            .delete("https://api.twitch.tv/helix/eventsub/subscriptions")
-            .query(&[("id", sub_id)])
-            .headers(self.get_app_access_headers())
-            .send()
-            .await?
-            .status()
-            .is_success());
-
-        Ok(())
-    }
-
-    pub fn get_client_id() -> Option<String> {
-        env::var("TWITCH_CLIENT_ID").ok()
-    }
-
-    pub fn get_client_secret() -> Option<String> {
-        env::var("TWITCH_CLIENT_SECRET").ok()
-    }
-
     // This terrible abomination has to exist because twitch doesn't provide an endpoint for this that doesn't require channel auth
     // /// Returns the list of logins of channel moderators. Don't expect this to be efficient
     /*async fn get_channel_mods_from_irc(
@@ -428,4 +341,12 @@ impl TwitchApi {
 
         Ok(mods)
     }*/
+}
+
+pub fn get_client_id() -> Option<String> {
+    env::var("TWITCH_CLIENT_ID").ok()
+}
+
+pub fn get_client_secret() -> Option<String> {
+    env::var("TWITCH_CLIENT_SECRET").ok()
 }
