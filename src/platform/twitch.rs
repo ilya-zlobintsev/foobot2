@@ -103,19 +103,50 @@ impl Twitch {
 
                     tracing::info!("Replying with {}", response);
 
-                    if let Some(pm) = msg.get_privmsg() {
-                        client
-                            .reply_to_privmsg(response, &pm)
-                            .await
-                            .expect("Failed to reply");
+                    const MSG_LENGTH_LIMIT: usize = 420;
+
+                    if response.len() > MSG_LENGTH_LIMIT {
+                        let response_bytes = response.into_bytes();
+
+                        let mut chunks = response_bytes
+                            .chunks(MSG_LENGTH_LIMIT)
+                            .map(std::str::from_utf8)
+                            .collect::<Result<Vec<&str>, _>>()
+                            .unwrap()
+                            .into_iter();
+
+                        if let Some(pm) = msg.get_privmsg() {
+                            client
+                                .reply_to_privmsg(chunks.next().unwrap().to_owned(), &pm)
+                                .await
+                                .expect("Failed to reply");
+
+                            for chunk in chunks {
+                                client
+                                    .say(pm.channel_login.clone(), chunk.to_owned())
+                                    .await
+                                    .expect("Failed to say");
+                                
+                                sleep(Duration::from_secs(1)).await; // rate limiting
+                            }
+                        } else {
+                            unimplemented!() // i don't bother with the whispers functionality because it doesn't properly work on twitch
+                        }
                     } else {
-                        client
-                            .privmsg(
-                                channel.to_string(),
-                                format!("/w {} {}", msg.get_sender().login, response),
-                            )
-                            .await
-                            .expect("Failed to say");
+                        if let Some(pm) = msg.get_privmsg() {
+                            client
+                                .reply_to_privmsg(response, &pm)
+                                .await
+                                .expect("Failed to reply");
+                        } else {
+                            client
+                                .privmsg(
+                                    channel.to_string(),
+                                    format!("/w {} {}", msg.get_sender().login, response),
+                                )
+                                .await
+                                .expect("Failed to say");
+                        }
                     }
 
                     sleep(Duration::from_secs(1)).await; // This is needed to adhere to the twitch rate limits
