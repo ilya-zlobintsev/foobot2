@@ -1,5 +1,4 @@
 use std::env;
-use std::thread::{self, sleep};
 use std::time::Duration;
 
 use handlebars::{
@@ -8,6 +7,7 @@ use handlebars::{
 };
 use rand::{thread_rng, Rng};
 use serde::{Deserialize, Serialize};
+use tokio::time::sleep;
 use twitch_irc::login::RefreshingLoginCredentials;
 
 use crate::database::{models::User, Database};
@@ -66,15 +66,12 @@ impl HelperDef for TwitchUserHelper {
 
         let twitch_api = self.twitch_api.clone();
 
-        let users_response = thread::spawn(move || {
-            runtime.block_on(twitch_api.get_users(
+        let users_response = runtime
+            .block_on(twitch_api.get_users(
                 Some(&logins.iter().map(|u| u.as_str()).collect::<Vec<&str>>()),
                 Some(&ids.iter().map(|u| u.as_str()).collect::<Vec<&str>>()),
             ))
-        })
-        .join()
-        .unwrap()
-        .map_err(|e| RenderError::new(e.to_string()))?;
+            .map_err(|e| RenderError::new(e.to_string()))?;
 
         let user = users_response
             .first()
@@ -187,9 +184,8 @@ impl HelperDef for WeatherHelper {
         let api = self.api.clone();
 
         // All of this is needed to call async apis from a blocking function
-        let weather = thread::spawn(move || runtime.block_on(api.get_current(&place)))
-            .join()
-            .unwrap()
+        let weather = runtime
+            .block_on(api.get_current(&place))
             .map_err(|e| RenderError::new(e.to_string()))?;
 
         out.write(&format!(
@@ -252,13 +248,9 @@ impl HelperDef for SpotifyHelper {
 
         let spotify_api = SpotifyApi::new(&access_token);
 
-        match thread::spawn(move || {
-            runtime
-                .block_on(spotify_api.get_current_song())
-                .map_err(|e| RenderError::new(format!("Spotify API Error: {}", e.to_string())))
-        })
-        .join()
-        .unwrap()?
+        match runtime
+            .block_on(spotify_api.get_current_song())
+            .map_err(|e| RenderError::new(format!("Spotify API Error: {}", e.to_string())))?
         {
             Some(playback) => {
                 let position = playback.progress_ms / 1000;
@@ -331,11 +323,9 @@ impl HelperDef for LastFMHelper {
 
         let lastfm_api = self.lastfm_api.clone();
 
-        let response =
-            thread::spawn(move || runtime.block_on(lastfm_api.get_recent_tracks(&username)))
-                .join()
-                .unwrap()
-                .map_err(|e| RenderError::new(format!("Last.FM Error: {}", e)))?;
+        let response = runtime
+            .block_on(lastfm_api.get_recent_tracks(&username))
+            .map_err(|e| RenderError::new(format!("Last.FM Error: {}", e)))?;
 
         out.write(&match response.recenttracks.track.iter().find(|track| {
             if let Some(attr) = &track.attr {
@@ -384,9 +374,11 @@ pub fn sleep_helper(
 ) -> HelperResult {
     match h.params().get(0) {
         Some(duration) => {
-            sleep(Duration::from_secs(
+            let runtime = tokio::runtime::Handle::current();
+
+            runtime.block_on(sleep(Duration::from_secs(
                 duration.value().as_u64().expect("Invalid duration"),
-            ));
+            )));
 
             Ok(())
         }

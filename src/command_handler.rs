@@ -214,8 +214,8 @@ impl CommandHandler {
                                 action,
                                 execution_context,
                                 user.clone(),
-                                &arguments,
-                            )?,
+                                arguments.into_iter().map(|a| a.to_owned()).collect(),
+                            ).await?,
                             None,
                         )
                     } else {
@@ -266,8 +266,8 @@ impl CommandHandler {
                                 cmd.action,
                                 execution_context,
                                 user.clone(),
-                                &arguments,
-                            )?,
+                                arguments.into_iter().map(|a| a.to_owned()).collect(),
+                            ).await?,
                             cmd.cooldown,
                         )
                     }
@@ -307,22 +307,24 @@ impl CommandHandler {
         });
     }
 
-    fn execute_command_action<C: ExecutionContext>(
+    async fn execute_command_action<C: ExecutionContext>(
         &self,
         action: String,
         _execution_context: C,
         user: User,
-        arguments: &Vec<&str>,
+        arguments: Vec<String>,
     ) -> Result<Option<String>, CommandError> {
         tracing::info!("Parsing action {}", action);
+        
+        let template_registry = self.template_registry.clone();
 
-        let response = match self.template_registry.render_template(
+        let response = match task::spawn_blocking(move || template_registry.render_template(
             &action,
             &(InquiryContext {
                 user,
                 arguments: arguments.iter().map(|s| s.to_owned().to_owned()).collect(),
             }),
-        ) {
+        )).await.expect("Faoled to join") {
             Ok(result) => result,
             Err(e) => e.desc,
         };
