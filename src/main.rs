@@ -41,7 +41,7 @@ async fn main() {
     handles.push(web_handle);
 
     match &command_handler.twitch_api {
-        Some(twitch_api) => {
+        Some(_) => {
             let twitch = Twitch::init(command_handler.clone()).await.unwrap();
 
             handles.push(twitch.run().await);

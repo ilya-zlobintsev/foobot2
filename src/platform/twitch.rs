@@ -1,4 +1,3 @@
-use std::env;
 use std::sync::Arc;
 
 use async_trait::async_trait;
@@ -7,7 +6,7 @@ use std::time::{Duration, Instant};
 use tokio::sync::Mutex;
 use tokio::task::{self, JoinHandle};
 use tokio::time::sleep;
-use twitch_irc::login::RefreshingLoginCredentials;
+use twitch_irc::login::{LoginCredentials, RefreshingLoginCredentials};
 use twitch_irc::message::{Badge, PrivmsgMessage, ServerMessage, TwitchUserBasics, WhisperMessage};
 use twitch_irc::{ClientConfig, SecureTCPTransport, TwitchIRCClient};
 
@@ -126,7 +125,7 @@ impl Twitch {
                                     .say(pm.channel_login.clone(), chunk.to_owned())
                                     .await
                                     .expect("Failed to say");
-                                
+
                                 sleep(Duration::from_secs(1)).await; // rate limiting
                             }
                         } else {
@@ -161,12 +160,24 @@ impl ChatPlatform for Twitch {
     async fn init(command_handler: CommandHandler) -> Result<Box<Self>, super::ChatPlatformError> {
         let command_prefix = Self::get_prefix();
 
+        let twitch_api = command_handler
+            .twitch_api
+            .as_ref()
+            .expect("Twitch API is not initialized");
+
+        let login = twitch_api
+            .credentials
+            .get_credentials()
+            .await
+            .expect("Failed to get Twtich credentials")
+            .login;
+
         Ok(Box::new(Self {
             client: Arc::new(Mutex::new(None)),
             command_handler,
             command_prefix,
             last_messages: Arc::new(DashMap::new()),
-            login: env::var("TWITCH_LOGIN_NAME").expect("TWITCH_LOGIN_NAME missing"),
+            login,
         }))
     }
 

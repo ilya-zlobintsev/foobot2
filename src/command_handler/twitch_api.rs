@@ -26,12 +26,10 @@ pub struct TwitchApi<C: LoginCredentials> {
 
 impl TwitchApi<RefreshingLoginCredentials<Database>> {
     pub async fn init_refreshing(db: Database) -> anyhow::Result<Self> {
-        let login = env::var("TWITCH_LOGIN_NAME")?;
-
         let client_id = env::var("TWITCH_CLIENT_ID")?;
         let client_secret = env::var("TWITCH_CLIENT_SECRET")?;
 
-        let credentials = RefreshingLoginCredentials::new(login, client_id, client_secret, db);
+        let credentials = RefreshingLoginCredentials::new(client_id, client_secret, db);
 
         Self::init(credentials).await
     }
@@ -248,7 +246,7 @@ impl<C: LoginCredentials> TwitchApi<C> {
             .credentials
             .get_credentials()
             .await
-            .map_err(|_| anyhow!("Unable to get credentials"))?
+            .map_err(|e| anyhow!("Unable to get credentials: {:?}", e))?
             .token
             .ok_or_else(|| anyhow!("Token missing"))?)
     }
