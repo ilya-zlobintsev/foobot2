@@ -1,6 +1,7 @@
 pub mod discord_api;
 pub mod inquiry_helper;
 pub mod lastfm_api;
+pub mod lingva_api;
 pub mod owm_api;
 pub mod spotify_api;
 pub mod twitch_api;
@@ -22,8 +23,10 @@ use tokio::task;
 
 use discord_api::DiscordApi;
 use lastfm_api::LastFMApi;
+use lingva_api::LingvaApi;
 use owm_api::OwmApi;
 use twitch_api::TwitchApi;
+
 use twitch_irc::login::RefreshingLoginCredentials;
 
 #[derive(Clone, Debug)]
@@ -51,8 +54,16 @@ impl CommandHandler {
             Err(_) => None,
         };
 
+        let lingva_url = match env::var("LINGVA_INSTANCE_URL") {
+            Ok(url) => url,
+            Err(_) => "https://lingva.ml".to_owned(),
+        };
+
+        let lingva_api = LingvaApi::init(lingva_url);
+
         let mut template_registry = Handlebars::new();
 
+        template_registry.register_helper("translate", Box::new(lingva_api));
         template_registry.register_helper("args", Box::new(inquiry_helper::args_helper));
         template_registry.register_helper("spotify", Box::new(SpotifyHelper { db: db.clone() }));
         template_registry.register_helper("choose", Box::new(random_helper));
@@ -215,7 +226,8 @@ impl CommandHandler {
                                 execution_context,
                                 user.clone(),
                                 arguments.into_iter().map(|a| a.to_owned()).collect(),
-                            ).await?,
+                            )
+                            .await?,
                             None,
                         )
                     } else {
@@ -267,7 +279,8 @@ impl CommandHandler {
                                 execution_context,
                                 user.clone(),
                                 arguments.into_iter().map(|a| a.to_owned()).collect(),
-                            ).await?,
+                            )
+                            .await?,
                             cmd.cooldown,
                         )
                     }
@@ -315,18 +328,26 @@ impl CommandHandler {
         arguments: Vec<String>,
     ) -> Result<Option<String>, CommandError> {
         tracing::info!("Parsing action {}", action);
-        
+
         let template_registry = self.template_registry.clone();
 
-        let response = match task::spawn_blocking(move || template_registry.render_template(
-            &action,
-            &(InquiryContext {
-                user,
-                arguments: arguments.iter().map(|s| s.to_owned().to_owned()).collect(),
-            }),
-        )).await.expect("Faoled to join") {
+        let response = match task::spawn_blocking(move || {
+            template_registry.render_template(
+                &action,
+                &(InquiryContext {
+                    user,
+                    arguments: arguments.iter().map(|s| s.to_owned().to_owned()).collect(),
+                }),
+            )
+        })
+        .await
+        .expect("Failed to join")
+        {
             Ok(result) => result,
-            Err(e) => e.desc,
+            Err(e) => {
+                tracing::info!("Failed to render command template: {:?}", e);
+                e.desc
+            }
         };
 
         if !response.is_empty() {

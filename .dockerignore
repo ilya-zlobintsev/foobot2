@@ -2,3 +2,4 @@ target
 Dockerfile
 Dockerfile.aarch64
 deploy.sh
+Cargo.lock

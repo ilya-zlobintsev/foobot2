@@ -7,6 +7,7 @@ use handlebars::{
 };
 use rand::{thread_rng, Rng};
 use serde::{Deserialize, Serialize};
+use tokio::runtime::Handle;
 use tokio::time::sleep;
 use twitch_irc::login::RefreshingLoginCredentials;
 
@@ -14,6 +15,7 @@ use crate::database::{models::User, Database};
 use crate::platform::UserIdentifier;
 
 use super::lastfm_api::LastFMApi;
+use super::lingva_api::LingvaApi;
 use super::twitch_api::TwitchApi;
 use super::{owm_api::OwmApi, spotify_api::SpotifyApi};
 
@@ -383,5 +385,61 @@ pub fn sleep_helper(
             Ok(())
         }
         None => Err(RenderError::new("sleep error: no duration specified")),
+    }
+}
+
+impl HelperDef for LingvaApi {
+    fn call<'reg: 'rc, 'rc>(
+        &self,
+        h: &Helper,
+        _: &Handlebars,
+        _: &Context,
+        _: &mut RenderContext,
+        out: &mut dyn Output,
+    ) -> HelperResult {
+        let raw_params = h
+            .params()
+            .iter()
+            .map(|param| match param.relative_path() {
+                Some(path) => path.to_owned(),
+                None => param.render(),
+            })
+            .collect::<Vec<String>>()
+            .join(" ");
+
+        let mut params = raw_params.split_whitespace().collect::<Vec<&str>>();
+
+        // The join into split is needed to fix inconsistencies when calling the command with
+        // `(args)` as opposed to passing the arguments to the helper directly
+
+        let mut source = String::from("auto");
+        let mut target = String::from("en");
+
+        params.retain(|param| {
+            if let Some(source_lang) = param.strip_prefix("from:") {
+                source = source_lang.to_string();
+
+                false
+            } else if let Some(target_lang) = param.strip_prefix("to:") {
+                target = target_lang.to_string();
+
+                false
+            } else {
+                true
+            }
+        });
+
+        let text = params.join(" ");
+
+        tracing::info!("Translating text {}", text);
+
+        let rt = Handle::current();
+
+        match rt.block_on(self.translate(&source, &target, &text)) {
+            Ok(translation) => out.write(&translation)?,
+            Err(e) => out.write(&format!("error translating: {}", e))?,
+        }
+
+        Ok(())
     }
 }
