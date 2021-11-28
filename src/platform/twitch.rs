@@ -35,7 +35,7 @@ impl Twitch {
             let client = client.as_ref().unwrap();
 
             client
-                .privmsg("pajlada".to_owned(), "Weirdga 👉 🚨".to_owned())
+                .privmsg("pajlada".to_owned(), "FeelsWeirdMan 👉 🚨".to_owned())
                 .await
                 .unwrap();
         }
