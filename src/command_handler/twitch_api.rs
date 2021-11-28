@@ -29,7 +29,7 @@ impl TwitchApi<RefreshingLoginCredentials<Database>> {
         let client_id = env::var("TWITCH_CLIENT_ID")?;
         let client_secret = env::var("TWITCH_CLIENT_SECRET")?;
 
-        let credentials = RefreshingLoginCredentials::new(client_id, client_secret, db);
+        let credentials = RefreshingLoginCredentials::init(client_id, client_secret, db);
 
         Self::init(credentials).await
     }
