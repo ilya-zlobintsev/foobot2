@@ -1,4 +1,5 @@
 pub mod discord_api;
+pub mod finnhub_api;
 pub mod inquiry_helper;
 pub mod lastfm_api;
 pub mod lingva_api;
@@ -28,6 +29,8 @@ use owm_api::OwmApi;
 use twitch_api::TwitchApi;
 
 use twitch_irc::login::RefreshingLoginCredentials;
+
+use self::finnhub_api::FinnhubApi;
 
 #[derive(Clone, Debug)]
 pub struct CommandHandler {
@@ -68,6 +71,10 @@ impl CommandHandler {
         template_registry.register_helper("spotify", Box::new(SpotifyHelper { db: db.clone() }));
         template_registry.register_helper("choose", Box::new(random_helper));
         template_registry.register_helper("sleep", Box::new(sleep_helper));
+
+        if let Ok(api_key) = env::var("FINNHUB_API_KEY") {
+            template_registry.register_helper("stock", Box::new(FinnhubApi::init(api_key)));
+        }
 
         if let Ok(owm_api_key) = env::var("OWM_API_KEY") {
             template_registry.register_helper(

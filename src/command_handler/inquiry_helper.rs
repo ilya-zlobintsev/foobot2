@@ -14,6 +14,7 @@ use twitch_irc::login::RefreshingLoginCredentials;
 use crate::database::{models::User, Database};
 use crate::platform::UserIdentifier;
 
+use super::finnhub_api::FinnhubApi;
 use super::lastfm_api::LastFMApi;
 use super::lingva_api::LingvaApi;
 use super::twitch_api::TwitchApi;
@@ -441,5 +442,40 @@ impl HelperDef for LingvaApi {
         }
 
         Ok(())
+    }
+}
+
+impl HelperDef for FinnhubApi {
+    fn call<'reg: 'rc, 'rc>(
+        &self,
+        h: &Helper,
+        _: &Handlebars,
+        _: &Context,
+        _: &mut RenderContext,
+        out: &mut dyn Output,
+    ) -> HelperResult {
+        let param = h
+            .param(0)
+            .ok_or_else(|| RenderError::new("symbol not specified!"))?;
+
+        let symbol = match param.relative_path() {
+            Some(path) => path.to_owned(),
+            None => param.render(),
+        };
+
+        let rt = Handle::current();
+
+        match rt.block_on(self.quote(&symbol)) {
+            Ok(quote) => {
+                out.write(&format!(
+                    "{} ({})",
+                    quote.current_price,
+                    quote.percent_change.unwrap_or(0.0)
+                ))?;
+
+                Ok(())
+            }
+            Err(e) => Err(RenderError::new(e.to_string())),
+        }
     }
 }
