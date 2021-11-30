@@ -502,17 +502,16 @@ impl HelperDef for HttpHelper {
         _: &mut RenderContext,
         out: &mut dyn Output,
     ) -> HelperResult {
-    let mut url = h
-        .params()
-        .iter()
-        .map(|param| match param.relative_path() {
-            Some(path) => path.to_owned(),
-            None => param.render(),
-        })
-        .collect::<Vec<String>>()
-        .join("");
+        let url = h
+            .params()
+            .iter()
+            .map(|param| match param.relative_path() {
+                Some(path) => path.to_owned(),
+                None => param.render(),
+            })
+            .collect::<Vec<String>>()
+            .join("");
 
-        
         tracing::info!("Making a request to: {}", url);
 
         let rt = Handle::current();
@@ -522,16 +521,27 @@ impl HelperDef for HttpHelper {
         match response {
             Ok(response) => {
                 if response.status().is_success() {
-                    let text = rt
-                        .block_on(response.text())
-                        .unwrap_or("<empty text>".to_owned());
+                    match response.headers().get(http::header::CONTENT_TYPE) {
+                        Some(content_type) => {
+                            if content_type.to_str().unwrap().starts_with("text/plain") {
+                                let text = rt
+                                    .block_on(response.text())
+                                    .unwrap_or("<empty text>".to_owned());
 
-                    out.write(&text)?;
+                                out.write(&text)?;
+
+                                Ok(())
+                            } else {
+                                Err(RenderError::new("content type is not text/plain!"))
+                            }
+                        }
+                        None => Err(RenderError::new("server did not return content type!")),
+                    }
                 } else {
                     out.write(&format!("HTTP status: {}", response.status()))?;
-                }
 
-                Ok(())
+                    Ok(())
+                }
             }
             Err(e) => Err(RenderError::new(e.to_string())),
         }
