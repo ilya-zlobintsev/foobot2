@@ -6,6 +6,7 @@ use handlebars::{
     RenderError, ScopedJson,
 };
 use rand::{thread_rng, Rng};
+use reqwest::Client;
 use serde::{Deserialize, Serialize};
 use tokio::runtime::Handle;
 use tokio::time::sleep;
@@ -472,6 +473,63 @@ impl HelperDef for FinnhubApi {
                     quote.current_price,
                     quote.percent_change.unwrap_or(0.0)
                 ))?;
+
+                Ok(())
+            }
+            Err(e) => Err(RenderError::new(e.to_string())),
+        }
+    }
+}
+
+pub struct HttpHelper {
+    client: Client,
+}
+
+impl HttpHelper {
+    pub fn init() -> Self {
+        Self {
+            client: Client::new(),
+        }
+    }
+}
+
+impl HelperDef for HttpHelper {
+    fn call<'reg: 'rc, 'rc>(
+        &self,
+        h: &Helper,
+        _: &Handlebars,
+        _: &Context,
+        _: &mut RenderContext,
+        out: &mut dyn Output,
+    ) -> HelperResult {
+    let mut url = h
+        .params()
+        .iter()
+        .map(|param| match param.relative_path() {
+            Some(path) => path.to_owned(),
+            None => param.render(),
+        })
+        .collect::<Vec<String>>()
+        .join("");
+
+        
+        tracing::info!("Making a request to: {}", url);
+
+        let rt = Handle::current();
+
+        let response = rt.block_on(self.client.get(url).send());
+
+        match response {
+            Ok(response) => {
+                if response.status().is_success() {
+                    let text = rt
+                        .block_on(response.text())
+                        .unwrap_or("<empty text>".to_owned());
+
+                    out.write(&text)?;
+                } else {
+                    out.write(&format!("HTTP status: {}", response.status()))?;
+                }
 
                 Ok(())
             }
