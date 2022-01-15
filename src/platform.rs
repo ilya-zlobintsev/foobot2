@@ -43,6 +43,13 @@ pub trait ExecutionContext {
     fn get_user_identifier(&self) -> UserIdentifier;
 }
 
+pub struct ServerExecutionContext {
+    pub target_channel_id: u64,
+    pub executing_user: UserIdentifier,
+}
+
+
+
 #[derive(Debug)]
 pub enum ChatPlatformError {
     ReqwestError(reqwest::Error),

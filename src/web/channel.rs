@@ -1,7 +1,4 @@
-use crate::{
-    database::models::NewCommand,
-    platform::{ChannelIdentifier, Permissions},
-};
+use crate::{database::models::NewCommand, platform::Permissions};
 
 use super::api::ApiError;
 use super::*;
@@ -28,7 +25,10 @@ pub async fn commands_page(
 ) -> Html<Template> {
     let moderator = {
         if let Some(session) = &session {
-            match get_permissions(channel_id, session.user_id, cmd).await {
+            match cmd
+                .get_permissions_in_channel(session.user_id, channel_id)
+                .await
+            {
                 Ok(permissions) => {
                     tracing::info!("User permissions: {:?}", permissions);
 
@@ -65,7 +65,9 @@ pub async fn update_command(
 ) -> Result<Redirect, ApiError> {
     tracing::info!("{:?}", command_form);
 
-    let permissions = get_permissions(channel_id, session.user_id, cmd).await?;
+    let permissions = cmd
+        .get_permissions_in_channel(session.user_id, channel_id)
+        .await?;
 
     if permissions >= Permissions::ChannelMod {
         cmd.db.update_command(NewCommand {
@@ -87,7 +89,9 @@ pub async fn delete_command(
     cmd: &State<CommandHandler>,
     trigger: &str,
 ) -> Result<(), ApiError> {
-    let permissions = get_permissions(channel_id, session.user_id, cmd).await?;
+    let permissions = cmd
+        .get_permissions_in_channel(session.user_id, channel_id)
+        .await?;
 
     if permissions >= Permissions::ChannelMod {
         cmd.db.delete_command(channel_id, trigger)?;
@@ -104,74 +108,4 @@ pub async fn not_found(_: &Request<'_>) -> Redirect {
 pub struct CommandForm {
     pub trigger: String,
     pub action: String,
-}
-
-pub async fn get_permissions(
-    channel_id: u64,
-    user_id: u64,
-    cmd: &CommandHandler,
-) -> Result<Permissions, ApiError> {
-    let user = cmd
-        .db
-        .get_user_by_id(user_id)?
-        .ok_or(ApiError::InvalidUser)?;
-
-    if let Ok(Some(admin_user)) = cmd.db.get_admin_user() {
-        if user.id == admin_user.id {
-            return Ok(Permissions::Admin);
-        }
-    }
-
-    match cmd.db.get_channel_by_id(channel_id)? {
-        Some(channel) => match ChannelIdentifier::new(&channel.platform, channel.channel)? {
-            ChannelIdentifier::TwitchChannelID(channel_id) => {
-                let twitch_id = user.twitch_id.ok_or_else(|| {
-                    ApiError::GenericError("Not registered on this platform".to_string())
-                })?;
-
-                let twitch_api = cmd
-                    .twitch_api
-                    .as_ref()
-                    .ok_or_else(|| ApiError::GenericError("Twitch not configured".to_string()))?;
-
-                let users_response = twitch_api.get_users(None, Some(&vec![&channel_id])).await?;
-
-                let channel_login = &users_response.first().expect("User not found").login;
-
-                match twitch_api.get_channel_mods(channel_login).await?.contains(
-                    &twitch_api
-                        .get_users(None, Some(&vec![&twitch_id]))
-                        .await?
-                        .first()
-                        .unwrap()
-                        .display_name,
-                ) {
-                    true => Ok(Permissions::ChannelMod),
-                    false => Ok(Permissions::Default),
-                }
-            }
-            ChannelIdentifier::DiscordGuildID(guild_id) => {
-                let user_id = user
-                    .discord_id
-                    .ok_or(ApiError::InvalidUser)?
-                    .parse()
-                    .unwrap();
-
-                let discord_api = cmd.discord_api.as_ref().unwrap();
-
-                match discord_api
-                    .get_permissions_in_guild(user_id, guild_id.parse().unwrap())
-                    .await
-                    .map_err(|_| ApiError::GenericError("discord error".to_string()))?
-                    .contains(twilight_model::guild::Permissions::ADMINISTRATOR)
-                {
-                    true => Ok(Permissions::ChannelMod),
-                    false => Ok(Permissions::Default),
-                }
-            }
-            ChannelIdentifier::IrcChannel(_) => Ok(Permissions::Default), // TODO
-            ChannelIdentifier::Anonymous => Ok(Permissions::Default),
-        },
-        None => Ok(Permissions::Default),
-    }
 }

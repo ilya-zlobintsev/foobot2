@@ -71,7 +71,7 @@ impl HelperDef for TwitchUserHelper {
         let twitch_api = self.twitch_api.clone();
 
         let users_response = runtime
-            .block_on(twitch_api.get_users(
+            .block_on(twitch_api.helix_api.get_users(
                 Some(&logins.iter().map(|u| u.as_str()).collect::<Vec<&str>>()),
                 Some(&ids.iter().map(|u| u.as_str()).collect::<Vec<&str>>()),
             ))

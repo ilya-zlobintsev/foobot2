@@ -77,7 +77,7 @@ impl FromStr for EventSubNotificationType {
     }
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Clone, Deserialize)]
 pub struct EventSubNotification {
     pub subscription: EventSubSubscription,
     event: Value,
@@ -94,7 +94,7 @@ impl EventSubNotification {
     }
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Clone, Deserialize)]
 pub struct EventSubSubscription {
     pub id: String,
     pub status: String,

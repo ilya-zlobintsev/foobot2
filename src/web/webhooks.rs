@@ -37,6 +37,23 @@ pub async fn eventsub_callback(
                     let notification: EventSubNotification =
                         serde_json::from_value(message).expect("Invalid message format");
 
+                    let twitch_api = cmd.twitch_api.as_ref().unwrap();
+
+                    let client = twitch_api
+                        .chat_client
+                        .lock()
+                        .await
+                        .as_ref()
+                        .unwrap()
+                        .clone();
+
+                    client
+                        .say(
+                            "boring_nick".to_string(),
+                            format!("{:?}", notification.clone().get_event()),
+                        )
+                        .await.unwrap();
+
                     tracing::info!(
                         "Received EventSub notification: {:?}",
                         notification.get_event()
