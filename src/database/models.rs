@@ -84,3 +84,20 @@ pub struct WebSession {
     pub user_id: u64,
     pub username: String,
 }
+
+#[derive(Insertable)]
+#[diesel(table_name = eventsub_triggers)]
+pub struct NewEventSubTrigger<'a> {
+    pub broadcaster_id: &'a str,
+    pub event_type: &'a str,
+    pub action: &'a str,
+    pub creation_payload: &'a str,
+}
+
+#[derive(Queryable)]
+pub struct EventSubTrigger {
+    pub broadcaster_id: String,
+    pub event_type: String,
+    pub action: String,
+    pub creation_payload: String,
+}

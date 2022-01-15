@@ -16,8 +16,8 @@ use dashmap::DashMap;
 use diesel::mysql::MysqlConnection;
 use diesel::r2d2::{self, ConnectionManager, Pool};
 use diesel::sql_types::{BigInt, Unsigned};
-use diesel::ConnectionError;
 use diesel::{sql_query, EqAll, QueryDsl};
+use diesel::{ConnectionError, OptionalExtension};
 use diesel::{ExpressionMethods, RunQueryDsl};
 use passwords::PasswordGenerator;
 
@@ -493,6 +493,27 @@ impl Database {
             .next())
     }
 
+    pub fn get_eventsub_redeem_action(
+        &self,
+        broadcaster_id: &str,
+        event_type: &str,
+    ) -> Result<Option<String>, diesel::result::Error> {
+        let mut conn = self.conn_pool.get().unwrap();
+
+        Ok(eventsub_triggers::table
+            .filter(eventsub_triggers::broadcaster_id.eq_all(broadcaster_id))
+            .filter(eventsub_triggers::event_type.eq_all(event_type))
+            .select(eventsub_triggers::action)
+            .first(&mut conn)
+            .optional()?)
+    }
+    
+    pub fn get_eventsub_triggers(&self) -> Result<Vec<EventSubTrigger>, DatabaseError> {
+        let mut conn = self.conn_pool.get().unwrap();
+
+        Ok(eventsub_triggers::table.load(&mut conn)?)
+    }
+
     pub fn set_user_data(
         &self,
         user_data: &UserData,
@@ -623,6 +644,14 @@ impl Database {
             self.set_auth("twitch_expires_at", &expires_at.to_rfc3339())?;
         }
 
+        Ok(())
+    }
+    
+    pub fn add_eventsub_trigger(&self, trigger: NewEventSubTrigger) -> Result<(), DatabaseError> {
+        let mut conn = self.conn_pool.get().unwrap();
+
+        diesel::insert_into(eventsub_triggers::table).values(trigger).execute(&mut conn)?;
+        
         Ok(())
     }
 }

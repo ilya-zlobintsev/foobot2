@@ -1,0 +1,1 @@
+ALTER TABLE eventsub_triggers ADD creation_payload JSON NOT NULL

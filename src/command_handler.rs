@@ -7,6 +7,11 @@ pub mod owm_api;
 pub mod spotify_api;
 pub mod twitch_api;
 
+use crate::command_handler::twitch_api::eventsub::conditions::ChannelUpdateCondition;
+use crate::command_handler::twitch_api::eventsub::{
+    EventSubNotificationType, EventSubSubscriptionType,
+};
+use crate::database::models::NewEventSubTrigger;
 use crate::database::DatabaseError;
 use crate::database::{models::User, Database};
 use crate::platform::{
@@ -50,7 +55,18 @@ pub struct CommandHandler {
 impl CommandHandler {
     pub async fn init(db: Database) -> Self {
         let twitch_api = match TwitchApi::init_refreshing(db.clone()).await {
-            Ok(api) => Some(api),
+            Ok(api) => {
+                for trigger in db.get_eventsub_triggers().expect("DB Error") {
+                    let subscription_type = serde_json::from_str(&trigger.creation_payload)
+                        .expect("Deserialization error");
+
+                    api.add_eventsub_subscription(subscription_type)
+                        .await
+                        .expect("Failed to add EventSub subscription");
+                }
+
+                Some(api)
+            }
             Err(e) => {
                 tracing::info!("Failed to initialize Twitch API: {}", e);
                 None
@@ -281,6 +297,31 @@ impl CommandHandler {
                         },
                         _ => return Err(CommandError::NoPermissions),
                     }
+                }
+                "addchannelupdatetrigger" => {
+                    let channel = execution_context.get_channel();
+                    
+                    let broadcaster_id = channel.get_channel().unwrap();
+
+                    let subscription =
+                        EventSubSubscriptionType::ChannelUpdate(ChannelUpdateCondition {
+                            broadcaster_user_id: broadcaster_id.to_string(),
+                        });
+
+                    let new_trigger = NewEventSubTrigger {
+                        broadcaster_id,
+                        event_type: subscription.get_type(),
+                        action: "channelupdate custom trigger",
+                        creation_payload: &serde_json::to_string(&subscription).unwrap(),
+                    };
+                    
+                    let twitch_api = self.twitch_api.as_ref().unwrap();
+
+                    twitch_api.add_eventsub_subscription(subscription.clone()).await?;
+                    
+                    self.db.add_eventsub_trigger(new_trigger)?;
+                    
+                    (Some(String::from("OK")), None)
                 }
                 _ => match self
                     .db
@@ -625,6 +666,7 @@ pub enum CommandError {
     DatabaseError(DatabaseError),
     TemplateError(handlebars::RenderError),
     ConfigurationError(VarError),
+    GenericError(String),
 }
 
 impl fmt::Display for CommandError {
@@ -644,6 +686,7 @@ impl fmt::Display for CommandError {
             CommandError::ConfigurationError(e) => {
                 f.write_str(&format!("configuration error: {}", e))
             }
+            CommandError::GenericError(s) => f.write_str(s),
         }
     }
 }
@@ -685,6 +728,12 @@ impl From<UserIdentifierError> for CommandError {
             ),
             UserIdentifierError::InvalidPlatform => Self::InvalidArgument("platform".to_string()),
         }
+    }
+}
+
+impl From<anyhow::Error> for CommandError {
+    fn from(e: anyhow::Error) -> Self {
+        Self::GenericError(e.to_string())
     }
 }
 

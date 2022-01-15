@@ -1,6 +1,6 @@
 use std::str::FromStr;
 
-use hmac::{Hmac, Mac, NewMac};
+use hmac::{Hmac, Mac};
 use rocket::{data::ToByteUnit, http::Status, outcome::Outcome, request::FromRequest, Data, State};
 use serde_json::Value;
 use sha2::Sha256;
@@ -48,29 +48,35 @@ pub async fn eventsub_callback(
                     let cmd = (*cmd).clone();
 
                     task::spawn(async move {
-                        let action = format!("{:?}", event); // TODO query this from DB
-
                         let broadcaster_id = event.get_broadcaster_id();
+                        
+                        if let Some(action) =
+                            cmd.db.get_eventsub_redeem_action(&broadcaster_id, &properties.subscription_type).expect("DB error")
+                        {
+                            let user_id = match event {
+                                EventSubEventType::ChannelUpdate(event) => {
+                                    event.broadcaster_user_id
+                                }
+                                EventSubEventType::StreamOnline(event) => event.broadcaster_user_id,
+                                EventSubEventType::ChannelPointsCustomRewardRedemptionAdd(
+                                    event,
+                                ) => event.user_id,
+                            };
 
-                        let user_id = match event {
-                            EventSubEventType::ChannelUpdate(event) => event.broadcaster_user_id,
-                            EventSubEventType::StreamOnline(event) => event.broadcaster_user_id,
-                            EventSubEventType::ChannelPointsCustomRewardRedemptionAdd(event) => {
-                                event.user_id
-                            }
-                        };
+                            let context = ServerExecutionContext {
+                                target_channel: ChannelIdentifier::TwitchChannelID(
+                                    broadcaster_id.to_string(),
+                                ),
+                                executing_user: UserIdentifier::TwitchID(user_id),
+                                cmd: cmd.clone(),
+                            };
 
-                        let context = ServerExecutionContext {
-                            target_channel: ChannelIdentifier::TwitchChannelID(
-                                broadcaster_id.to_string(),
-                            ),
-                            executing_user: UserIdentifier::TwitchID(user_id),
-                            cmd: cmd.clone(),
-                        };
-
-                        cmd.handle_server_message(action, context)
-                            .await
-                            .expect("Failed to handle event");
+                            cmd.handle_server_message(action, context)
+                                .await
+                                .expect("Failed to handle event");
+                        } else {
+                            tracing::warn!("Unregistered EventSub notification (no cleanup?)");
+                        }
                     });
 
                     String::new()
@@ -129,6 +135,7 @@ pub struct TwitchEventsubCallbackProperties {
     message_type: EventSubNotificationType,
     message_signature: String,
     message_timestamp: String,
+    subscription_type: String,
 }
 
 #[rocket::async_trait]
@@ -167,6 +174,11 @@ impl<'r> FromRequest<'r> for TwitchEventsubCallbackProperties {
                 .to_string(),
             message_timestamp: headers
                 .get("Twitch-Eventsub-Message-Timestamp")
+                .next()
+                .unwrap()
+                .to_string(),
+            subscription_type: headers
+                .get("Twitch-Eventsub-Subscription-Type")
                 .next()
                 .unwrap()
                 .to_string(),

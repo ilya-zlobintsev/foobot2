@@ -5,6 +5,7 @@ use std::str::FromStr;
 
 use anyhow::anyhow;
 use serde::Deserialize;
+use serde::Serialize;
 use serde_json::{json, Value};
 
 use crate::web;
@@ -12,13 +13,13 @@ use crate::web;
 use self::conditions::*;
 use self::events::*;
 
-#[derive(Debug)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum EventSubSubscriptionType {
     ChannelUpdate(ChannelUpdateCondition),
 }
 
 impl EventSubSubscriptionType {
-    fn get_type(&self) -> &str {
+    pub fn get_type(&self) -> &str {
         match self {
             Self::ChannelUpdate(_) => "channel.update",
         }
@@ -30,7 +31,7 @@ impl EventSubSubscriptionType {
         }
     }
 
-    fn get_condition(&self) -> Value {
+    pub fn get_condition(&self) -> Value {
         match self {
             Self::ChannelUpdate(condition) => serde_json::to_value(condition).unwrap(),
         }

@@ -1,7 +1,6 @@
 CREATE TABLE eventsub_triggers(
-    channel_id BIGINT UNSIGNED,
-    event_type VARCHAR(255),
-    action MEDIUMTEXT,
-    FOREIGN KEY (channel_id) REFERENCES channels (id),
-    PRIMARY KEY (channel_id, event_type)
+    broadcaster_id VARCHAR(255) NOT NULL,
+    event_type VARCHAR(255) NOT NULL,
+    action MEDIUMTEXT NOT NULL,
+    PRIMARY KEY (broadcaster_id, event_type)
 )

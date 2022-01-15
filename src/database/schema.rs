@@ -24,10 +24,11 @@ table! {
 }
 
 table! {
-    eventsub_triggers (channel_id, event_type) {
-        channel_id -> Unsigned<Bigint>,
+    eventsub_triggers (broadcaster_id, event_type) {
+        broadcaster_id -> Varchar,
         event_type -> Varchar,
-        action -> Nullable<Mediumtext>,
+        action -> Mediumtext,
+        creation_payload -> Longtext,
     }
 }
 
@@ -65,7 +66,6 @@ table! {
 }
 
 joinable!(commands -> channels (channel_id));
-joinable!(eventsub_triggers -> channels (channel_id));
 joinable!(prefixes -> channels (channel_id));
 joinable!(user_data -> users (user_id));
 joinable!(web_sessions -> users (user_id));
