@@ -5,10 +5,11 @@ mod errors;
 mod profile;
 mod template_context;
 mod webhooks;
+use anyhow::anyhow;
 
 use std::env;
 
-use reqwest::Client;
+use reqwest::{Client, Response};
 use rocket::{catchers, fs::FileServer, get, response::content::Html, routes, State};
 use rocket_dyn_templates::Template;
 use tokio::task::{self, JoinHandle};
@@ -80,4 +81,12 @@ pub async fn run(command_handler: CommandHandler) -> JoinHandle<()> {
 
 pub fn get_base_url() -> String {
     env::var("BASE_URL").expect("BASE_URL missing!")
+}
+
+pub fn response_ok(r: &Response) -> anyhow::Result<()> {
+    if r.status().is_success() {
+        Ok(())
+    } else {
+        Err(anyhow!("Non-success response: {}", r.status()))
+    }
 }

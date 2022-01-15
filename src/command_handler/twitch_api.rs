@@ -1,6 +1,10 @@
+pub mod eventsub;
 pub mod model;
 
 use anyhow::anyhow;
+use futures::future::join_all;
+use http::Method;
+use reqwest::RequestBuilder;
 use std::collections::HashMap;
 use std::env;
 use std::sync::{Arc, RwLock};
@@ -10,12 +14,18 @@ use reqwest::{header::HeaderMap, Client};
 use tokio::task;
 
 use model::*;
+use serde_json::Value;
 use twitch_irc::login::{LoginCredentials, RefreshingLoginCredentials, StaticLoginCredentials};
 
 use crate::database::Database;
+use crate::web::response_ok;
+
+use self::eventsub::{EventSubSubscription, EventSubSubscriptionType};
+
+const HELIX_URL: &'static str = "https://api.twitch.tv/helix";
 
 #[derive(Clone, Debug)]
-pub struct TwitchApi<C: LoginCredentials> {
+pub struct TwitchApi<C: LoginCredentials + Clone> {
     pub credentials: C,
     client: Client,
     moderators_cache: Arc<RwLock<HashMap<String, Vec<String>>>>,
@@ -45,7 +55,7 @@ impl TwitchApi<StaticLoginCredentials> {
     }
 }
 
-impl<C: LoginCredentials> TwitchApi<C> {
+impl<C: LoginCredentials + Clone> TwitchApi<C> {
     pub async fn init(credentials: C) -> anyhow::Result<Self> {
         let mut headers = HeaderMap::new();
 
@@ -72,15 +82,24 @@ impl<C: LoginCredentials> TwitchApi<C> {
             headers,
         };
 
-        /*if let Some(_) = twitch_api.app_access_token {
-            for subscription in twitch_api.list_eventsub_subscriptions().await?.data {
+        twitch_api.start_cron().await;
+
+        let mut request_handles = Vec::new();
+
+        for subscription in twitch_api.get_eventsub_subscriptions().await? {
+            let twitch_api = twitch_api.clone();
+
+            request_handles.push(task::spawn(async move {
+                tracing::info!("Removing old subscription {}", subscription.sub_type);
+
                 twitch_api
                     .delete_eventsub_subscription(&subscription.id)
-                    .await?;
-            }
-        }*/
+                    .await
+                    .expect("Failed to remove EventSub subscription");
+            }));
+        }
 
-        twitch_api.start_cron().await;
+        join_all(request_handles).await;
 
         Ok(twitch_api)
     }
@@ -356,30 +375,60 @@ impl<C: LoginCredentials> TwitchApi<C> {
         Ok(mods)
     }*/
 
-    pub async fn add_eventsub_subscription(
-        &self,
-        subscription: EventsubSubscriptionType,
-    ) -> anyhow::Result<()> {
-        let response = self
-            .client
-            .post("https://api.twitch.tv/helix/eventsub/subscriptions")
+    fn app_request(&self, method: Method, path: &str) -> RequestBuilder {
+        self.client
+            .request(method, format!("{}{}", HELIX_URL, path))
             .headers(self.headers.clone())
             .bearer_auth(&self.app_access_token)
+    }
+
+    fn app_get(&self, path: &str) -> RequestBuilder {
+        self.app_request(Method::GET, path)
+    }
+
+    fn app_post(&self, path: &str) -> RequestBuilder {
+        self.app_request(Method::POST, path)
+    }
+
+    fn app_delete(&self, path: &str) -> RequestBuilder {
+        self.app_request(Method::DELETE, path)
+    }
+
+    pub async fn add_eventsub_subscription(
+        &self,
+        subscription: EventSubSubscriptionType,
+    ) -> anyhow::Result<()> {
+        let response = self
+            .app_post("/eventsub/subscriptions")
             .json(&subscription.build_body())
             .send()
             .await?;
 
-        if response.status().is_success() {
-            tracing::info!("Succesfully added EventSub subscription {:?}", subscription);
+        response_ok(&response)?;
 
-            Ok(())
-        } else {
-            Err(anyhow!(
-                "Cannot add eventsub subscription: status {}, {}",
-                response.status(),
-                response.text().await?
-            ))
-        }
+        tracing::info!("Succesfully added EventSub subscription {:?}", subscription);
+
+        Ok(())
+    }
+
+    pub async fn get_eventsub_subscriptions(&self) -> anyhow::Result<Vec<EventSubSubscription>> {
+        let response = self.app_get("/eventsub/subscriptions").send().await?;
+
+        let mut v: Value = response.json().await?;
+
+        let data = v["data"].take();
+
+        Ok(serde_json::from_value(data)?)
+    }
+
+    pub async fn delete_eventsub_subscription(&self, id: &str) -> anyhow::Result<()> {
+        response_ok(
+            &self
+                .app_delete("/eventsub/subscriptions")
+                .query(&[("id", id)])
+                .send()
+                .await?,
+        )
     }
 }
 
