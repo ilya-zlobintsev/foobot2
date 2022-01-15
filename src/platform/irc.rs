@@ -26,22 +26,19 @@ impl Irc {
         } = self.clone();
 
         task::spawn(async move {
-            match &message.command {
-                Command::PRIVMSG(_, content) => {
-                    if let Some(command_text) = content.strip_prefix(&*command_prefix) {
-                        if let Some(response) = command_handler
-                            .handle_command_message(&command_text, IrcExecutionContext(&message))
-                            .await
-                        {
-                            let client = client.read().unwrap();
+            if let Command::PRIVMSG(_, content) = &message.command {
+                if let Some(command_text) = content.strip_prefix(&*command_prefix) {
+                    if let Some(response) = command_handler
+                        .handle_command_message(command_text, IrcExecutionContext(&message))
+                        .await
+                    {
+                        let client = client.read().unwrap();
 
-                            client
-                                .send_privmsg(message.response_target().unwrap(), response)
-                                .expect("Failed to send PRIVMSG");
-                        }
+                        client
+                            .send_privmsg(message.response_target().unwrap(), response)
+                            .expect("Failed to send PRIVMSG");
                     }
                 }
-                _ => (),
             }
         });
     }
@@ -61,7 +58,7 @@ impl ChatPlatform for Irc {
                 match env::var("IRC_CHANNELS") {
                     Ok(channels) => {
                         dbg!(&channels);
-                        channels.split(",").map(|s| s.to_owned()).collect()
+                        channels.split(',').map(|s| s.to_owned()).collect()
                     }
                     Err(e) => {
                         tracing::info!("Failed to load IRC channels: {}", e);

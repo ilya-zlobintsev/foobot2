@@ -11,7 +11,7 @@ use serde::{Deserialize, Serialize};
 
 use std::cmp::Ordering;
 use std::env::{self, VarError};
-use std::fmt;
+use std::fmt::{self, Display};
 
 #[async_trait]
 pub trait ChatPlatform {
@@ -83,13 +83,13 @@ impl UserIdentifier {
         tracing::info!("parsing user identifier {}", s);
 
         if let Some(discord_user_id) = s.strip_prefix("<@!") {
-            let discord_user_id = discord_user_id.strip_suffix(">").unwrap();
+            let discord_user_id = discord_user_id.strip_suffix('>').unwrap();
 
             Ok(UserIdentifier::DiscordID(discord_user_id.to_owned()))
         } else {
             let (platform, user_id) = s
                 .split_once(":")
-                .ok_or_else(|| UserIdentifierError::MissingDelimiter)?;
+                .ok_or(UserIdentifierError::MissingDelimiter)?;
 
             match platform {
                 "twitch" => Ok(Self::TwitchID(user_id.to_owned())),
@@ -134,9 +134,9 @@ impl ChannelIdentifier {
 
     pub fn get_channel(&self) -> Option<&str> {
         match self {
-            ChannelIdentifier::TwitchChannelID(id) => Some(&id),
-            ChannelIdentifier::DiscordGuildID(id) => Some(&id),
-            ChannelIdentifier::IrcChannel(channel) => Some(&channel),
+            ChannelIdentifier::TwitchChannelID(id) => Some(id),
+            ChannelIdentifier::DiscordGuildID(id) => Some(id),
+            ChannelIdentifier::IrcChannel(channel) => Some(channel),
             ChannelIdentifier::Anonymous => None,
         }
     }
@@ -149,13 +149,17 @@ pub enum Permissions {
     Admin,
 }
 
-impl Permissions {
-    pub fn to_string(&self) -> String {
-        match self {
-            Permissions::Default => "default".to_string(),
-            Permissions::ChannelMod => "channel_mod".to_string(),
-            Permissions::Admin => "admin".to_string(),
-        }
+impl Display for Permissions {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(
+            f,
+            "{}",
+            match self {
+                Permissions::Default => "default",
+                Permissions::ChannelMod => "channel_mod",
+                Permissions::Admin => "admin",
+            }
+        )
     }
 }
 

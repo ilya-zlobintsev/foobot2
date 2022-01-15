@@ -49,7 +49,7 @@ impl LingvaApi {
 mod tests {
     use super::LingvaApi;
 
-    const TEST_URL: &'static str = "https://lingva.ml/";
+    const TEST_URL: &str = "https://lingva.ml/";
 
     #[tokio::test]
     async fn test_translate() {

@@ -114,7 +114,7 @@ pub async fn get_permissions(
     let user = cmd
         .db
         .get_user_by_id(user_id)?
-        .ok_or_else(|| ApiError::InvalidUser)?;
+        .ok_or(ApiError::InvalidUser)?;
 
     if let Ok(Some(admin_user)) = cmd.db.get_admin_user() {
         if user.id == admin_user.id {
@@ -138,7 +138,7 @@ pub async fn get_permissions(
 
                 let channel_login = &users_response.first().expect("User not found").login;
 
-                match twitch_api.get_channel_mods(&channel_login).await?.contains(
+                match twitch_api.get_channel_mods(channel_login).await?.contains(
                     &twitch_api
                         .get_users(None, Some(&vec![&twitch_id]))
                         .await?
@@ -153,7 +153,7 @@ pub async fn get_permissions(
             ChannelIdentifier::DiscordGuildID(guild_id) => {
                 let user_id = user
                     .discord_id
-                    .ok_or_else(|| ApiError::InvalidUser)?
+                    .ok_or(ApiError::InvalidUser)?
                     .parse()
                     .unwrap();
 
