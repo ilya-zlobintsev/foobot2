@@ -22,7 +22,7 @@ impl User {
 }
 
 #[derive(Insertable, Default)]
-#[table_name = "users"]
+#[diesel(table_name = users)]
 pub struct NewUser<'a> {
     pub twitch_id: Option<&'a str>,
     pub discord_id: Option<&'a str>,
@@ -37,7 +37,7 @@ pub struct Channel {
 }
 
 #[derive(Insertable)]
-#[table_name = "channels"]
+#[diesel(table_name = channels)]
 pub struct NewChannel<'a> {
     pub platform: &'a str,
     pub channel: &'a str,
@@ -53,7 +53,7 @@ pub struct Command {
 }
 
 #[derive(Insertable, Debug, PartialEq, Eq)]
-#[table_name = "commands"]
+#[diesel(table_name = commands)]
 pub struct NewCommand<'a> {
     pub name: &'a str,
     pub action: &'a str,
@@ -63,7 +63,7 @@ pub struct NewCommand<'a> {
 }
 
 #[derive(Queryable, Insertable, Debug, PartialEq, Eq)]
-#[table_name = "user_data"]
+#[diesel(table_name = user_data)]
 pub struct UserData {
     pub name: String,
     pub value: String,
@@ -72,13 +72,13 @@ pub struct UserData {
 }
 
 #[derive(Insertable)]
-#[table_name = "user_data"]
+#[diesel(table_name = user_data)]
 pub struct UserDataUserId {
     pub user_id: u64,
 }
 
 #[derive(Queryable, Insertable, Clone, Serialize, Debug)]
-#[table_name = "web_sessions"]
+#[diesel(table_name = web_sessions)]
 pub struct WebSession {
     pub session_id: String,
     pub user_id: u64,
