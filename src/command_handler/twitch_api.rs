@@ -20,7 +20,7 @@ pub struct TwitchApi<C: LoginCredentials> {
     client: Client,
     moderators_cache: Arc<RwLock<HashMap<String, Vec<String>>>>,
     users_cache: Arc<RwLock<Vec<User>>>,
-    app_access_token: Option<Arc<String>>,
+    app_access_token: Arc<String>,
     headers: HeaderMap,
 }
 
@@ -49,21 +49,26 @@ impl<C: LoginCredentials> TwitchApi<C> {
     pub async fn init(credentials: C) -> anyhow::Result<Self> {
         let mut headers = HeaderMap::new();
 
-        headers.insert(
-            "Client-Id",
-            get_client_id().expect("Client ID missing").parse().unwrap(),
-        );
+        let client_id = get_client_id().expect("Client ID missing");
+
+        headers.insert("Client-Id", client_id.parse().unwrap());
 
         let moderators_cache = Arc::new(RwLock::new(HashMap::new()));
 
         let users_cache = Arc::new(RwLock::new(Vec::new()));
+
+        let app_access_token = Self::get_app_token(
+            &client_id,
+            &get_client_secret().expect("client secret missing"),
+        )
+        .await?;
 
         let twitch_api = TwitchApi {
             credentials,
             client: Client::new(),
             moderators_cache,
             users_cache,
-            app_access_token: None,
+            app_access_token: Arc::new(app_access_token),
             headers,
         };
 
@@ -87,7 +92,9 @@ impl<C: LoginCredentials> TwitchApi<C> {
     ) -> Result<String, reqwest::Error> {
         let client = Client::new();
 
-        let response: serde_json::Value = client.post("https://id.twitch.tv/oauth2/token").query(&[("client_id", client_id), ("client_secret", client_secret), ("grant_type", "client_credentials"), ("scope", "moderation:read channel:edit:commercial channel:manage:broadcast channel:moderate chat:edit")]).send().await?.json().await?;
+        let response: serde_json::Value = client.post("https://id.twitch.tv/oauth2/token")
+            .query(&[("client_id", client_id), ("client_secret", client_secret), ("grant_type", "client_credentials"), ("scope", "moderation:read channel:edit:commercial channel:manage:broadcast channel:moderate chat:edit")])
+            .send().await?.json().await?;
 
         // tracing::info!("{:?}", response);
 
@@ -348,6 +355,32 @@ impl<C: LoginCredentials> TwitchApi<C> {
 
         Ok(mods)
     }*/
+
+    pub async fn add_eventsub_subscription(
+        &self,
+        subscription: EventsubSubscriptionType,
+    ) -> anyhow::Result<()> {
+        let response = self
+            .client
+            .post("https://api.twitch.tv/helix/eventsub/subscriptions")
+            .headers(self.headers.clone())
+            .bearer_auth(&self.app_access_token)
+            .json(&subscription.build_body())
+            .send()
+            .await?;
+
+        if response.status().is_success() {
+            tracing::info!("Succesfully added EventSub subscription {:?}", subscription);
+
+            Ok(())
+        } else {
+            Err(anyhow!(
+                "Cannot add eventsub subscription: status {}, {}",
+                response.status(),
+                response.text().await?
+            ))
+        }
+    }
 }
 
 pub fn get_client_id() -> Option<String> {

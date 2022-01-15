@@ -1,4 +1,4 @@
-use std::{collections::HashMap, env};
+use std::collections::HashMap;
 
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
@@ -70,21 +70,25 @@ pub struct Vip {
     pub granted_at: String,
 }
 
+#[derive(Debug)]
 pub enum EventsubSubscriptionType {
-    /// `broadcaster_id`
+    /// `broadcaster_user_id`
     ChannelFollow(String),
+    /// `broadcaster_user_id`
+    ChannelUpdate(String),
 }
 
 impl EventsubSubscriptionType {
     fn get_type(&self) -> &str {
         match self {
             Self::ChannelFollow(_) => "channel.follow",
+            Self::ChannelUpdate(_) => "channel.update",
         }
     }
 
     fn get_version(&self) -> &str {
         match self {
-            EventsubSubscriptionType::ChannelFollow(_) => "1",
+            _ => "1",
         }
     }
 
@@ -92,8 +96,8 @@ impl EventsubSubscriptionType {
         let mut condition = HashMap::new();
 
         match self {
-            EventsubSubscriptionType::ChannelFollow(broadcaster_id) => {
-                condition.insert("broadcaster_user_id", broadcaster_id.as_str());
+            Self::ChannelFollow(broadcaster_id) | Self::ChannelUpdate(broadcaster_id) => {
+                condition.insert("broadcaster_user_id", broadcaster_id);
             }
         }
 
@@ -110,15 +114,13 @@ impl EventsubSubscriptionType {
         })
     }
 
-    pub fn build_body(&self) -> String {
-        let body = json!({
+    pub fn build_body(&self) -> Value {
+        json!({
             "type": self.get_type(),
             "version": self.get_version(),
             "condition": self.get_condition(),
             "transport": Self::get_transport()
-        });
-
-        serde_json::to_string(&body).expect("Invalid eventsub body")
+        })
     }
 }
 

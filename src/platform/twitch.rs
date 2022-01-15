@@ -169,7 +169,7 @@ impl ChatPlatform for Twitch {
             .credentials
             .get_credentials()
             .await
-            .expect("Failed to get Twtich credentials")
+            .map_err(|_| super::ChatPlatformError::MissingAuthentication)?
             .login;
 
         Ok(Box::new(Self {

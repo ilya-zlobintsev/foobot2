@@ -7,8 +7,8 @@ use crate::command_handler::{
     CommandHandler,
 };
 
-#[post("/twitch", data = "<body>")]
-pub async fn twitch_callback(
+#[post("/twitch/eventsub", data = "<body>")]
+pub async fn eventsub_callback(
     properties: TwitchEventsubCallbackProperties,
     cmd: &State<CommandHandler>,
     body: Data<'_>,

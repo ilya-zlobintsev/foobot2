@@ -67,7 +67,7 @@ pub async fn run(command_handler: CommandHandler) -> JoinHandle<()> {
             )
             .mount("/profile", routes![profile::profile])
             .mount("/api", routes![api::set_lastfm_name])
-            .mount("/hooks", routes![webhooks::twitch_callback])
+            .mount("/hooks", routes![webhooks::eventsub_callback])
             .register("/", catchers![errors::not_found, errors::not_authorized])
             .register("/channels", catchers![channel::not_found])
             .manage(Client::new())
