@@ -4,12 +4,14 @@ use hmac::{Hmac, Mac, NewMac};
 use rocket::{data::ToByteUnit, http::Status, outcome::Outcome, request::FromRequest, Data, State};
 use serde_json::Value;
 use sha2::Sha256;
+use tokio::task;
 
-use crate::command_handler::{
-    twitch_api::eventsub::{
-        EventSubNotification, EventSubNotificationType, EventSubVerficationCallback,
+use crate::{
+    command_handler::{
+        twitch_api::eventsub::{events::*, *},
+        CommandHandler,
     },
-    CommandHandler,
+    platform::{ChannelIdentifier, ServerExecutionContext, UserIdentifier},
 };
 
 #[post("/twitch/eventsub", data = "<body>")]
@@ -37,27 +39,39 @@ pub async fn eventsub_callback(
                     let notification: EventSubNotification =
                         serde_json::from_value(message).expect("Invalid message format");
 
-                    let twitch_api = cmd.twitch_api.as_ref().unwrap();
+                    let event = notification
+                        .get_event()
+                        .expect("Failed to get notification event");
 
-                    let client = twitch_api
-                        .chat_client
-                        .lock()
-                        .await
-                        .as_ref()
-                        .unwrap()
-                        .clone();
+                    tracing::info!("Received EventSub notification: {:?}", event);
 
-                    client
-                        .say(
-                            "boring_nick".to_string(),
-                            format!("{:?}", notification.clone().get_event()),
-                        )
-                        .await.unwrap();
+                    let cmd = (*cmd).clone();
 
-                    tracing::info!(
-                        "Received EventSub notification: {:?}",
-                        notification.get_event()
-                    );
+                    task::spawn(async move {
+                        let action = format!("{:?}", event); // TODO query this from DB
+
+                        let broadcaster_id = event.get_broadcaster_id();
+
+                        let user_id = match event {
+                            EventSubEventType::ChannelUpdate(event) => event.broadcaster_user_id,
+                            EventSubEventType::StreamOnline(event) => event.broadcaster_user_id,
+                            EventSubEventType::ChannelPointsCustomRewardRedemptionAdd(event) => {
+                                event.user_id
+                            }
+                        };
+
+                        let context = ServerExecutionContext {
+                            target_channel: ChannelIdentifier::TwitchChannelID(
+                                broadcaster_id.to_string(),
+                            ),
+                            executing_user: UserIdentifier::TwitchID(user_id),
+                            cmd: cmd.clone(),
+                        };
+
+                        cmd.handle_server_message(action, context)
+                            .await
+                            .expect("Failed to handle event");
+                    });
 
                     String::new()
                 }

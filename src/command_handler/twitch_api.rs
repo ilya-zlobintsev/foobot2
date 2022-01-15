@@ -2,7 +2,6 @@ pub mod eventsub;
 pub mod helix;
 pub mod model;
 
-use anyhow::anyhow;
 use futures::future::join_all;
 use http::Method;
 use reqwest::RequestBuilder;

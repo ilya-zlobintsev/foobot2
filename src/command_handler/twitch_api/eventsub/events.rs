@@ -7,6 +7,18 @@ pub enum EventSubEventType {
     ChannelPointsCustomRewardRedemptionAdd(ChannelPointsCustomRewardRedemptionAddEvent),
 }
 
+impl EventSubEventType {
+    pub fn get_broadcaster_id(&self) -> String {
+        match self {
+            EventSubEventType::ChannelUpdate(event) => event.broadcaster_user_id.clone(),
+            EventSubEventType::StreamOnline(event) => event.broadcaster_user_id.clone(),
+            EventSubEventType::ChannelPointsCustomRewardRedemptionAdd(event) => {
+                event.broadcaster_user_id.clone()
+            }
+        }
+    }
+}
+
 #[derive(Debug, Deserialize)]
 pub struct ChannelUpdateEvent {
     pub broadcaster_user_id: String,

@@ -69,7 +69,7 @@ impl ChatPlatform for Twitch {
         tracing::info!("Connected to Twitch");
 
         *self.client.lock().await = Some(client.clone());
-        
+
         *twitch_api.chat_client.lock().await = Some(client.clone());
 
         let channels = self.command_handler.db.get_channels().unwrap();
@@ -85,7 +85,11 @@ impl ChatPlatform for Twitch {
             })
             .collect();
 
-        match twitch_api.helix_api.get_users(None, Some(&channel_ids)).await {
+        match twitch_api
+            .helix_api
+            .get_users(None, Some(&channel_ids))
+            .await
+        {
             Ok(twitch_channels) => {
                 for channel in twitch_channels {
                     tracing::info!("Joining channel {}", channel.login);

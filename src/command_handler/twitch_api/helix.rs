@@ -127,6 +127,15 @@ impl<C: LoginCredentials> HelixApi<C> {
         }
     }
 
+    pub async fn get_user_by_id(&self, id: &str) -> anyhow::Result<User> {
+        let users = self.get_users(None, Some(&vec![id])).await?;
+
+        users
+            .into_iter()
+            .next()
+            .ok_or_else(|| anyhow!("User not found"))
+    }
+
     async fn get_token(&self) -> anyhow::Result<String> {
         Ok(self
             .credentials

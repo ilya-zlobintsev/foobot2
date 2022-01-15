@@ -9,7 +9,9 @@ pub mod twitch_api;
 
 use crate::database::DatabaseError;
 use crate::database::{models::User, Database};
-use crate::platform::{ChannelIdentifier, ExecutionContext, Permissions, UserIdentifierError};
+use crate::platform::{
+    ChannelIdentifier, ExecutionContext, Permissions, ServerExecutionContext, UserIdentifierError,
+};
 use crate::web;
 
 use anyhow::anyhow;
@@ -495,6 +497,66 @@ impl CommandHandler {
 
     pub async fn get_permissions_in_channel(
         &self,
+        user: User,
+        channel: &ChannelIdentifier,
+    ) -> anyhow::Result<Permissions> {
+        match channel {
+            ChannelIdentifier::TwitchChannelID(channel_id) => {
+                let twitch_id = user
+                    .twitch_id
+                    .ok_or_else(|| anyhow!("Not registered on this platform"))?;
+
+                let twitch_api = self
+                    .twitch_api
+                    .as_ref()
+                    .ok_or_else(|| anyhow!("Twitch not configured"))?;
+
+                let users_response = twitch_api
+                    .helix_api
+                    .get_users(None, Some(&vec![&channel_id]))
+                    .await?;
+
+                let channel_login = &users_response.first().expect("User not found").login;
+
+                match twitch_api.get_channel_mods(channel_login).await?.contains(
+                    &twitch_api
+                        .helix_api
+                        .get_users(None, Some(&vec![&twitch_id]))
+                        .await?
+                        .first()
+                        .unwrap()
+                        .display_name,
+                ) {
+                    true => Ok(Permissions::ChannelMod),
+                    false => Ok(Permissions::Default),
+                }
+            }
+            ChannelIdentifier::DiscordGuildID(guild_id) => {
+                let user_id = user
+                    .discord_id
+                    .ok_or_else(|| anyhow!("Invalid user"))?
+                    .parse()
+                    .unwrap();
+
+                let discord_api = self.discord_api.as_ref().unwrap();
+
+                match discord_api
+                    .get_permissions_in_guild(user_id, guild_id.parse().unwrap())
+                    .await
+                    .map_err(|_| anyhow!("discord error"))?
+                    .contains(twilight_model::guild::Permissions::ADMINISTRATOR)
+                {
+                    true => Ok(Permissions::ChannelMod),
+                    false => Ok(Permissions::Default),
+                }
+            }
+            ChannelIdentifier::IrcChannel(_) => Ok(Permissions::Default), // TODO
+            ChannelIdentifier::Anonymous => Ok(Permissions::Default),
+        }
+    }
+
+    pub async fn get_permissions_in_channel_by_id(
+        &self,
         user_id: u64,
         channel_id: u64,
     ) -> anyhow::Result<Permissions> {
@@ -510,74 +572,52 @@ impl CommandHandler {
         }
 
         match self.db.get_channel_by_id(channel_id)? {
-            Some(channel) => match ChannelIdentifier::new(&channel.platform, channel.channel)? {
-                ChannelIdentifier::TwitchChannelID(channel_id) => {
-                    let twitch_id = user
-                        .twitch_id
-                        .ok_or_else(|| anyhow!("Not registered on this platform"))?;
+            Some(channel) => {
+                let channel_identifier =
+                    ChannelIdentifier::new(&channel.platform, channel.channel)?;
 
-                    let twitch_api = self
-                        .twitch_api
-                        .as_ref()
-                        .ok_or_else(|| anyhow!("Twitch not configured"))?;
+                self.get_permissions_in_channel(user, &channel_identifier)
+                    .await
+            }
 
-                    let users_response = twitch_api
-                        .helix_api
-                        .get_users(None, Some(&vec![&channel_id]))
-                        .await?;
-
-                    let channel_login = &users_response.first().expect("User not found").login;
-
-                    match twitch_api.get_channel_mods(channel_login).await?.contains(
-                        &twitch_api
-                            .helix_api
-                            .get_users(None, Some(&vec![&twitch_id]))
-                            .await?
-                            .first()
-                            .unwrap()
-                            .display_name,
-                    ) {
-                        true => Ok(Permissions::ChannelMod),
-                        false => Ok(Permissions::Default),
-                    }
-                }
-                ChannelIdentifier::DiscordGuildID(guild_id) => {
-                    let user_id = user
-                        .discord_id
-                        .ok_or_else(|| anyhow!("Invalid user"))?
-                        .parse()
-                        .unwrap();
-
-                    let discord_api = self.discord_api.as_ref().unwrap();
-
-                    match discord_api
-                        .get_permissions_in_guild(user_id, guild_id.parse().unwrap())
-                        .await
-                        .map_err(|_| anyhow!("discord error"))?
-                        .contains(twilight_model::guild::Permissions::ADMINISTRATOR)
-                    {
-                        true => Ok(Permissions::ChannelMod),
-                        false => Ok(Permissions::Default),
-                    }
-                }
-                ChannelIdentifier::IrcChannel(_) => Ok(Permissions::Default), // TODO
-                ChannelIdentifier::Anonymous => Ok(Permissions::Default),
-            },
             None => Ok(Permissions::Default),
         }
     }
 
-    pub async fn process_command_in_channel(&self, channel_id: u64) -> anyhow::Result<()> {
-        let channel = self
-            .db
-            .get_channel_by_id(channel_id)?
-            .ok_or_else(|| anyhow!("Invalid channel ID specified"))?;
+    pub async fn handle_server_message(
+        &self,
+        action: String,
+        context: ServerExecutionContext,
+    ) -> anyhow::Result<()> {
+        let user = self.db.get_or_create_user(&context.executing_user)?;
 
-        Ok(())
+        let response = self
+            .execute_command_action(action, context.clone(), user, Vec::new()) // TODO
+            .await?
+            .unwrap_or("Event triggered with no action".to_string());
+
+        match context.get_channel() {
+            ChannelIdentifier::TwitchChannelID(channel_id) => {
+                let twitch_api = self.twitch_api.as_ref().unwrap();
+
+                let broadcaster = twitch_api.helix_api.get_user_by_id(&channel_id).await?;
+
+                let chat_client_guard = twitch_api.chat_client.lock().await;
+
+                let chat_client = chat_client_guard.as_ref().expect("Chat client missing");
+
+                chat_client.say(broadcaster.login, response).await?;
+
+                Ok(())
+            }
+            _ => Err(anyhow!(
+                "Remotely triggered commands not supported for this platform"
+            )),
+        }
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, thiserror::Error)]
 pub enum CommandError {
     MissingArgument(String),
     InvalidArgument(String),

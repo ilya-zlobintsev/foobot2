@@ -26,7 +26,7 @@ pub async fn commands_page(
     let moderator = {
         if let Some(session) = &session {
             match cmd
-                .get_permissions_in_channel(session.user_id, channel_id)
+                .get_permissions_in_channel_by_id(session.user_id, channel_id)
                 .await
             {
                 Ok(permissions) => {
@@ -66,7 +66,7 @@ pub async fn update_command(
     tracing::info!("{:?}", command_form);
 
     let permissions = cmd
-        .get_permissions_in_channel(session.user_id, channel_id)
+        .get_permissions_in_channel_by_id(session.user_id, channel_id)
         .await?;
 
     if permissions >= Permissions::ChannelMod {
@@ -90,7 +90,7 @@ pub async fn delete_command(
     trigger: &str,
 ) -> Result<(), ApiError> {
     let permissions = cmd
-        .get_permissions_in_channel(session.user_id, channel_id)
+        .get_permissions_in_channel_by_id(session.user_id, channel_id)
         .await?;
 
     if permissions >= Permissions::ChannelMod {

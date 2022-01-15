@@ -43,12 +43,37 @@ pub trait ExecutionContext {
     fn get_user_identifier(&self) -> UserIdentifier;
 }
 
+#[derive(Clone)]
 pub struct ServerExecutionContext {
-    pub target_channel_id: u64,
+    pub target_channel: ChannelIdentifier,
     pub executing_user: UserIdentifier,
+    pub cmd: CommandHandler,
 }
 
+#[async_trait]
+impl ExecutionContext for ServerExecutionContext {
+    async fn get_permissions_internal(&self) -> Permissions {
+        let user = self
+            .cmd
+            .db
+            .get_user(&self.executing_user)
+            .expect("DB error")
+            .expect("Invalid user");
 
+        self.cmd
+            .get_permissions_in_channel(user, &self.target_channel)
+            .await
+            .expect("Failed to get permissions")
+    }
+
+    fn get_channel(&self) -> ChannelIdentifier {
+        self.target_channel.clone()
+    }
+
+    fn get_user_identifier(&self) -> UserIdentifier {
+        self.executing_user.clone()
+    }
+}
 
 #[derive(Debug)]
 pub enum ChatPlatformError {
