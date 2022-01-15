@@ -2,11 +2,9 @@ use hmac::{Hmac, Mac, NewMac};
 use rocket::{data::ToByteUnit, http::Status, outcome::Outcome, request::FromRequest, Data, State};
 use sha2::Sha256;
 
-use crate::{
-    command_handler::{
-        twitch_api::model::{EventsubMessage, EventsubMessageType},
-        CommandHandler,
-    },
+use crate::command_handler::{
+    twitch_api::model::{EventsubMessage, EventsubMessageType},
+    CommandHandler,
 };
 
 #[post("/twitch", data = "<body>")]
@@ -31,9 +29,7 @@ pub async fn twitch_callback(
 
             match properties.message_type {
                 EventsubMessageType::WebhookCallbackVerification => Ok(message.challenge.unwrap()),
-                EventsubMessageType::Notification => {
-                    Ok(String::new())
-                }
+                EventsubMessageType::Notification => Ok(String::new()),
             }
         }
         false => {

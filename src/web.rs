@@ -3,8 +3,10 @@ pub mod authenticate;
 mod channel;
 mod errors;
 mod profile;
-// mod webhooks;
 mod template_context;
+mod webhooks;
+
+use std::env;
 
 use reqwest::Client;
 use rocket::{catchers, fs::FileServer, get, response::content::Html, routes, State};
@@ -65,7 +67,7 @@ pub async fn run(command_handler: CommandHandler) -> JoinHandle<()> {
             )
             .mount("/profile", routes![profile::profile])
             .mount("/api", routes![api::set_lastfm_name])
-            // .mount("/webhooks", routes![webhooks::twitch_callback])
+            .mount("/hooks", routes![webhooks::twitch_callback])
             .register("/", catchers![errors::not_found, errors::not_authorized])
             .register("/channels", catchers![channel::not_found])
             .manage(Client::new())
@@ -74,4 +76,8 @@ pub async fn run(command_handler: CommandHandler) -> JoinHandle<()> {
             .await
             .expect("Failed to launch web server")
     })
+}
+
+pub fn get_base_url() -> String {
+    env::var("BASE_URL").expect("BASE_URL missing!")
 }

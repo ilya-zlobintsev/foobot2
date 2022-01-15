@@ -215,7 +215,7 @@ impl<C: LoginCredentials> TwitchApi<C> {
                 .await?;
 
             tracing::info!("GET {}: {}", response.url(), response.status());
-            
+
             let status = response.status();
 
             match status.is_success() {
@@ -232,9 +232,7 @@ impl<C: LoginCredentials> TwitchApi<C> {
 
                     Ok(results)
                 }
-                false => {
-                    Err(anyhow!("Response code {}", status))
-                }
+                false => Err(anyhow!("Response code {}", status)),
             }
         } else {
             Ok(results)

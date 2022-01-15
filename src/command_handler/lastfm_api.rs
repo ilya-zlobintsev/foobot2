@@ -1,8 +1,8 @@
-use std::sync::Arc;
 use anyhow::anyhow;
 use http::StatusCode;
 use reqwest::Client;
 use serde::{Deserialize, Serialize};
+use std::sync::Arc;
 
 #[derive(Clone)]
 pub struct LastFMApi {

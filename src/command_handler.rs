@@ -10,6 +10,7 @@ pub mod twitch_api;
 use crate::database::DatabaseError;
 use crate::database::{models::User, Database};
 use crate::platform::{ExecutionContext, Permissions, UserIdentifierError};
+use crate::web;
 
 use core::fmt;
 use std::env::{self, VarError};
@@ -104,7 +105,7 @@ impl CommandHandler {
                 }),
             );
         }
-        
+
         template_registry.register_helper("get", Box::new(HttpHelper::init()));
 
         template_registry.register_helper("song", Box::new(inquiry_helper::song_helper));
@@ -412,7 +413,7 @@ impl CommandHandler {
         if arguments.len() == 0 {
             Ok(Some(format!(
                 "{}/channels/{}/commands",
-                env::var("BASE_URL")?,
+                web::get_base_url(),
                 self.db
                     .get_or_create_channel(&execution_context.get_channel())?
                     .ok_or_else(|| CommandError::InvalidArgument(

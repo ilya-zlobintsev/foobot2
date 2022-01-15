@@ -25,7 +25,7 @@ impl FinnhubApi {
             .header("X-Finnhub-Token", &*self.api_key)
             .send()
             .await?;
-        
+
         tracing::info!("GET {}: {}", response.url(), response.status());
 
         if response.status().is_success() {

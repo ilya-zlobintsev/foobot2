@@ -1,7 +1,9 @@
-use std::collections::HashMap;
+use std::{collections::HashMap, env};
 
 use serde::{Deserialize, Serialize};
-use serde_json::Value;
+use serde_json::{json, Value};
+
+use crate::web;
 
 #[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -74,19 +76,19 @@ pub enum EventsubSubscriptionType {
 }
 
 impl EventsubSubscriptionType {
-    pub fn get_name(&self) -> &str {
+    fn get_type(&self) -> &str {
         match self {
             Self::ChannelFollow(_) => "channel.follow",
         }
     }
 
-    pub fn get_version(&self) -> &str {
+    fn get_version(&self) -> &str {
         match self {
             EventsubSubscriptionType::ChannelFollow(_) => "1",
         }
     }
 
-    pub fn get_condition(&self) -> HashMap<&str, &str> {
+    fn get_condition(&self) -> Value {
         let mut condition = HashMap::new();
 
         match self {
@@ -95,7 +97,28 @@ impl EventsubSubscriptionType {
             }
         }
 
-        condition
+        serde_json::to_value(condition).expect("Invalid condition")
+    }
+
+    fn get_transport() -> Value {
+        let callback_url = format!("{}/hooks/twitch/eventsub", web::get_base_url(),);
+
+        json!({
+           "method": "webhook",
+           "callback": callback_url,
+           "secret": rocket::Config::SECRET_KEY,
+        })
+    }
+
+    pub fn build_body(&self) -> String {
+        let body = json!({
+            "type": self.get_type(),
+            "version": self.get_version(),
+            "condition": self.get_condition(),
+            "transport": Self::get_transport()
+        });
+
+        serde_json::to_string(&body).expect("Invalid eventsub body")
     }
 }
 
