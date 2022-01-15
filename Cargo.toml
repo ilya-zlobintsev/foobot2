@@ -8,7 +8,7 @@ edition = "2021"
 [dependencies]
 dotenv = "0.15"
 
-diesel = { git = "https://github.com/diesel-rs/diesel.git", features = ["mysql", "r2d2"] }
+diesel = { git = "https://github.com/diesel-rs/diesel.git", features = ["mysql", "r2d2", "serde_json"] }
 diesel_migrations = { git = "https://github.com/diesel-rs/diesel.git" }
 
 tokio = { version = "1.6", features = ["full"] }
@@ -26,11 +26,11 @@ serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 
 twitch-irc = { git = "https://github.com/robotty/twitch-irc-rs", default-features=false, features = ["transport-tcp-rustls-webpki-roots", "refreshing-token"] }
-twilight-http = "0.7"
-twilight-model = "0.7"
-twilight-gateway = "0.7"
-twilight-cache-inmemory = "0.7"
-twilight-util = { version = "0.7", features = ["permission-calculator"] }
+twilight-http = "0.8"
+twilight-model = "0.8"
+twilight-gateway = "0.8"
+twilight-cache-inmemory = "0.8"
+twilight-util = { version = "0.8", features = ["permission-calculator"] }
 
 handlebars = "4.1"
 
@@ -44,13 +44,13 @@ thiserror = "1.0"
 
 rand = "0.8"
 
-hmac = "0.11"
-sha2 = "0.9"
+hmac = "0.12"
+sha2 = "0.10"
 hex = "0.4"
 
 psutil = { version = "3.2" , default-features = false, features = ["memory"] }
 
-dashmap = "4.0"
+dashmap = "5.0"
 
 chrono = "0.4"
 
