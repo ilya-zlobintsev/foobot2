@@ -170,7 +170,7 @@ impl CommandHandler {
                     Some(format!(
                         "{:?}, identified as {}, channel: {:?}, permissions: {:?}",
                         user,
-                        user_identifier.to_string(),
+                        user_identifier,
                         execution_context.get_channel(),
                         execution_context.get_permissions().await,
                     )),
@@ -256,7 +256,7 @@ impl CommandHandler {
                             Permissions::Admin => {
                                 let mut cmd = Command::new("sh");
 
-                                cmd.arg("-c").arg(format!("{}", arguments.join(" ")));
+                                cmd.arg("-c").arg(arguments.join(" "));
 
                                 tracing::info!("Running command {:?}", cmd);
 
@@ -346,7 +346,7 @@ impl CommandHandler {
                 &action,
                 &(InquiryContext {
                     user,
-                    arguments: arguments.iter().map(|s| s.to_owned().to_owned()).collect(),
+                    arguments: arguments.iter().map(|s| s.to_owned()).collect(),
                 }),
             )
         })
@@ -546,7 +546,7 @@ impl From<VarError> for CommandError {
 }
 impl From<ParseIntError> for CommandError {
     fn from(_: ParseIntError) -> Self {
-        Self::InvalidArgument(format!("expected a number"))
+        Self::InvalidArgument("expected a number".to_string())
     }
 }
 

@@ -54,7 +54,7 @@ impl DiscordApi {
             Some(permissions) => {
                 tracing::debug!("Using cached permissions");
 
-                Ok(permissions.clone())
+                Ok(*permissions)
             }
             None => {
                 drop(permissions_cache);

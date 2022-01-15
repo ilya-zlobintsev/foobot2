@@ -16,11 +16,12 @@ use crate::platform::{ChannelIdentifier, ExecutionContext};
 
 use super::{ChatPlatform, Permissions, UserIdentifier};
 
+type Credentials = RefreshingLoginCredentials<Database>;
+type TwitchClient = TwitchIRCClient<SecureTCPTransport, Credentials>;
+
 #[derive(Clone)]
 pub struct Twitch {
-    client: Arc<
-        Mutex<Option<TwitchIRCClient<SecureTCPTransport, RefreshingLoginCredentials<Database>>>>,
-    >,
+    client: Arc<Mutex<Option<TwitchClient>>>,
     command_handler: CommandHandler,
     command_prefix: String,
     last_messages: Arc<DashMap<String, String>>,
@@ -116,7 +117,7 @@ impl Twitch {
 
                         if let Some(pm) = msg.get_privmsg() {
                             client
-                                .reply_to_privmsg(chunks.next().unwrap().to_owned(), &pm)
+                                .reply_to_privmsg(chunks.next().unwrap().to_owned(), pm)
                                 .await
                                 .expect("Failed to reply");
 
@@ -131,21 +132,19 @@ impl Twitch {
                         } else {
                             unimplemented!() // i don't bother with the whispers functionality because it doesn't properly work on twitch
                         }
+                    } else if let Some(pm) = msg.get_privmsg() {
+                        client
+                            .reply_to_privmsg(response, pm)
+                            .await
+                            .expect("Failed to reply");
                     } else {
-                        if let Some(pm) = msg.get_privmsg() {
-                            client
-                                .reply_to_privmsg(response, &pm)
-                                .await
-                                .expect("Failed to reply");
-                        } else {
-                            client
-                                .privmsg(
-                                    channel.to_string(),
-                                    format!("/w {} {}", msg.get_sender().login, response),
-                                )
-                                .await
-                                .expect("Failed to say");
-                        }
+                        client
+                            .privmsg(
+                                channel.to_string(),
+                                format!("/w {} {}", msg.get_sender().login, response),
+                            )
+                            .await
+                            .expect("Failed to say");
                     }
 
                     sleep(Duration::from_secs(1)).await; // This is needed to adhere to the twitch rate limits
@@ -282,7 +281,7 @@ impl TwitchMessage for PrivmsgMessage {
     }
 
     fn get_privmsg(&self) -> Option<&PrivmsgMessage> {
-        Some(&self)
+        Some(self)
     }
 }
 

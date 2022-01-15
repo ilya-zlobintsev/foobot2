@@ -24,11 +24,11 @@ use crate::{
 
 use super::template_context::AuthenticateContext;
 
-const TWITCH_SCOPES: &[&'static str] = &[""];
-const DISCORD_SCOPES: &'static str = "identify";
-const SPOTIFY_SCOPES: &[&'static str] = &["user-read-playback-state", "user-read-recently-played"];
+const TWITCH_SCOPES: &[&str] = &[""];
+const DISCORD_SCOPES: &str = "identify";
+const SPOTIFY_SCOPES: &[&str] = &["user-read-playback-state", "user-read-recently-played"];
 
-const TWITCH_BOT_SCOPES: &[&'static str] = &[
+const TWITCH_BOT_SCOPES: &[&str] = &[
     "chat:read",
     "chat:edit",
     "whispers:read",
@@ -367,7 +367,7 @@ pub fn disconnect_spotify(session: WebSession, cmd: &State<CommandHandler>) -> R
 
 fn create_user_session(db: &Database, user_id: u64, display_name: String) -> Cookie<'static> {
     let session_id = db
-        .create_web_session(user_id, display_name.to_string())
+        .create_web_session(user_id, display_name)
         .expect("DB error");
 
     Cookie::build("session_id", session_id)

@@ -19,14 +19,11 @@ pub fn profile(
         .expect("DB Error")
         .expect("Potentially invalid user session");
 
-    let spotify_connected = match cmd
+    let spotify_connected = cmd
         .db
         .get_spotify_access_token(session.user_id)
         .expect("DB Error")
-    {
-        Some(_) => true,
-        None => false,
-    };
+        .is_some();
 
     let lastfm_name = cmd
         .db

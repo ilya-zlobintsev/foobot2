@@ -210,7 +210,7 @@ impl<C: LoginCredentials + Clone> TwitchApi<C> {
 
             if let Some(logins) = logins {
                 for login in logins {
-                    if let Some(user) = users_cache.iter().find(|user| &user.login == *login) {
+                    if let Some(user) = users_cache.iter().find(|user| user.login == *login) {
                         tracing::info!("Using cache for user {}", user.login);
                         results.push(user.clone());
                     } else {
@@ -220,7 +220,7 @@ impl<C: LoginCredentials + Clone> TwitchApi<C> {
             }
             if let Some(ids) = ids {
                 for id in ids {
-                    if let Some(user) = users_cache.iter().find(|user| &user.id == *id) {
+                    if let Some(user) = users_cache.iter().find(|user| user.id == *id) {
                         tracing::info!("Using cache for user {}", user.login);
                         results.push(user.clone());
                     } else {
@@ -248,7 +248,7 @@ impl<C: LoginCredentials + Clone> TwitchApi<C> {
                 true => {
                     let api_results = response.json::<UsersResponse>().await?.data;
 
-                    if api_results.len() != 0 {
+                    if !api_results.is_empty() {
                         let mut users_cache = self.users_cache.write().unwrap();
 
                         users_cache.extend(api_results.clone());

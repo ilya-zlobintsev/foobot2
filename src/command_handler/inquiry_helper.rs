@@ -242,7 +242,7 @@ impl HelperDef for SpotifyHelper {
         let access_token = self
             .db
             .get_spotify_access_token(user_id)
-            .map_err(|e| RenderError::new(format!("DB Error: {}", e.to_string())))?
+            .map_err(|e| RenderError::new(format!("DB Error: {}", e)))?
             .ok_or_else(|| {
                 RenderError::new(format!(
                     "Not configured for user! You can set up Spotify by going to {}/profile",
@@ -254,7 +254,7 @@ impl HelperDef for SpotifyHelper {
 
         match runtime
             .block_on(spotify_api.get_current_song())
-            .map_err(|e| RenderError::new(format!("Spotify API Error: {}", e.to_string())))?
+            .map_err(|e| RenderError::new(format!("Spotify API Error: {}", e)))?
         {
             Some(playback) => {
                 let position = playback.progress_ms / 1000;
@@ -526,7 +526,7 @@ impl HelperDef for HttpHelper {
                             if content_type.to_str().unwrap().starts_with("text/plain") {
                                 let text = rt
                                     .block_on(response.text())
-                                    .unwrap_or("<empty text>".to_owned());
+                                    .unwrap_or_else(|_| "<empty text>".to_owned());
 
                                 out.write(&text)?;
 

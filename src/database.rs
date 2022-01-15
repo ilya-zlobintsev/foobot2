@@ -28,7 +28,7 @@ use diesel_migrations::{embed_migrations, EmbeddedMigrations, MigrationHarness};
 use twitch_irc::login::{TokenStorage, UserAccessToken};
 pub const MIGRATIONS: EmbeddedMigrations = embed_migrations!();
 
-const BUILTIN_COMMANDS: &'static [&'static str] = &[
+const BUILTIN_COMMANDS: &[&str] = &[
     "ping", "commands", "cmd", "command", "addcmd", "debug", "delcmd", "merge", "showcmd",
     "checkcmd",
 ];
@@ -193,7 +193,7 @@ impl Database {
                         .execute(&mut conn)
                         .expect("Failed to create channel");
 
-                    self.get_or_create_channel(&channel_identifier)
+                    self.get_or_create_channel(channel_identifier)
                 }
             }
         } else {
@@ -399,18 +399,18 @@ impl Database {
     ) -> Result<User, diesel::result::Error> {
         let mut conn = self.conn_pool.get().unwrap();
 
-        match self.get_user(&user_identifier)? {
+        match self.get_user(user_identifier)? {
             Some(user) => Ok(user),
             None => {
                 let new_user = match &user_identifier {
                     UserIdentifier::TwitchID(user_id) => NewUser {
-                        twitch_id: Some(&user_id),
+                        twitch_id: Some(user_id),
                         discord_id: None,
                         irc_name: None,
                     },
                     UserIdentifier::DiscordID(user_id) => NewUser {
                         twitch_id: None,
-                        discord_id: Some(&user_id),
+                        discord_id: Some(user_id),
                         irc_name: None,
                     },
                     UserIdentifier::IrcName(name) => NewUser {
@@ -425,7 +425,7 @@ impl Database {
                     .execute(&mut conn)
                     .expect("Failed to save new user");
 
-                Ok(self.get_user(&user_identifier)?.unwrap())
+                Ok(self.get_user(user_identifier)?.unwrap())
             }
         }
     }
