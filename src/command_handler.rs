@@ -7,11 +7,6 @@ pub mod owm_api;
 pub mod spotify_api;
 pub mod twitch_api;
 
-use crate::command_handler::twitch_api::eventsub::conditions::ChannelUpdateCondition;
-use crate::command_handler::twitch_api::eventsub::{
-    EventSubNotificationType, EventSubSubscriptionType,
-};
-use crate::database::models::NewEventSubTrigger;
 use crate::database::DatabaseError;
 use crate::database::{models::User, Database};
 use crate::platform::{
@@ -516,6 +511,12 @@ impl CommandHandler {
         user: User,
         channel: &ChannelIdentifier,
     ) -> anyhow::Result<Permissions> {
+        if let Ok(Some(admin_user)) = self.db.get_admin_user() {
+            if user.id == admin_user.id {
+                return Ok(Permissions::Admin);
+            }
+        }
+
         match channel {
             ChannelIdentifier::TwitchChannelID(channel_id) => {
                 let twitch_id = user
@@ -580,12 +581,6 @@ impl CommandHandler {
             .db
             .get_user_by_id(user_id)?
             .ok_or_else(|| anyhow!("Invalid user id"))?;
-
-        if let Ok(Some(admin_user)) = self.db.get_admin_user() {
-            if user.id == admin_user.id {
-                return Ok(Permissions::Admin);
-            }
-        }
 
         match self.db.get_channel_by_id(channel_id)? {
             Some(channel) => {
