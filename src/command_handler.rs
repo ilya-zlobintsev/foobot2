@@ -298,31 +298,6 @@ impl CommandHandler {
                         _ => return Err(CommandError::NoPermissions),
                     }
                 }
-                "addchannelupdatetrigger" => {
-                    let channel = execution_context.get_channel();
-                    
-                    let broadcaster_id = channel.get_channel().unwrap();
-
-                    let subscription =
-                        EventSubSubscriptionType::ChannelUpdate(ChannelUpdateCondition {
-                            broadcaster_user_id: broadcaster_id.to_string(),
-                        });
-
-                    let new_trigger = NewEventSubTrigger {
-                        broadcaster_id,
-                        event_type: subscription.get_type(),
-                        action: "channelupdate custom trigger",
-                        creation_payload: &serde_json::to_string(&subscription).unwrap(),
-                    };
-                    
-                    let twitch_api = self.twitch_api.as_ref().unwrap();
-
-                    twitch_api.add_eventsub_subscription(subscription.clone()).await?;
-                    
-                    self.db.add_eventsub_trigger(new_trigger)?;
-                    
-                    (Some(String::from("OK")), None)
-                }
                 _ => match self
                     .db
                     .get_command(&execution_context.get_channel(), command)?
