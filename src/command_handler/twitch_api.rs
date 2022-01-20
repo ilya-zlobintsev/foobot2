@@ -161,7 +161,7 @@ impl<C: LoginCredentials + Clone> TwitchApi<C> {
         let response = self
             .client
             .get(format!(
-                "https://api.ivr.fi/twitch/modsvips/{}",
+                "https://api.ivr.fi/v2/twitch/modvip/{}",
                 channel_login
             ))
             .send()
