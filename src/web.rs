@@ -3,10 +3,13 @@ pub mod authenticate;
 mod channel;
 mod errors;
 mod profile;
-// mod webhooks;
 mod template_context;
+mod webhooks;
+use anyhow::anyhow;
 
-use reqwest::Client;
+use std::env;
+
+use reqwest::{Client, Response};
 use rocket::{catchers, fs::FileServer, get, response::content::Html, routes, State};
 use rocket_dyn_templates::Template;
 use tokio::task::{self, JoinHandle};
@@ -63,9 +66,9 @@ pub async fn run(command_handler: CommandHandler) -> JoinHandle<()> {
                     authenticate::logout,
                 ],
             )
-            .mount("/profile", routes![profile::profile])
+            .mount("/profile", routes![profile::profile, profile::join_twitch])
             .mount("/api", routes![api::set_lastfm_name])
-            // .mount("/webhooks", routes![webhooks::twitch_callback])
+            .mount("/hooks", routes![webhooks::eventsub_callback])
             .register("/", catchers![errors::not_found, errors::not_authorized])
             .register("/channels", catchers![channel::not_found])
             .manage(Client::new())
@@ -74,4 +77,16 @@ pub async fn run(command_handler: CommandHandler) -> JoinHandle<()> {
             .await
             .expect("Failed to launch web server")
     })
+}
+
+pub fn get_base_url() -> String {
+    env::var("BASE_URL").expect("BASE_URL missing!")
+}
+
+pub fn response_ok(r: &Response) -> anyhow::Result<()> {
+    if r.status().is_success() {
+        Ok(())
+    } else {
+        Err(anyhow!("Non-success response: {}", r.status()))
+    }
 }

@@ -10,10 +10,9 @@ use rocket_dyn_templates::Template;
 use twitch_irc::login::UserAccessToken;
 
 use crate::command_handler::twitch_api;
+use crate::command_handler::twitch_api::helix::HelixApi;
 use crate::{
-    command_handler::{
-        discord_api::DiscordApi, spotify_api::SpotifyApi, twitch_api::TwitchApi, CommandHandler,
-    },
+    command_handler::{discord_api::DiscordApi, spotify_api::SpotifyApi, CommandHandler},
     database::{
         models::{UserData, WebSession},
         Database,
@@ -110,11 +109,11 @@ pub async fn twitch_redirect(
         auth_info.access_token
     );
 
-    let twitch_api = TwitchApi::init_with_token(&auth_info.access_token)
+    let helix_api = HelixApi::with_token(&auth_info.access_token)
         .await
         .expect("Failed to initialize Twitch API");
 
-    let twitch_user = twitch_api.get_self_user().await.unwrap();
+    let twitch_user = helix_api.get_self_user().await.unwrap();
 
     let user = cmd
         .db

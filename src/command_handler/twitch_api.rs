@@ -1,27 +1,40 @@
+pub mod eventsub;
+pub mod helix;
 pub mod model;
 
-use anyhow::anyhow;
+use futures::future::join_all;
+use http::Method;
+use reqwest::RequestBuilder;
 use std::collections::HashMap;
 use std::env;
 use std::sync::{Arc, RwLock};
 use std::time::Duration;
+use tokio::sync::Mutex;
 
 use reqwest::{header::HeaderMap, Client};
 use tokio::task;
 
 use model::*;
-use twitch_irc::login::{LoginCredentials, RefreshingLoginCredentials, StaticLoginCredentials};
+use serde_json::Value;
+use twitch_irc::login::{LoginCredentials, RefreshingLoginCredentials};
 
 use crate::database::Database;
+use crate::platform::twitch;
+use crate::web::response_ok;
+
+use self::eventsub::{EventSubSubscription, EventSubSubscriptionType};
+use self::helix::HelixApi;
+
+const HELIX_URL: &'static str = "https://api.twitch.tv/helix";
 
 #[derive(Clone, Debug)]
-pub struct TwitchApi<C: LoginCredentials> {
-    pub credentials: C,
-    client: Client,
+pub struct TwitchApi<C: LoginCredentials + Clone> {
+    pub helix_api: HelixApi<C>,
+    pub chat_client: Arc<Mutex<Option<twitch::TwitchClient>>>,
     moderators_cache: Arc<RwLock<HashMap<String, Vec<String>>>>,
-    users_cache: Arc<RwLock<Vec<User>>>,
-    app_access_token: Option<Arc<String>>,
+    client: Client,
     headers: HeaderMap,
+    app_access_token: Arc<String>,
 }
 
 impl TwitchApi<RefreshingLoginCredentials<Database>> {
@@ -35,47 +48,47 @@ impl TwitchApi<RefreshingLoginCredentials<Database>> {
     }
 }
 
-impl TwitchApi<StaticLoginCredentials> {
-    pub async fn init_with_token(access_token: &str) -> anyhow::Result<Self> {
-        Self::init(StaticLoginCredentials::new(
-            String::new(),
-            Some(access_token.to_owned()),
-        ))
-        .await
-    }
-}
-
-impl<C: LoginCredentials> TwitchApi<C> {
+impl<C: LoginCredentials + Clone> TwitchApi<C> {
     pub async fn init(credentials: C) -> anyhow::Result<Self> {
         let mut headers = HeaderMap::new();
 
-        headers.insert(
-            "Client-Id",
-            get_client_id().expect("Client ID missing").parse().unwrap(),
-        );
+        let client_id = get_client_id().expect("Client ID missing");
 
-        let moderators_cache = Arc::new(RwLock::new(HashMap::new()));
+        headers.insert("Client-Id", client_id.parse().unwrap());
 
-        let users_cache = Arc::new(RwLock::new(Vec::new()));
+        let app_access_token = Self::get_app_token(
+            &client_id,
+            &get_client_secret().expect("client secret missing"),
+        )
+        .await?;
 
         let twitch_api = TwitchApi {
-            credentials,
+            helix_api: HelixApi::with_credentials(credentials).await,
             client: Client::new(),
-            moderators_cache,
-            users_cache,
-            app_access_token: None,
+            chat_client: Arc::new(Mutex::new(None)),
             headers,
+            app_access_token: Arc::new(app_access_token),
+            moderators_cache: Arc::new(RwLock::new(HashMap::new())),
         };
 
-        /*if let Some(_) = twitch_api.app_access_token {
-            for subscription in twitch_api.list_eventsub_subscriptions().await?.data {
+        twitch_api.start_cron().await;
+
+        let mut request_handles = Vec::new();
+
+        for subscription in twitch_api.get_eventsub_subscriptions().await? {
+            let twitch_api = twitch_api.clone();
+
+            request_handles.push(task::spawn(async move {
+                tracing::info!("Removing old subscription {}", subscription.sub_type);
+
                 twitch_api
                     .delete_eventsub_subscription(&subscription.id)
-                    .await?;
-            }
-        }*/
+                    .await
+                    .expect("Failed to remove EventSub subscription");
+            }));
+        }
 
-        twitch_api.start_cron().await;
+        join_all(request_handles).await;
 
         Ok(twitch_api)
     }
@@ -87,7 +100,9 @@ impl<C: LoginCredentials> TwitchApi<C> {
     ) -> Result<String, reqwest::Error> {
         let client = Client::new();
 
-        let response: serde_json::Value = client.post("https://id.twitch.tv/oauth2/token").query(&[("client_id", client_id), ("client_secret", client_secret), ("grant_type", "client_credentials"), ("scope", "moderation:read channel:edit:commercial channel:manage:broadcast channel:moderate chat:edit")]).send().await?.json().await?;
+        let response: serde_json::Value = client.post("https://id.twitch.tv/oauth2/token")
+            .query(&[("client_id", client_id), ("client_secret", client_secret), ("grant_type", "client_credentials"), ("scope", "moderation:read channel:edit:commercial channel:manage:broadcast channel:moderate chat:edit")])
+            .send().await?.json().await?;
 
         // tracing::info!("{:?}", response);
 
@@ -101,7 +116,6 @@ impl<C: LoginCredentials> TwitchApi<C> {
 
     pub async fn start_cron(&self) {
         let moderators_cache = self.moderators_cache.clone();
-        let users_cache = self.users_cache.clone();
 
         task::spawn(async move {
             loop {
@@ -112,45 +126,6 @@ impl<C: LoginCredentials> TwitchApi<C> {
                 let mut moderators_cache = moderators_cache.write().expect("Failed to lock");
 
                 moderators_cache.clear();
-            }
-        });
-
-        task::spawn(async move {
-            loop {
-                tokio::time::sleep(Duration::from_secs(3600)).await;
-
-                tracing::info!("Clearing users cache");
-
-                let mut users_cache = users_cache.write().expect("Failed to lock");
-
-                users_cache.clear();
-            }
-        });
-
-        task::spawn(async move {
-            let client = Client::new();
-
-            let user_id = env::var("SUPINIC_USER_ID").unwrap_or_default();
-            let pass = env::var("SUPINIC_PASSWORD").unwrap_or_default();
-
-            loop {
-                tracing::info!("Pinging Supinic API");
-
-                match client
-                    .put("https://supinic.com/api/bot-program/bot/active")
-                    .header("Authorization", format!("Basic {}:{}", user_id, pass))
-                    .send()
-                    .await
-                {
-                    Ok(response) => {
-                        if !response.status().is_success() {
-                            tracing::info!("Supinic API error: {:?}", response.text().await);
-                        }
-                    }
-                    Err(e) => tracing::warn!("Failed to ping Supinic API! {:?}", e),
-                }
-
-                tokio::time::sleep(Duration::from_secs(3600)).await;
             }
         });
     }
@@ -169,94 +144,6 @@ impl<C: LoginCredentials> TwitchApi<C> {
     /*pub fn get_client_id(&self) -> &str {
         self.headers.get("Client-Id").unwrap().to_str().unwrap()
     }*/
-
-    pub async fn get_users(
-        &self,
-        logins: Option<&Vec<&str>>,
-        ids: Option<&Vec<&str>>,
-    ) -> anyhow::Result<Vec<User>> {
-        let mut results = Vec::new();
-
-        let mut params: Vec<(&str, &str)> = Vec::new();
-
-        {
-            let users_cache = self.users_cache.read().unwrap();
-
-            if let Some(logins) = logins {
-                for login in logins {
-                    if let Some(user) = users_cache.iter().find(|user| user.login == *login) {
-                        tracing::info!("Using cache for user {}", user.login);
-                        results.push(user.clone());
-                    } else {
-                        params.push(("login", login));
-                    }
-                }
-            }
-            if let Some(ids) = ids {
-                for id in ids {
-                    if let Some(user) = users_cache.iter().find(|user| user.id == *id) {
-                        tracing::info!("Using cache for user {}", user.login);
-                        results.push(user.clone());
-                    } else {
-                        params.push(("id", id));
-                    }
-                }
-            }
-        }
-
-        if !params.is_empty() || (logins.is_none() && ids.is_none()) {
-            let response = self
-                .client
-                .get("https://api.twitch.tv/helix/users")
-                .headers(self.headers.clone())
-                .bearer_auth(self.get_token().await?)
-                .query(&params)
-                .send()
-                .await?;
-
-            tracing::info!("GET {}: {}", response.url(), response.status());
-
-            let status = response.status();
-
-            match status.is_success() {
-                true => {
-                    let api_results = response.json::<UsersResponse>().await?.data;
-
-                    if !api_results.is_empty() {
-                        let mut users_cache = self.users_cache.write().unwrap();
-
-                        users_cache.extend(api_results.clone());
-                    }
-
-                    results.extend(api_results);
-
-                    Ok(results)
-                }
-                false => Err(anyhow!("Response code {}", status)),
-            }
-        } else {
-            Ok(results)
-        }
-    }
-
-    async fn get_token(&self) -> anyhow::Result<String> {
-        Ok(self
-            .credentials
-            .get_credentials()
-            .await
-            .map_err(|e| anyhow!("Unable to get credentials: {:?}", e))?
-            .token
-            .ok_or_else(|| anyhow!("Token missing"))?)
-    }
-
-    pub async fn get_self_user(&self) -> anyhow::Result<User> {
-        Ok(self
-            .get_users(None, None)
-            .await?
-            .into_iter()
-            .next()
-            .unwrap())
-    }
 
     pub async fn get_channel_mods(
         &self,
@@ -348,6 +235,62 @@ impl<C: LoginCredentials> TwitchApi<C> {
 
         Ok(mods)
     }*/
+
+    fn app_request(&self, method: Method, path: &str) -> RequestBuilder {
+        self.client
+            .request(method, format!("{}{}", HELIX_URL, path))
+            .headers(self.headers.clone())
+            .bearer_auth(&self.app_access_token)
+    }
+
+    fn app_get(&self, path: &str) -> RequestBuilder {
+        self.app_request(Method::GET, path)
+    }
+
+    fn app_post(&self, path: &str) -> RequestBuilder {
+        self.app_request(Method::POST, path)
+    }
+
+    fn app_delete(&self, path: &str) -> RequestBuilder {
+        self.app_request(Method::DELETE, path)
+    }
+
+    pub async fn add_eventsub_subscription(
+        &self,
+        subscription: EventSubSubscriptionType,
+    ) -> anyhow::Result<()> {
+        let response = self
+            .app_post("/eventsub/subscriptions")
+            .json(&subscription.build_body())
+            .send()
+            .await?;
+
+        response_ok(&response)?;
+
+        tracing::info!("Succesfully added EventSub subscription {:?}", subscription);
+
+        Ok(())
+    }
+
+    pub async fn get_eventsub_subscriptions(&self) -> anyhow::Result<Vec<EventSubSubscription>> {
+        let response = self.app_get("/eventsub/subscriptions").send().await?;
+
+        let mut v: Value = response.json().await?;
+
+        let data = v["data"].take();
+
+        Ok(serde_json::from_value(data)?)
+    }
+
+    pub async fn delete_eventsub_subscription(&self, id: &str) -> anyhow::Result<()> {
+        response_ok(
+            &self
+                .app_delete("/eventsub/subscriptions")
+                .query(&[("id", id)])
+                .send()
+                .await?,
+        )
+    }
 }
 
 pub fn get_client_id() -> Option<String> {

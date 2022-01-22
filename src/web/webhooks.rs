@@ -1,41 +1,100 @@
-use hmac::{Hmac, Mac, NewMac};
+use std::str::FromStr;
+
+use hmac::{Hmac, Mac};
 use rocket::{data::ToByteUnit, http::Status, outcome::Outcome, request::FromRequest, Data, State};
+use serde_json::Value;
 use sha2::Sha256;
+use tokio::task;
 
 use crate::{
     command_handler::{
-        twitch_api::model::{EventsubMessage, EventsubMessageType},
+        twitch_api::eventsub::{events::*, *},
         CommandHandler,
     },
+    platform::{ChannelIdentifier, ServerExecutionContext, UserIdentifier},
 };
 
-#[post("/twitch", data = "<body>")]
-pub async fn twitch_callback(
+#[post("/twitch/eventsub", data = "<body>")]
+pub async fn eventsub_callback(
     properties: TwitchEventsubCallbackProperties,
     cmd: &State<CommandHandler>,
     body: Data<'_>,
 ) -> Result<String, Status> {
     tracing::info!("Handling eventsub callback {:?}", properties.message_type);
 
-    let body_stream = body.open(32.mebibytes());
+    let body_stream = body.open(32i32.mebibytes());
 
     let body = body_stream.into_bytes().await.unwrap();
 
-    let message = serde_json::from_slice::<EventsubMessage>(&body).expect("Parse error");
+    let message: Value = serde_json::from_slice(&body).expect("Parse error");
 
     let secret_key = rocket::Config::SECRET_KEY;
 
     match verify_twitch_signature(&properties, &body, secret_key).await {
-        true => {
+        true => Ok({
             tracing::info!("Request signature verified");
 
             match properties.message_type {
-                EventsubMessageType::WebhookCallbackVerification => Ok(message.challenge.unwrap()),
-                EventsubMessageType::Notification => {
-                    Ok(String::new())
+                EventSubNotificationType::Notification => {
+                    let notification: EventSubNotification =
+                        serde_json::from_value(message).expect("Invalid message format");
+
+                    let event = notification
+                        .get_event()
+                        .expect("Failed to get notification event");
+
+                    tracing::info!("Received EventSub notification: {:?}", event);
+
+                    let cmd = (*cmd).clone();
+
+                    task::spawn(async move {
+                        let broadcaster_id = event.get_broadcaster_id();
+
+                        if let Some(action) = cmd
+                            .db
+                            .get_eventsub_redeem_action(
+                                &broadcaster_id,
+                                &properties.subscription_type,
+                            )
+                            .expect("DB error")
+                        {
+                            let user_id = match event {
+                                EventSubEventType::ChannelUpdate(event) => {
+                                    event.broadcaster_user_id
+                                }
+                                EventSubEventType::StreamOnline(event) => event.broadcaster_user_id,
+                                EventSubEventType::ChannelPointsCustomRewardRedemptionAdd(
+                                    event,
+                                ) => event.user_id,
+                            };
+
+                            let context = ServerExecutionContext {
+                                target_channel: ChannelIdentifier::TwitchChannelID(
+                                    broadcaster_id.to_string(),
+                                ),
+                                executing_user: UserIdentifier::TwitchID(user_id),
+                                cmd: cmd.clone(),
+                            };
+
+                            cmd.handle_server_message(action, context)
+                                .await
+                                .expect("Failed to handle event");
+                        } else {
+                            tracing::warn!("Unregistered EventSub notification (no cleanup?)");
+                        }
+                    });
+
+                    String::new()
                 }
+                EventSubNotificationType::WebhookCallbackVerification => {
+                    let callback: EventSubVerficationCallback =
+                        serde_json::from_value(message).expect("Invalid message format");
+
+                    callback.challenge
+                }
+                EventSubNotificationType::Revocation => todo!(),
             }
-        }
+        }),
         false => {
             tracing::warn!("REQUEST FORGERY DETECTED");
             Err(Status::Unauthorized)
@@ -78,9 +137,10 @@ async fn verify_twitch_signature(
 pub struct TwitchEventsubCallbackProperties {
     message_id: String,
     message_retry: u32,
-    message_type: EventsubMessageType,
+    message_type: EventSubNotificationType,
     message_signature: String,
     message_timestamp: String,
+    subscription_type: String,
 }
 
 #[rocket::async_trait]
@@ -104,13 +164,14 @@ impl<'r> FromRequest<'r> for TwitchEventsubCallbackProperties {
                 .unwrap()
                 .parse()
                 .unwrap(),
-            message_type: EventsubMessageType::from_str(
+            message_type: EventSubNotificationType::from_str(
                 &headers
                     .get("Twitch-Eventsub-Message-Type")
                     .next()
                     .unwrap()
                     .to_string(),
-            ),
+            )
+            .expect("Invalid message type!"),
             message_signature: headers
                 .get("Twitch-Eventsub-Message-Signature")
                 .next()
@@ -118,6 +179,11 @@ impl<'r> FromRequest<'r> for TwitchEventsubCallbackProperties {
                 .to_string(),
             message_timestamp: headers
                 .get("Twitch-Eventsub-Message-Timestamp")
+                .next()
+                .unwrap()
+                .to_string(),
+            subscription_type: headers
+                .get("Twitch-Eventsub-Subscription-Type")
                 .next()
                 .unwrap()
                 .to_string(),

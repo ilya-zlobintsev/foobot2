@@ -9,9 +9,14 @@ pub mod twitch_api;
 
 use crate::database::DatabaseError;
 use crate::database::{models::User, Database};
-use crate::platform::{ExecutionContext, Permissions, UserIdentifierError};
+use crate::platform::{
+    ChannelIdentifier, ExecutionContext, Permissions, ServerExecutionContext, UserIdentifierError,
+};
+use crate::web;
 
+use anyhow::{anyhow, Context};
 use core::fmt;
+use reqwest::Client;
 use std::env::{self, VarError};
 use std::num::ParseIntError;
 use std::sync::{Arc, RwLock};
@@ -45,7 +50,18 @@ pub struct CommandHandler {
 impl CommandHandler {
     pub async fn init(db: Database) -> Self {
         let twitch_api = match TwitchApi::init_refreshing(db.clone()).await {
-            Ok(api) => Some(api),
+            Ok(api) => {
+                for trigger in db.get_eventsub_triggers().expect("DB Error") {
+                    let subscription_type = serde_json::from_str(&trigger.creation_payload)
+                        .expect("Deserialization error");
+
+                    if let Err(e) = api.add_eventsub_subscription(subscription_type).await {
+                        tracing::error!("Failed to add EventSub subscription! {}", e);
+                    }
+                }
+
+                Some(api)
+            }
             Err(e) => {
                 tracing::info!("Failed to initialize Twitch API: {}", e);
                 None
@@ -112,6 +128,8 @@ impl CommandHandler {
         template_registry.set_strict_mode(true);
 
         let cooldowns = Arc::new(RwLock::new(Vec::new()));
+
+        start_supinic_heartbeat().await;
 
         Self {
             db,
@@ -412,7 +430,7 @@ impl CommandHandler {
         if arguments.len() == 0 {
             Ok(Some(format!(
                 "{}/channels/{}/commands",
-                env::var("BASE_URL")?,
+                web::get_base_url(),
                 self.db
                     .get_or_create_channel(&execution_context.get_channel())?
                     .ok_or_else(|| CommandError::InvalidArgument(
@@ -487,9 +505,160 @@ impl CommandHandler {
             }
         }
     }
+
+    pub async fn get_permissions_in_channel(
+        &self,
+        user: User,
+        channel: &ChannelIdentifier,
+    ) -> anyhow::Result<Permissions> {
+        if let Ok(Some(admin_user)) = self.db.get_admin_user() {
+            if user.id == admin_user.id {
+                return Ok(Permissions::Admin);
+            }
+        }
+
+        match channel {
+            ChannelIdentifier::TwitchChannelID(channel_id) => {
+                let twitch_id = user
+                    .twitch_id
+                    .ok_or_else(|| anyhow!("Not registered on this platform"))?;
+
+                let twitch_api = self
+                    .twitch_api
+                    .as_ref()
+                    .ok_or_else(|| anyhow!("Twitch not configured"))?;
+
+                let users_response = twitch_api
+                    .helix_api
+                    .get_users(None, Some(&vec![channel_id]))
+                    .await?;
+
+                let channel_login = &users_response.first().expect("User not found").login;
+
+                match twitch_api.get_channel_mods(channel_login).await?.contains(
+                    &twitch_api
+                        .helix_api
+                        .get_users(None, Some(&vec![&twitch_id]))
+                        .await?
+                        .first()
+                        .unwrap()
+                        .display_name,
+                ) {
+                    true => Ok(Permissions::ChannelMod),
+                    false => Ok(Permissions::Default),
+                }
+            }
+            ChannelIdentifier::DiscordGuildID(guild_id) => {
+                let user_id = user
+                    .discord_id
+                    .ok_or_else(|| anyhow!("Invalid user"))?
+                    .parse()
+                    .unwrap();
+
+                let discord_api = self.discord_api.as_ref().unwrap();
+
+                match discord_api
+                    .get_permissions_in_guild(user_id, guild_id.parse().unwrap())
+                    .await
+                    .map_err(|_| anyhow!("discord error"))?
+                    .contains(twilight_model::guild::Permissions::ADMINISTRATOR)
+                {
+                    true => Ok(Permissions::ChannelMod),
+                    false => Ok(Permissions::Default),
+                }
+            }
+            ChannelIdentifier::IrcChannel(_) => Ok(Permissions::Default), // TODO
+            ChannelIdentifier::Anonymous => Ok(Permissions::Default),
+        }
+    }
+
+    pub async fn get_permissions_in_channel_by_id(
+        &self,
+        user_id: u64,
+        channel_id: u64,
+    ) -> anyhow::Result<Permissions> {
+        let user = self
+            .db
+            .get_user_by_id(user_id)?
+            .ok_or_else(|| anyhow!("Invalid user id"))?;
+
+        match self.db.get_channel_by_id(channel_id)? {
+            Some(channel) => {
+                let channel_identifier =
+                    ChannelIdentifier::new(&channel.platform, channel.channel)?;
+
+                self.get_permissions_in_channel(user, &channel_identifier)
+                    .await
+            }
+
+            None => Ok(Permissions::Default),
+        }
+    }
+
+    pub async fn handle_server_message(
+        &self,
+        action: String,
+        context: ServerExecutionContext,
+    ) -> anyhow::Result<()> {
+        let user = self.db.get_or_create_user(&context.executing_user)?;
+
+        let response = self
+            .execute_command_action(action, context.clone(), user, Vec::new()) // TODO
+            .await?
+            .unwrap_or_else(|| "Event triggered with no action".to_string());
+
+        match context.get_channel() {
+            ChannelIdentifier::TwitchChannelID(channel_id) => {
+                let twitch_api = self.twitch_api.as_ref().unwrap();
+
+                let broadcaster = twitch_api.helix_api.get_user_by_id(&channel_id).await?;
+
+                let chat_client_guard = twitch_api.chat_client.lock().await;
+
+                let chat_client = chat_client_guard.as_ref().expect("Chat client missing");
+
+                chat_client.say(broadcaster.login, response).await?;
+
+                Ok(())
+            }
+            _ => Err(anyhow!(
+                "Remotely triggered commands not supported for this platform"
+            )),
+        }
+    }
+
+    pub async fn join_channel(&self, channel: &ChannelIdentifier) -> anyhow::Result<()> {
+        match channel {
+            ChannelIdentifier::TwitchChannelID(id) => {
+                let twitch_api = self.twitch_api.as_ref().context("Twitch not initialized")?;
+
+                let user = twitch_api.helix_api.get_user_by_id(id).await?;
+
+                let chat_client_guard = twitch_api.chat_client.lock().await;
+
+                let chat_client = chat_client_guard
+                    .as_ref()
+                    .context("Twitch chat not initialized")?;
+
+                chat_client.join(user.login.clone());
+                chat_client
+                    .say(user.login, "MrDestructoid 👍 Foobot2 joined".to_string())
+                    .await?;
+
+                self.db
+                    .get_or_create_channel(channel)?
+                    .context("Failed to add channel")?;
+
+                Ok(())
+            }
+            ChannelIdentifier::DiscordGuildID(_) => Ok(()), // Discord guilds don't need to be joined client side and get added to the DB on demand
+            ChannelIdentifier::IrcChannel(_) => Err(anyhow!("Not implemented yet")),
+            ChannelIdentifier::Anonymous => Err(anyhow!("Invalid channel specified")),
+        }
+    }
 }
 
-#[derive(Debug)]
+#[derive(Debug, thiserror::Error)]
 pub enum CommandError {
     MissingArgument(String),
     InvalidArgument(String),
@@ -497,6 +666,7 @@ pub enum CommandError {
     DatabaseError(DatabaseError),
     TemplateError(handlebars::RenderError),
     ConfigurationError(VarError),
+    GenericError(String),
 }
 
 impl fmt::Display for CommandError {
@@ -516,6 +686,7 @@ impl fmt::Display for CommandError {
             CommandError::ConfigurationError(e) => {
                 f.write_str(&format!("configuration error: {}", e))
             }
+            CommandError::GenericError(s) => f.write_str(s),
         }
     }
 }
@@ -558,4 +729,39 @@ impl From<UserIdentifierError> for CommandError {
             UserIdentifierError::InvalidPlatform => Self::InvalidArgument("platform".to_string()),
         }
     }
+}
+
+impl From<anyhow::Error> for CommandError {
+    fn from(e: anyhow::Error) -> Self {
+        Self::GenericError(e.to_string())
+    }
+}
+
+async fn start_supinic_heartbeat() {
+    task::spawn(async move {
+        let client = Client::new();
+
+        let user_id = env::var("SUPINIC_USER_ID").unwrap_or_default();
+        let pass = env::var("SUPINIC_PASSWORD").unwrap_or_default();
+
+        loop {
+            tracing::info!("Pinging Supinic API");
+
+            match client
+                .put("https://supinic.com/api/bot-program/bot/active")
+                .header("Authorization", format!("Basic {}:{}", user_id, pass))
+                .send()
+                .await
+            {
+                Ok(response) => {
+                    if !response.status().is_success() {
+                        tracing::info!("Supinic API error: {:?}", response.text().await);
+                    }
+                }
+                Err(e) => tracing::warn!("Failed to ping Supinic API! {:?}", e),
+            }
+
+            tokio::time::sleep(Duration::from_secs(3600)).await;
+        }
+    });
 }
