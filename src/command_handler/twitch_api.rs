@@ -25,7 +25,7 @@ use crate::web::response_ok;
 use self::eventsub::{EventSubSubscription, EventSubSubscriptionType};
 use self::helix::HelixApi;
 
-const HELIX_URL: &'static str = "https://api.twitch.tv/helix";
+const HELIX_URL: &str = "https://api.twitch.tv/helix";
 
 #[derive(Clone, Debug)]
 pub struct TwitchApi<C: LoginCredentials + Clone> {
