@@ -530,7 +530,7 @@ impl CommandHandler {
 
                 let users_response = twitch_api
                     .helix_api
-                    .get_users(None, Some(&vec![&channel_id]))
+                    .get_users(None, Some(&vec![channel_id]))
                     .await?;
 
                 let channel_login = &users_response.first().expect("User not found").login;
@@ -605,7 +605,7 @@ impl CommandHandler {
         let response = self
             .execute_command_action(action, context.clone(), user, Vec::new()) // TODO
             .await?
-            .unwrap_or("Event triggered with no action".to_string());
+            .unwrap_or_else(|| "Event triggered with no action".to_string());
 
         match context.get_channel() {
             ChannelIdentifier::TwitchChannelID(channel_id) => {
@@ -646,7 +646,7 @@ impl CommandHandler {
                     .await?;
 
                 self.db
-                    .get_or_create_channel(&channel)?
+                    .get_or_create_channel(channel)?
                     .context("Failed to add channel")?;
 
                 Ok(())

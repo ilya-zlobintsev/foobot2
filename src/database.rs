@@ -190,13 +190,11 @@ impl Database {
         let query = channels::table.into_boxed();
 
         if let Some(channel) = channel_identifier.get_channel() {
-            // Doing .load().iter().next() looks nicer than doing .first() and then mapping NotFoundError to None
             match query
                 .filter(channels::platform.eq_all(channel_identifier.get_platform_name().unwrap()))
                 .filter(channels::channel.eq_all(channel))
-                .load(&mut conn)?
-                .into_iter()
-                .next()
+                .first(&mut conn)
+                .optional()?
             {
                 Some(channel) => Ok(Some(channel)),
                 None => {
@@ -235,11 +233,10 @@ impl Database {
     ) -> Result<Option<Channel>, diesel::result::Error> {
         let mut conn = self.conn_pool.get().unwrap();
 
-        Ok(channels::table
+        channels::table
             .filter(channels::id.eq_all(channel_id))
-            .load(&mut conn)?
-            .into_iter()
-            .next())
+            .first(&mut conn)
+            .optional()
     }
 
     pub fn get_channels_amount(&self) -> Result<i64, diesel::result::Error> {
@@ -269,9 +266,8 @@ impl Database {
                     ),
                 )
                 .filter(commands::name.eq_all(command))
-                .load::<Command>(&mut conn)?
-                .into_iter()
-                .next()),
+                .first(&mut conn)
+                .optional()?),
             None => Ok(None),
         }
     }
@@ -373,15 +369,12 @@ impl Database {
                     UserIdentifier::IrcName(name) => query.filter(users::irc_name.eq(Some(name))),
                 };
 
-                match query.load::<User>(&mut conn)?.into_iter().next() {
-                    Some(user) => {
-                        self.user_identifiers_cache
-                            .insert(user_identifier.clone(), user.id);
+                Ok(query.first::<User>(&mut conn).optional()?.map(|user| {
+                    self.user_identifiers_cache
+                        .insert(user_identifier.clone(), user.id);
 
-                        Ok(Some(user))
-                    }
-                    None => Ok(None),
-                }
+                    user
+                }))
             }
         }
     }
@@ -394,9 +387,8 @@ impl Database {
 
                 match users::table
                     .filter(users::id.eq_all(user_id))
-                    .load::<User>(&mut conn)?
-                    .into_iter()
-                    .next()
+                    .first::<User>(&mut conn)
+                    .optional()?
                 {
                     Some(user) => {
                         tracing::debug!("Cached user {}", user_id);
@@ -478,9 +470,8 @@ impl Database {
         Ok(auth::table
             .filter(auth::name.eq_all(key))
             .select(auth::value)
-            .load(&mut conn)?
-            .into_iter()
-            .next()
+            .first(&mut conn)
+            .optional()?
             .unwrap_or_default())
     }
 
@@ -501,13 +492,12 @@ impl Database {
     ) -> Result<Option<String>, diesel::result::Error> {
         let mut conn = self.conn_pool.get().unwrap();
 
-        Ok(user_data::table
+        user_data::table
             .filter(user_data::user_id.eq_all(user_id))
             .filter(user_data::name.eq_all(key))
             .select(user_data::value)
-            .load(&mut conn)?
-            .into_iter()
-            .next())
+            .first(&mut conn)
+            .optional()
     }
 
     pub fn get_eventsub_redeem_action(
@@ -601,9 +591,8 @@ impl Database {
 
                 match web_sessions::table
                     .filter(web_sessions::session_id.eq_all(session_id))
-                    .load::<WebSession>(&mut conn)?
-                    .into_iter()
-                    .next()
+                    .first::<WebSession>(&mut conn)
+                    .optional()?
                 {
                     Some(session) => {
                         self.web_sessions_cache
