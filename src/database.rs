@@ -507,12 +507,12 @@ impl Database {
     ) -> Result<Option<String>, diesel::result::Error> {
         let mut conn = self.conn_pool.get().unwrap();
 
-        Ok(eventsub_triggers::table
+        eventsub_triggers::table
             .filter(eventsub_triggers::broadcaster_id.eq_all(broadcaster_id))
             .filter(eventsub_triggers::event_type.eq_all(event_type))
             .select(eventsub_triggers::action)
             .first(&mut conn)
-            .optional()?)
+            .optional()
     }
 
     pub fn get_eventsub_triggers(&self) -> Result<Vec<EventSubTrigger>, DatabaseError> {

@@ -19,8 +19,6 @@ use platform::irc::Irc;
 use platform::twitch::Twitch;
 use platform::ChatPlatform;
 
-use rocket::futures::future::join_all;
-
 #[tokio::main]
 async fn main() {
     dotenv().unwrap_or_default();
@@ -34,15 +32,9 @@ async fn main() {
 
     let command_handler = CommandHandler::init(db).await;
 
-    let mut handles = Vec::new();
-
-    let web_handle = web::run(command_handler.clone()).await;
-
-    handles.push(web_handle);
-
     match &command_handler.twitch_api {
         Some(_) => match Twitch::init(command_handler.clone()).await {
-            Ok(twitch) => handles.push(twitch.run().await),
+            Ok(twitch) => twitch.run().await,
             Err(e) => tracing::warn!("Error loading Twitch: {:?}", e),
         },
         None => {
@@ -51,26 +43,18 @@ async fn main() {
     }
 
     match Discord::init(command_handler.clone()).await {
-        Ok(discord) => {
-            handles.push(discord.run().await);
-
-            // command_handler
-            //     .platform_senders
-            //     .lock()
-            //     .unwrap()
-            //     .insert(ChatPlatformKind::Discord, discord.create_listener().await);
-        }
+        Ok(discord) => discord.run().await,
         Err(e) => {
             tracing::error!("Error loading Discord: {:?}", e);
         }
     };
 
     match Irc::init(command_handler.clone()).await {
-        Ok(irc) => handles.push(irc.run().await),
+        Ok(irc) => irc.run().await,
         Err(e) => {
             tracing::error!("Error loading IRC: {:?}", e);
         }
     }
 
-    join_all(handles).await;
+    web::run(command_handler.clone()).await;
 }

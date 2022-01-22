@@ -5,7 +5,6 @@ pub mod twitch;
 use crate::command_handler::CommandHandler;
 
 use async_trait::async_trait;
-use tokio::task::JoinHandle;
 
 use serde::{Deserialize, Serialize};
 
@@ -17,7 +16,7 @@ use std::fmt::{self, Display};
 pub trait ChatPlatform {
     async fn init(command_handler: CommandHandler) -> Result<Box<Self>, ChatPlatformError>;
 
-    async fn run(self) -> JoinHandle<()>;
+    async fn run(self);
 
     fn get_prefix() -> String {
         env::var("COMMAND_PREFIX").unwrap_or_else(|_| "!".to_string())

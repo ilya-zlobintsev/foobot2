@@ -4,7 +4,7 @@ use async_trait::async_trait;
 use dashmap::DashMap;
 use std::time::{Duration, Instant};
 use tokio::sync::Mutex;
-use tokio::task::{self, JoinHandle};
+use tokio::task;
 use tokio::time::sleep;
 use twitch_irc::login::{LoginCredentials, RefreshingLoginCredentials};
 use twitch_irc::message::{Badge, PrivmsgMessage, ServerMessage, TwitchUserBasics, WhisperMessage};
@@ -55,7 +55,7 @@ impl ChatPlatform for Twitch {
         }))
     }
 
-    async fn run(self) -> JoinHandle<()> {
+    async fn run(self) {
         let twitch_api = self
             .command_handler
             .twitch_api
@@ -109,7 +109,7 @@ impl ChatPlatform for Twitch {
                     _ => (),
                 }
             }
-        })
+        });
     }
 
     /*async fn create_listener(&self) -> std::sync::mpsc::Sender<super::PlatformMessage> {

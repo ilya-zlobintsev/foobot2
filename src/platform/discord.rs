@@ -72,7 +72,7 @@ impl ChatPlatform for Discord {
         }))
     }
 
-    async fn run(self) -> tokio::task::JoinHandle<()> {
+    async fn run(self) {
         let scheme = ShardScheme::Auto;
 
         let intents = Intents::GUILD_MESSAGES | Intents::DIRECT_MESSAGES;
@@ -99,7 +99,7 @@ impl ChatPlatform for Discord {
                     _ => (),
                 }
             }
-        })
+        });
     }
 
     fn get_prefix() -> String {

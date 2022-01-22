@@ -7,7 +7,7 @@ use crate::platform::{ExecutionContext, UserIdentifier};
 use super::{ChannelIdentifier, ChatPlatform, ChatPlatformError, Permissions};
 use futures::StreamExt;
 use irc::client::{prelude::*, Client};
-use tokio::task::{self, JoinHandle};
+use tokio::task;
 
 #[derive(Clone)]
 pub struct Irc {
@@ -82,7 +82,7 @@ impl ChatPlatform for Irc {
         }))
     }
 
-    async fn run(self) -> JoinHandle<()> {
+    async fn run(self) {
         let mut stream = {
             let mut client = self.client.write().unwrap();
 
@@ -102,7 +102,7 @@ impl ChatPlatform for Irc {
             {
                 self.handle_message(message).await;
             }
-        })
+        });
     }
 }
 

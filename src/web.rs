@@ -12,7 +12,6 @@ use std::env;
 use reqwest::{Client, Response};
 use rocket::{catchers, fs::FileServer, get, response::content::Html, routes, State};
 use rocket_dyn_templates::Template;
-use tokio::task::{self, JoinHandle};
 
 use template_context::*;
 
@@ -33,50 +32,48 @@ async fn index(cmd: &State<CommandHandler>, session: Option<WebSession>) -> Html
     ))
 }
 
-pub async fn run(command_handler: CommandHandler) -> JoinHandle<()> {
-    task::spawn(async {
-        rocket::build()
-            .attach(Template::custom(|engines| {
-                engines.handlebars.set_strict_mode(true);
-            }))
-            .mount("/static", FileServer::from("static"))
-            .mount("/", routes![index])
-            .mount(
-                "/channels",
-                routes![
-                    channel::index,
-                    channel::commands_page,
-                    channel::update_command,
-                    channel::delete_command
-                ],
-            )
-            .mount(
-                "/authenticate",
-                routes![
-                    authenticate::index,
-                    authenticate::authenticate_twitch,
-                    authenticate::authenticate_twitch_bot,
-                    authenticate::twitch_redirect,
-                    authenticate::twitch_bot_redirect,
-                    authenticate::authenticate_discord,
-                    authenticate::discord_redirect,
-                    authenticate::authenticate_spotify,
-                    authenticate::spotify_redirect,
-                    authenticate::disconnect_spotify,
-                    authenticate::logout,
-                ],
-            )
-            .mount("/profile", routes![profile::profile, profile::join_twitch])
-            .mount("/api", routes![api::set_lastfm_name])
-            .mount("/hooks", routes![webhooks::eventsub_callback])
-            .register("/", catchers![errors::not_found, errors::not_authorized])
-            .register("/channels", catchers![channel::not_found])
-            .manage(Client::new())
-            .manage(command_handler)
-            .launch()
-            .await
-            .expect("Failed to launch web server")
-    })
+pub async fn run(command_handler: CommandHandler) {
+    rocket::build()
+        .attach(Template::custom(|engines| {
+            engines.handlebars.set_strict_mode(true);
+        }))
+        .mount("/static", FileServer::from("static"))
+        .mount("/", routes![index])
+        .mount(
+            "/channels",
+            routes![
+                channel::index,
+                channel::commands_page,
+                channel::update_command,
+                channel::delete_command
+            ],
+        )
+        .mount(
+            "/authenticate",
+            routes![
+                authenticate::index,
+                authenticate::authenticate_twitch,
+                authenticate::authenticate_twitch_bot,
+                authenticate::twitch_redirect,
+                authenticate::twitch_bot_redirect,
+                authenticate::authenticate_discord,
+                authenticate::discord_redirect,
+                authenticate::authenticate_spotify,
+                authenticate::spotify_redirect,
+                authenticate::disconnect_spotify,
+                authenticate::logout,
+            ],
+        )
+        .mount("/profile", routes![profile::profile, profile::join_twitch])
+        .mount("/api", routes![api::set_lastfm_name])
+        .mount("/hooks", routes![webhooks::eventsub_callback])
+        .register("/", catchers![errors::not_found, errors::not_authorized])
+        .register("/channels", catchers![channel::not_found])
+        .manage(Client::new())
+        .manage(command_handler)
+        .launch()
+        .await
+        .expect("Failed to launch web server")
 }
 
 pub fn get_base_url() -> String {
