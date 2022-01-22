@@ -34,6 +34,7 @@ pub struct ProfileContext {
     pub admin: bool,
     pub user: User,
     pub spotify_connected: bool,
+    pub twitch_joined: bool,
     pub parent_context: LayoutContext,
     pub lastfm_name: Option<String>,
 }
@@ -73,5 +74,26 @@ impl<'r> FromRequest<'r> for WebSession {
             },
             None => Outcome::Failure((Status::Unauthorized, ())),
         }
+    }
+}
+
+#[async_trait]
+impl<'r> FromRequest<'r> for User {
+    type Error = ();
+
+    async fn from_request(
+        request: &'r rocket::Request<'_>,
+    ) -> rocket::request::Outcome<Self, Self::Error> {
+        WebSession::from_request(request).await.map(|session| {
+            let db = &request
+                .rocket()
+                .state::<CommandHandler>()
+                .expect("Missing state")
+                .db;
+
+            db.get_user_by_id(session.user_id)
+                .expect("DB error")
+                .expect("Invalid web session") // TODO handle this
+        })
     }
 }

@@ -14,7 +14,7 @@ use crate::platform::{
 };
 use crate::web;
 
-use anyhow::anyhow;
+use anyhow::{anyhow, Context};
 use core::fmt;
 use reqwest::Client;
 use std::env::{self, VarError};
@@ -55,9 +55,9 @@ impl CommandHandler {
                     let subscription_type = serde_json::from_str(&trigger.creation_payload)
                         .expect("Deserialization error");
 
-                    api.add_eventsub_subscription(subscription_type)
-                        .await
-                        .expect("Failed to add EventSub subscription");
+                    if let Err(e) = api.add_eventsub_subscription(subscription_type).await {
+                        tracing::error!("Failed to add EventSub subscription! {}", e);
+                    }
                 }
 
                 Some(api)
@@ -624,6 +624,36 @@ impl CommandHandler {
             _ => Err(anyhow!(
                 "Remotely triggered commands not supported for this platform"
             )),
+        }
+    }
+
+    pub async fn join_channel(&self, channel: &ChannelIdentifier) -> anyhow::Result<()> {
+        match channel {
+            ChannelIdentifier::TwitchChannelID(id) => {
+                let twitch_api = self.twitch_api.as_ref().context("Twitch not initialized")?;
+
+                let user = twitch_api.helix_api.get_user_by_id(id).await?;
+
+                let chat_client_guard = twitch_api.chat_client.lock().await;
+
+                let chat_client = chat_client_guard
+                    .as_ref()
+                    .context("Twitch chat not initialized")?;
+
+                chat_client.join(user.login.clone());
+                chat_client
+                    .say(user.login, "MrDestructoid 👍 Foobot2 joined".to_string())
+                    .await?;
+
+                self.db
+                    .get_or_create_channel(&channel)?
+                    .context("Failed to add channel")?;
+
+                Ok(())
+            }
+            ChannelIdentifier::DiscordGuildID(_) => Ok(()), // Discord guilds don't need to be joined client side and get added to the DB on demand
+            ChannelIdentifier::IrcChannel(_) => Err(anyhow!("Not implemented yet")),
+            ChannelIdentifier::Anonymous => Err(anyhow!("Invalid channel specified")),
         }
     }
 }

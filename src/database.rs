@@ -164,6 +164,23 @@ impl Database {
         channels::table.order(channels::id).load(&mut conn)
     }
 
+    pub fn get_channel(
+        &self,
+        channel_identifier: &ChannelIdentifier,
+    ) -> Result<Option<Channel>, diesel::result::Error> {
+        let mut conn = self.conn_pool.get().unwrap();
+
+        if let Some(channel) = channel_identifier.get_channel() {
+            Ok(channels::table
+                .filter(channels::platform.eq_all(channel_identifier.get_platform_name().unwrap()))
+                .filter(channels::channel.eq_all(channel))
+                .first::<Channel>(&mut conn)
+                .optional()?)
+        } else {
+            Ok(None)
+        }
+    }
+
     pub fn get_or_create_channel(
         &self,
         channel_identifier: &ChannelIdentifier,
@@ -507,7 +524,7 @@ impl Database {
             .first(&mut conn)
             .optional()?)
     }
-    
+
     pub fn get_eventsub_triggers(&self) -> Result<Vec<EventSubTrigger>, DatabaseError> {
         let mut conn = self.conn_pool.get().unwrap();
 
@@ -646,12 +663,14 @@ impl Database {
 
         Ok(())
     }
-    
+
     pub fn add_eventsub_trigger(&self, trigger: NewEventSubTrigger) -> Result<(), DatabaseError> {
         let mut conn = self.conn_pool.get().unwrap();
 
-        diesel::insert_into(eventsub_triggers::table).values(trigger).execute(&mut conn)?;
-        
+        diesel::insert_into(eventsub_triggers::table)
+            .values(trigger)
+            .execute(&mut conn)?;
+
         Ok(())
     }
 }

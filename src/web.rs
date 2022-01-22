@@ -66,7 +66,7 @@ pub async fn run(command_handler: CommandHandler) -> JoinHandle<()> {
                     authenticate::logout,
                 ],
             )
-            .mount("/profile", routes![profile::profile])
+            .mount("/profile", routes![profile::profile, profile::join_twitch])
             .mount("/api", routes![api::set_lastfm_name])
             .mount("/hooks", routes![webhooks::eventsub_callback])
             .register("/", catchers![errors::not_found, errors::not_authorized])

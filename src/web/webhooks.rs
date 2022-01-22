@@ -49,9 +49,14 @@ pub async fn eventsub_callback(
 
                     task::spawn(async move {
                         let broadcaster_id = event.get_broadcaster_id();
-                        
-                        if let Some(action) =
-                            cmd.db.get_eventsub_redeem_action(&broadcaster_id, &properties.subscription_type).expect("DB error")
+
+                        if let Some(action) = cmd
+                            .db
+                            .get_eventsub_redeem_action(
+                                &broadcaster_id,
+                                &properties.subscription_type,
+                            )
+                            .expect("DB error")
                         {
                             let user_id = match event {
                                 EventSubEventType::ChannelUpdate(event) => {
