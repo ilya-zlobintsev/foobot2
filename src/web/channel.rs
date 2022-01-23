@@ -1,4 +1,8 @@
-use crate::{database::models::NewCommand, platform::Permissions};
+use crate::{
+    command_handler::twitch_api::eventsub::{conditions::*, EventSubSubscriptionType},
+    database::models::NewCommand,
+    platform::Permissions,
+};
 
 use super::api::ApiError;
 use super::*;
@@ -99,6 +103,43 @@ pub async fn delete_command(
     Ok(())
 }
 
+// #[post("/<channel_id>/eventsub", data = "<trigger_form>")]
+// pub async fn add_eventsub_trigger(
+//     cmd: &State<CommandHandler>,
+//     channel_id: u64,
+//     trigger_form: Form<EventSubTriggerForm>,
+// ) -> Result<(), ApiError> {
+//     let channel = cmd
+//         .db
+//         .get_channel_by_id(channel_id)?
+//         .ok_or_else(|| ApiError::GenericError("Channel not found".to_string()))?;
+
+//     if channel.platform == "twitch" {
+//         let broadcaster_id = channel.channel;
+
+//         let sub = match trigger_form.event.as_str() {
+//             "channel.update" => EventSubSubscriptionType::ChannelUpdate(ChannelUpdateCondition {
+//                 broadcaster_user_id: broadcaster_id,
+//             }),
+//             _ => {
+//                 return Err(ApiError::GenericError(
+//                     "Unrecognized event type".to_string(),
+//                 ))
+//             }
+//         };
+
+//         let twitch_api = cmd.twitch_api.as_ref().expect("Twitch not initialized"); // Expect because this only triggers if you have a twitch channel but no twitch_api
+        
+//         twitch_api.add_eventsub_trigger().await?
+
+//         Ok(())
+//     } else {
+//         Err(ApiError::GenericError(
+//             "Channel is not on Twitch".to_string(),
+//         ))
+//     }
+// }
+
 #[catch(404)]
 pub async fn not_found(_: &Request<'_>) -> Redirect {
     Redirect::to("/channels")
@@ -107,5 +148,11 @@ pub async fn not_found(_: &Request<'_>) -> Redirect {
 #[derive(FromForm, Debug)]
 pub struct CommandForm {
     pub trigger: String,
+    pub action: String,
+}
+
+#[derive(FromForm, Debug)]
+pub struct EventSubTriggerForm {
+    pub event: String,
     pub action: String,
 }

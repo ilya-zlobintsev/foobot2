@@ -1,11 +1,13 @@
 pub mod models;
 mod schema;
+pub mod credentials;
 
 use std::env;
 use std::fmt::Display;
 use std::sync::Arc;
 use std::time::Duration;
 
+use self::credentials::Credentials;
 use self::models::*;
 use crate::command_handler::spotify_api::SpotifyApi;
 use crate::database::schema::*;
@@ -477,6 +479,8 @@ impl Database {
 
     pub fn set_auth(&self, key: &str, value: &str) -> Result<(), DatabaseError> {
         let mut conn = self.conn_pool.get().unwrap();
+        
+        tracing::debug!("Setting auth: {} - {}", key, value);
 
         diesel::replace_into(auth::table)
             .values((auth::name.eq(key), auth::value.eq(value)))
@@ -640,19 +644,6 @@ impl Database {
         Ok(session.session_id)
     }
 
-    pub fn save_token(&self, token: &UserAccessToken) -> Result<(), DatabaseError> {
-        self.set_auth("twitch_access_token", &token.access_token)?;
-        self.set_auth("twitch_refresh_token", &token.refresh_token)?;
-
-        self.set_auth("twitch_created_at", &token.created_at.to_rfc3339())?;
-
-        if let Some(expires_at) = token.expires_at {
-            self.set_auth("twitch_expires_at", &expires_at.to_rfc3339())?;
-        }
-
-        Ok(())
-    }
-
     pub fn add_eventsub_trigger(&self, trigger: NewEventSubTrigger) -> Result<(), DatabaseError> {
         let mut conn = self.conn_pool.get().unwrap();
 
@@ -661,6 +652,13 @@ impl Database {
             .execute(&mut conn)?;
 
         Ok(())
+    }
+    
+    pub fn make_twitch_credentials(&self, user_id: String) -> Credentials {
+        Credentials {
+            db: self.clone(),
+            user_id,
+        }
     }
 }
 
@@ -735,7 +733,14 @@ impl TokenStorage for Database {
     async fn update_token(&mut self, token: &UserAccessToken) -> Result<(), Self::UpdateError> {
         tracing::info!("Refreshed Twitch token!");
 
-        self.save_token(token)?;
+        self.set_auth("twitch_access_token", &token.access_token)?;
+        self.set_auth("twitch_refresh_token", &token.refresh_token)?;
+
+        self.set_auth("twitch_created_at", &token.created_at.to_rfc3339())?;
+
+        if let Some(expires_at) = token.expires_at {
+            self.set_auth("twitch_expires_at", &expires_at.to_rfc3339())?;
+        }
 
         Ok(())
     }

@@ -7,10 +7,12 @@ use rocket::http::{Cookie, CookieJar, SameSite};
 use rocket::response::{content::Html, status, Redirect};
 use rocket::State;
 use rocket_dyn_templates::Template;
-use twitch_irc::login::UserAccessToken;
+use twitch_irc::login::{TokenStorage, UserAccessToken};
 
 use crate::command_handler::twitch_api;
 use crate::command_handler::twitch_api::helix::HelixApi;
+use crate::database::models::User;
+use crate::web::api::ApiError;
 use crate::{
     command_handler::{discord_api::DiscordApi, spotify_api::SpotifyApi, CommandHandler},
     database::{
@@ -23,7 +25,8 @@ use crate::{
 
 use super::template_context::AuthenticateContext;
 
-const TWITCH_SCOPES: &[&str] = &[""];
+const TWITCH_AUTH_SCOPES: &[&str] = &[""];
+const TWITCH_MANAGE_SCOPES: &[&str] = &["channel:read:predictions", "channel:read:redemptions"];
 const DISCORD_SCOPES: &str = "identify";
 const SPOTIFY_SCOPES: &[&str] = &["user-read-playback-state", "user-read-recently-played"];
 
@@ -60,12 +63,17 @@ pub async fn authenticate_twitch() -> Redirect {
 
     let client_id = twitch_api::get_client_id().expect("Twitch client ID not specified");
 
-    Redirect::to(AuthPlatform::Twitch.construct_uri(&client_id, &TWITCH_SCOPES.join(" "), false))
+    Redirect::to(AuthPlatform::Twitch.construct_uri(
+        &client_id,
+        &TWITCH_AUTH_SCOPES.join(" "),
+        false,
+        None,
+    ))
 }
 
 #[get("/twitch/bot")]
 
-pub async fn authenticate_twitch_bot(
+pub async fn admin_authenticate_twitch_bot(
     cmd: &State<CommandHandler>,
     current_session: WebSession,
 ) -> Result<Redirect, status::Unauthorized<&'static str>> {
@@ -79,6 +87,7 @@ pub async fn authenticate_twitch_bot(
                 &client_id,
                 &TWITCH_BOT_SCOPES.join("%20"),
                 true,
+                Some("bot"),
             );
 
             tracing::info!("{}", uri);
@@ -90,6 +99,49 @@ pub async fn authenticate_twitch_bot(
     } else {
         Err(status::Unauthorized(Some("Admin user not configured!")))
     }
+}
+
+#[get("/twitch/manage")]
+pub async fn authenticate_twitch_manage() -> Redirect {
+    let client_id = twitch_api::get_client_id().expect("Twitch client ID not specified");
+
+    let uri = AuthPlatform::Twitch.construct_uri(
+        &client_id,
+        &TWITCH_MANAGE_SCOPES.join("%20"),
+        true,
+        Some("manage"),
+    );
+
+    tracing::info!("{}", uri);
+
+    Redirect::to(uri)
+}
+
+#[get("/twitch/redirect/manage?<code>")]
+pub async fn twitch_manage_redirect(
+    cmd: &State<CommandHandler>,
+    code: &str,
+    client: &State<Client>,
+    user: User,
+) -> Result<Redirect, ApiError> {
+    let twitch_user_id = user.twitch_id.ok_or(ApiError::InvalidUser)?;
+
+    let mut user_credentials = cmd.db.make_twitch_credentials(twitch_user_id);
+
+    let auth_response = trade_twitch_code(client, code).await?;
+
+    let current = Utc::now();
+
+    let token = UserAccessToken {
+        access_token: auth_response.access_token,
+        refresh_token: auth_response.refresh_token,
+        created_at: current,
+        expires_at: Some(current + Duration::seconds(auth_response.expires_in)),
+    };
+
+    user_credentials.update_token(&token).await?;
+
+    Ok(Redirect::to("/profile"))
 }
 
 #[get("/twitch/redirect?<code>")]
@@ -138,7 +190,7 @@ pub async fn twitch_redirect(
 }
 
 #[get("/twitch/redirect/bot?<code>")]
-pub async fn twitch_bot_redirect(
+pub async fn admin_twitch_bot_redirect(
     cmd: &State<CommandHandler>,
     client: &State<Client>,
     code: &str,
@@ -153,13 +205,21 @@ pub async fn twitch_bot_redirect(
             let current = Utc::now();
 
             cmd.db
-                .save_token(&UserAccessToken {
-                    access_token: auth_response.access_token,
-                    refresh_token: auth_response.refresh_token,
-                    created_at: current,
-                    expires_at: Some(current + Duration::seconds(auth_response.expires_in)),
-                })
-                .expect("Failed to save token");
+                .set_auth("twitch_access_token", &auth_response.access_token)
+                .expect("DB error");
+            cmd.db
+                .set_auth("twitch_refresh_token", &auth_response.refresh_token)
+                .expect("DB error");
+
+            cmd.db
+                .set_auth("twitch_created_at", &current.to_rfc3339())
+                .expect("DB error");
+
+            let expires_at = current + Duration::seconds(auth_response.expires_in);
+
+            cmd.db
+                .set_auth("twitch_expires_at", &expires_at.to_rfc3339())
+                .expect("DB error");
 
             tracing::info!("Successfully authenticated the bot and saved the token!");
 
@@ -215,7 +275,7 @@ pub fn authenticate_discord() -> Redirect {
 
     let client_id = env::var("DISCORD_CLIENT_ID").expect("DISCORD_CLIENT_ID missing");
 
-    Redirect::to(AuthPlatform::Discord.construct_uri(&client_id, DISCORD_SCOPES, false))
+    Redirect::to(AuthPlatform::Discord.construct_uri(&client_id, DISCORD_SCOPES, false, None))
 }
 
 #[get("/discord/redirect?<code>")]
@@ -304,6 +364,7 @@ pub fn authenticate_spotify(_session: WebSession) -> Redirect {
         &client_id,
         &SPOTIFY_SCOPES.join("%20"),
         false,
+        None,
     ))
 }
 
@@ -417,16 +478,22 @@ impl AuthPlatform {
         }
     }
 
-    pub fn construct_uri(&self, client_id: &str, scopes: &str, force_verify: bool) -> String {
+    pub fn construct_uri(
+        &self,
+        client_id: &str,
+        scopes: &str,
+        force_verify: bool,
+        suffix: Option<&str>,
+    ) -> String {
         let mut redirect_uri = format!(
             "{}/authenticate/{}/redirect",
             env::var("BASE_URL").expect("BASE_URL missing"),
             self.get_name(),
         );
 
-        // force_verify is used when authenticating the bot
-        if force_verify && self == &Self::Twitch {
-            redirect_uri.push_str("/bot");
+        if let Some(suffix) = suffix {
+            redirect_uri.push('/');
+            redirect_uri.push_str(suffix);
         }
 
         tracing::info!("Using redirect_uri {}", redirect_uri);

@@ -64,3 +64,50 @@ pub struct Vip {
     pub display_name: String,
     pub granted_at: String,
 }
+
+
+#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct CustomReward {
+    pub broadcaster_name: String,
+    pub broadcaster_login: String,
+    pub broadcaster_id: String,
+    pub id: String,
+    pub background_color: String,
+    pub is_enabled: bool,
+    pub cost: i64,
+    pub title: String,
+    pub prompt: String,
+    pub is_user_input_required: bool,
+    pub max_per_stream_setting: MaxPerStreamSetting,
+    pub max_per_user_per_stream_setting: MaxPerUserPerStreamSetting,
+    pub global_cooldown_setting: GlobalCooldownSetting,
+    pub is_paused: bool,
+    pub is_in_stock: bool,
+    pub default_image: DefaultImage,
+    pub should_redemptions_skip_request_queue: bool,
+}
+
+#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct MaxPerStreamSetting {
+    pub is_enabled: bool,
+    pub max_per_stream: i64,
+}
+
+#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct MaxPerUserPerStreamSetting {
+    pub is_enabled: bool,
+    pub max_per_user_per_stream: i64,
+}
+
+#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct GlobalCooldownSetting {
+    pub is_enabled: bool,
+    pub global_cooldown_seconds: i64,
+}
+
+#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct DefaultImage {
+    pub url_1x: String,
+    pub url_2x: String,
+    pub url_4x: String,
+}

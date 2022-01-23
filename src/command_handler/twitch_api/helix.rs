@@ -3,15 +3,17 @@ use std::{
     time::Duration,
 };
 
-use anyhow::anyhow;
-use http::HeaderMap;
-use reqwest::Client;
+use anyhow::{anyhow, Context};
+use http::{HeaderMap, Method};
+use reqwest::{Client, RequestBuilder, Response};
 use tokio::task;
 use twitch_irc::login::{LoginCredentials, StaticLoginCredentials};
 
-use crate::command_handler::twitch_api::model::UsersResponse;
+use crate::{command_handler::twitch_api::model::UsersResponse, web::response_ok};
 
-use super::{get_client_id, model::User};
+use super::{get_client_id, model::*};
+
+pub const HELIX_URL: &str = "https://api.twitch.tv/helix";
 
 #[derive(Clone, Debug)]
 pub struct HelixApi<C: LoginCredentials> {
@@ -56,6 +58,24 @@ impl<C: LoginCredentials> HelixApi<C> {
                 users_cache.clear();
             }
         });
+    }
+
+    async fn request(&self, method: Method, path: &str) -> anyhow::Result<RequestBuilder> {
+        let credentials = self
+            .credentials
+            .get_credentials()
+            .await
+            .map_err(|_| anyhow!("Failed to get credentials"))?;
+
+        Ok(self
+            .client
+            .request(method, format!("{}{}", HELIX_URL, path))
+            .headers(self.headers.clone())
+            .bearer_auth(&credentials.token.context("Token missing")?))
+    }
+
+    async fn get(&self, path: &str) -> anyhow::Result<RequestBuilder> {
+        self.request(Method::GET, path).await
     }
 
     pub async fn get_users(
@@ -153,6 +173,22 @@ impl<C: LoginCredentials> HelixApi<C> {
             .into_iter()
             .next()
             .unwrap())
+    }
+
+    /// Returns a list of Custom Reward objects for the Custom Rewards on the authenticated user's channel.
+    pub async fn get_custom_rewards(&self) -> anyhow::Result<Vec<CustomReward>> {
+        let broadcaster_id = self.get_self_user().await?.id;
+
+        let response = self
+            .get("/channel_points/custom_rewards")
+            .await?
+            .query(&[("broadcaster_id", broadcaster_id)])
+            .send()
+            .await?;
+
+        response_ok(&response)?;
+        
+        Ok(response.json().await?)
     }
 }
 

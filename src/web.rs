@@ -53,14 +53,16 @@ pub async fn run(command_handler: CommandHandler) {
             routes![
                 authenticate::index,
                 authenticate::authenticate_twitch,
-                authenticate::authenticate_twitch_bot,
+                authenticate::admin_authenticate_twitch_bot,
                 authenticate::twitch_redirect,
-                authenticate::twitch_bot_redirect,
+                authenticate::admin_twitch_bot_redirect,
                 authenticate::authenticate_discord,
                 authenticate::discord_redirect,
                 authenticate::authenticate_spotify,
                 authenticate::spotify_redirect,
                 authenticate::disconnect_spotify,
+                authenticate::authenticate_twitch_manage,
+                authenticate::twitch_manage_redirect,
                 authenticate::logout,
             ],
         )
