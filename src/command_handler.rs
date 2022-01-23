@@ -25,7 +25,7 @@ use std::time::{Duration, Instant};
 use handlebars::Handlebars;
 use inquiry_helper::*;
 use tokio::process::Command;
-use tokio::task;
+use tokio::{fs, task};
 
 use discord_api::DiscordApi;
 use lastfm_api::LastFMApi;
@@ -186,7 +186,7 @@ impl CommandHandler {
             .contains(&(user.id, command.to_string()))
         {
             let result = match command {
-                "ping" => (Some(self.ping()), Some(5)),
+                "ping" => (Some(self.ping().await), Some(5)),
                 "whoami" | "id" => (
                     Some(format!(
                         "{:?}, identified as {}, channel: {:?}, permissions: {:?}",
@@ -388,7 +388,7 @@ impl CommandHandler {
         }
     }
 
-    fn ping(&self) -> String {
+    async fn ping(&self) -> String {
         let uptime = {
             let duration = self.startup_time.elapsed();
 
@@ -412,14 +412,28 @@ impl CommandHandler {
             result
         };
 
-        let mem = psutil::memory::virtual_memory().unwrap();
+        let smaps = fs::read_to_string("/proc/self/smaps")
+            .await
+            .expect("Proc FS not found");
+
+        let mut mem_usage = 0; // in KB
+
+        for line in smaps.lines() {
+            if line.starts_with("Pss:") || line.starts_with("SwapPss:") {
+                let mut split = line.split_whitespace();
+                split.next().unwrap();
+
+                let pss = split.next().unwrap();
+
+                mem_usage += pss.parse::<i32>().unwrap();
+            }
+        }
 
         format!(
-            "Pong! Version: {}, Uptime {}, RAM usage: {}/{} MiB",
+            "Pong! Version: {}, Uptime {}, RAM usage: {} MiB",
             env!("CARGO_PKG_VERSION"),
             uptime,
-            mem.used() / 1024 / 1024,
-            mem.total() / 1024 / 1024
+            mem_usage / 1024,
         )
     }
 
