@@ -1,6 +1,6 @@
+pub mod credentials;
 pub mod models;
 mod schema;
-pub mod credentials;
 
 use std::env;
 use std::fmt::Display;
@@ -479,7 +479,7 @@ impl Database {
 
     pub fn set_auth(&self, key: &str, value: &str) -> Result<(), DatabaseError> {
         let mut conn = self.conn_pool.get().unwrap();
-        
+
         tracing::debug!("Setting auth: {} - {}", key, value);
 
         diesel::replace_into(auth::table)
@@ -653,7 +653,7 @@ impl Database {
 
         Ok(())
     }
-    
+
     pub fn make_twitch_credentials(&self, user_id: String) -> Credentials {
         Credentials {
             db: self.clone(),

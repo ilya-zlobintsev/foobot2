@@ -79,7 +79,10 @@ impl TokenStorage for Credentials {
         )?;
 
         if let Some(expires_at) = token.expires_at {
-            self.db.set_auth(&self.make_entry_name("twitch_expires_at"), &expires_at.to_rfc3339())?;
+            self.db.set_auth(
+                &self.make_entry_name("twitch_expires_at"),
+                &expires_at.to_rfc3339(),
+            )?;
         }
 
         Ok(())

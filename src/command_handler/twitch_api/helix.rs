@@ -6,12 +6,17 @@ use std::{
 use anyhow::{anyhow, Context};
 use http::{HeaderMap, Method};
 use reqwest::{Client, RequestBuilder, Response};
+use serde_json::Value;
 use tokio::task;
 use twitch_irc::login::{LoginCredentials, StaticLoginCredentials};
 
 use crate::{command_handler::twitch_api::model::UsersResponse, web::response_ok};
 
-use super::{get_client_id, model::*};
+use super::{
+    eventsub::{EventSubSubscription, EventSubSubscriptionType},
+    get_client_id,
+    model::*,
+};
 
 pub const HELIX_URL: &str = "https://api.twitch.tv/helix";
 
@@ -78,6 +83,14 @@ impl<C: LoginCredentials> HelixApi<C> {
         self.request(Method::GET, path).await
     }
 
+    async fn post(&self, path: &str) -> anyhow::Result<RequestBuilder> {
+        self.request(Method::POST, path).await
+    }
+
+    async fn delete(&self, path: &str) -> anyhow::Result<RequestBuilder> {
+        self.request(Method::DELETE, path).await
+    }
+
     pub async fn get_users(
         &self,
         logins: Option<&Vec<&str>>,
@@ -113,38 +126,24 @@ impl<C: LoginCredentials> HelixApi<C> {
         }
 
         if !params.is_empty() || (logins.is_none() && ids.is_none()) {
-            let response = self
-                .client
-                .get("https://api.twitch.tv/helix/users")
-                .headers(self.headers.clone())
-                .bearer_auth(self.get_token().await?)
-                .query(&params)
-                .send()
-                .await?;
+            let response = self.get("/users").await?.query(&params).send().await?;
 
             tracing::info!("GET {}: {}", response.url(), response.status());
 
-            let status = response.status();
+            response_ok(&response)?;
 
-            match status.is_success() {
-                true => {
-                    let api_results = response.json::<UsersResponse>().await?.data;
+            let api_results = response.json::<UsersResponse>().await?.data;
 
-                    if !api_results.is_empty() {
-                        let mut users_cache = self.users_cache.write().unwrap();
+            if !api_results.is_empty() {
+                let mut users_cache = self.users_cache.write().unwrap();
 
-                        users_cache.extend(api_results.clone());
-                    }
-
-                    results.extend(api_results);
-
-                    Ok(results)
-                }
-                false => Err(anyhow!("Response code {}", status)),
+                users_cache.extend(api_results.clone());
             }
-        } else {
-            Ok(results)
+
+            results.extend(api_results);
         }
+
+        Ok(results)
     }
 
     pub async fn get_user_by_id(&self, id: &str) -> anyhow::Result<User> {
@@ -187,8 +186,47 @@ impl<C: LoginCredentials> HelixApi<C> {
             .await?;
 
         response_ok(&response)?;
-        
+
         Ok(response.json().await?)
+    }
+
+    pub async fn add_eventsub_subscription(
+        &self,
+        subscription: EventSubSubscriptionType,
+    ) -> anyhow::Result<()> {
+        let response = self
+            .post("/eventsub/subscriptions")
+            .await?
+            .json(&subscription.build_body())
+            .send()
+            .await?;
+
+        response_ok(&response)?;
+
+        tracing::info!("Succesfully added EventSub subscription {:?}", subscription);
+
+        Ok(())
+    }
+
+    pub async fn get_eventsub_subscriptions(&self) -> anyhow::Result<Vec<EventSubSubscription>> {
+        let response = self.get("/eventsub/subscriptions").await?.send().await?;
+
+        let mut v: Value = response.json().await?;
+
+        let data = v["data"].take();
+
+        Ok(serde_json::from_value(data)?)
+    }
+
+    pub async fn delete_eventsub_subscription(&self, id: &str) -> anyhow::Result<()> {
+        response_ok(
+            &self
+                .delete("/eventsub/subscriptions")
+                .await?
+                .query(&[("id", id)])
+                .send()
+                .await?,
+        )
     }
 }
 

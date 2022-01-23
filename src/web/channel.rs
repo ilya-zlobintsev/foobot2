@@ -129,7 +129,7 @@ pub async fn delete_command(
 //         };
 
 //         let twitch_api = cmd.twitch_api.as_ref().expect("Twitch not initialized"); // Expect because this only triggers if you have a twitch channel but no twitch_api
-        
+
 //         twitch_api.add_eventsub_trigger().await?
 
 //         Ok(())

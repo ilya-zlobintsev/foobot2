@@ -94,11 +94,7 @@ impl ChatPlatform for Irc {
         tracing::info!("IRC connected");
 
         task::spawn(async move {
-            while let Ok(Some(message)) = stream
-                .next()
-                .await
-                .transpose()
-            {
+            while let Ok(Some(message)) = stream.next().await.transpose() {
                 self.handle_message(message).await;
             }
 

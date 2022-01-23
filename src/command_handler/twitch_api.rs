@@ -3,38 +3,32 @@ pub mod helix;
 pub mod model;
 
 use futures::future::join_all;
-use http::Method;
-use reqwest::RequestBuilder;
 use std::collections::HashMap;
 use std::env;
 use std::sync::{Arc, RwLock};
 use std::time::Duration;
 use tokio::sync::Mutex;
 
-use reqwest::{header::HeaderMap, Client};
+use reqwest::Client;
 use tokio::task;
 
 use model::*;
-use serde_json::Value;
-use twitch_irc::login::{LoginCredentials, RefreshingLoginCredentials};
+use twitch_irc::login::{LoginCredentials, RefreshingLoginCredentials, StaticLoginCredentials};
 
 use crate::database::Database;
 use crate::platform::twitch;
-use crate::web::response_ok;
 
-use self::eventsub::{EventSubSubscription, EventSubSubscriptionType};
 use self::helix::HelixApi;
 
-const HELIX_URL: &str = "https://api.twitch.tv/helix";
+const APP_SCOPES: &[&str] = &["moderation:read", "channel:moderate", "chat:edit"];
 
 #[derive(Clone, Debug)]
 pub struct TwitchApi<C: LoginCredentials + Clone> {
     pub helix_api: HelixApi<C>,
+    pub helix_api_app: HelixApi<StaticLoginCredentials>,
     pub chat_client: Arc<Mutex<Option<twitch::TwitchClient>>>,
     moderators_cache: Arc<RwLock<HashMap<String, Vec<String>>>>,
     client: Client,
-    headers: HeaderMap,
-    app_access_token: Arc<String>,
 }
 
 impl TwitchApi<RefreshingLoginCredentials<Database>> {
@@ -50,11 +44,7 @@ impl TwitchApi<RefreshingLoginCredentials<Database>> {
 
 impl<C: LoginCredentials + Clone> TwitchApi<C> {
     pub async fn init(credentials: C) -> anyhow::Result<Self> {
-        let mut headers = HeaderMap::new();
-
         let client_id = get_client_id().expect("Client ID missing");
-
-        headers.insert("Client-Id", client_id.parse().unwrap());
 
         let app_access_token = Self::get_app_token(
             &client_id,
@@ -64,10 +54,13 @@ impl<C: LoginCredentials + Clone> TwitchApi<C> {
 
         let twitch_api = TwitchApi {
             helix_api: HelixApi::with_credentials(credentials).await,
+            helix_api_app: HelixApi::with_credentials(StaticLoginCredentials::new(
+                String::new(),
+                Some(app_access_token),
+            ))
+            .await,
             client: Client::new(),
             chat_client: Arc::new(Mutex::new(None)),
-            headers,
-            app_access_token: Arc::new(app_access_token),
             moderators_cache: Arc::new(RwLock::new(HashMap::new())),
         };
 
@@ -75,13 +68,18 @@ impl<C: LoginCredentials + Clone> TwitchApi<C> {
 
         let mut request_handles = Vec::new();
 
-        for subscription in twitch_api.get_eventsub_subscriptions().await? {
+        for subscription in twitch_api
+            .helix_api_app
+            .get_eventsub_subscriptions()
+            .await?
+        {
             let twitch_api = twitch_api.clone();
 
             request_handles.push(task::spawn(async move {
                 tracing::info!("Removing old subscription {}", subscription.sub_type);
 
                 twitch_api
+                    .helix_api_app
                     .delete_eventsub_subscription(&subscription.id)
                     .await
                     .expect("Failed to remove EventSub subscription");
@@ -94,15 +92,21 @@ impl<C: LoginCredentials + Clone> TwitchApi<C> {
     }
 
     // TODO
-    pub async fn get_app_token(
-        client_id: &str,
-        client_secret: &str,
-    ) -> Result<String, reqwest::Error> {
+    async fn get_app_token(client_id: &str, client_secret: &str) -> Result<String, reqwest::Error> {
         let client = Client::new();
 
-        let response: serde_json::Value = client.post("https://id.twitch.tv/oauth2/token")
-            .query(&[("client_id", client_id), ("client_secret", client_secret), ("grant_type", "client_credentials"), ("scope", "moderation:read channel:edit:commercial channel:manage:broadcast channel:moderate chat:edit")])
-            .send().await?.json().await?;
+        let response: serde_json::Value = client
+            .post("https://id.twitch.tv/oauth2/token")
+            .query(&[
+                ("client_id", client_id),
+                ("client_secret", client_secret),
+                ("grant_type", "client_credentials"),
+                ("scope", &APP_SCOPES.join(" ")),
+            ])
+            .send()
+            .await?
+            .json()
+            .await?;
 
         // tracing::info!("{:?}", response);
 
@@ -235,62 +239,6 @@ impl<C: LoginCredentials + Clone> TwitchApi<C> {
 
         Ok(mods)
     }*/
-
-    fn app_request(&self, method: Method, path: &str) -> RequestBuilder {
-        self.client
-            .request(method, format!("{}{}", HELIX_URL, path))
-            .headers(self.headers.clone())
-            .bearer_auth(&self.app_access_token)
-    }
-
-    fn app_get(&self, path: &str) -> RequestBuilder {
-        self.app_request(Method::GET, path)
-    }
-
-    fn app_post(&self, path: &str) -> RequestBuilder {
-        self.app_request(Method::POST, path)
-    }
-
-    fn app_delete(&self, path: &str) -> RequestBuilder {
-        self.app_request(Method::DELETE, path)
-    }
-
-    pub async fn add_eventsub_subscription(
-        &self,
-        subscription: EventSubSubscriptionType,
-    ) -> anyhow::Result<()> {
-        let response = self
-            .app_post("/eventsub/subscriptions")
-            .json(&subscription.build_body())
-            .send()
-            .await?;
-
-        response_ok(&response)?;
-
-        tracing::info!("Succesfully added EventSub subscription {:?}", subscription);
-
-        Ok(())
-    }
-
-    pub async fn get_eventsub_subscriptions(&self) -> anyhow::Result<Vec<EventSubSubscription>> {
-        let response = self.app_get("/eventsub/subscriptions").send().await?;
-
-        let mut v: Value = response.json().await?;
-
-        let data = v["data"].take();
-
-        Ok(serde_json::from_value(data)?)
-    }
-
-    pub async fn delete_eventsub_subscription(&self, id: &str) -> anyhow::Result<()> {
-        response_ok(
-            &self
-                .app_delete("/eventsub/subscriptions")
-                .query(&[("id", id)])
-                .send()
-                .await?,
-        )
-    }
 }
 
 pub fn get_client_id() -> Option<String> {

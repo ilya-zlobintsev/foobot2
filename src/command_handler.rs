@@ -55,7 +55,11 @@ impl CommandHandler {
                     let subscription_type = serde_json::from_str(&trigger.creation_payload)
                         .expect("Deserialization error");
 
-                    if let Err(e) = api.add_eventsub_subscription(subscription_type).await {
+                    if let Err(e) = api
+                        .helix_api_app
+                        .add_eventsub_subscription(subscription_type)
+                        .await
+                    {
                         tracing::error!("Failed to add EventSub subscription! {}", e);
                     }
                 }

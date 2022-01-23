@@ -65,7 +65,6 @@ pub struct Vip {
     pub granted_at: String,
 }
 
-
 #[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct CustomReward {
     pub broadcaster_name: String,
