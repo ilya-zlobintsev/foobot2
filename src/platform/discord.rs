@@ -77,7 +77,7 @@ impl ChatPlatform for Discord {
 
         let intents = Intents::GUILD_MESSAGES | Intents::DIRECT_MESSAGES;
 
-        let (cluster, mut events) = Cluster::builder(&self.token, intents)
+        let (cluster, mut events) = Cluster::builder(self.token.clone(), intents)
             .shard_scheme(scheme)
             .build()
             .await
@@ -149,12 +149,12 @@ impl ExecutionContext for DiscordExecutionContext<'_> {
 
     fn get_channel(&self) -> ChannelIdentifier {
         match self.msg.guild_id {
-            Some(guild_id) => ChannelIdentifier::DiscordGuildID(guild_id.0.to_string()),
+            Some(guild_id) => ChannelIdentifier::DiscordGuildID(guild_id.to_string()),
             None => ChannelIdentifier::Anonymous,
         }
     }
 
     fn get_user_identifier(&self) -> UserIdentifier {
-        UserIdentifier::DiscordID(self.msg.author.id.0.to_string())
+        UserIdentifier::DiscordID(self.msg.author.id.to_string())
     }
 }

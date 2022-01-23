@@ -5,7 +5,7 @@ use std::{
 
 use anyhow::{anyhow, Context};
 use http::{HeaderMap, Method};
-use reqwest::{Client, RequestBuilder, Response};
+use reqwest::{Client, RequestBuilder};
 use serde_json::Value;
 use tokio::task;
 use twitch_irc::login::{LoginCredentials, StaticLoginCredentials};

@@ -4,7 +4,7 @@ use std::time::Duration;
 use tokio::sync::RwLock;
 use twilight_http::Client;
 use twilight_model::guild::Permissions;
-use twilight_model::id::{GuildId, UserId};
+use twilight_model::id::Id;
 use twilight_model::user::CurrentUser;
 use twilight_util::permission_calculator::PermissionCalculator;
 
@@ -61,8 +61,8 @@ impl DiscordApi {
 
                 tracing::debug!("Querying user permissions");
 
-                let user_id = UserId::new(user_id).unwrap();
-                let guild_id = GuildId::new(guild_id).unwrap();
+                let user_id = Id::new(user_id);
+                let guild_id = Id::new(guild_id);
 
                 let guild_member = self
                     .http

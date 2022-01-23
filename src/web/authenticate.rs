@@ -336,7 +336,7 @@ pub async fn discord_redirect(
         .expect("Discord API Error");
 
     let user = db
-        .get_or_create_user(&UserIdentifier::DiscordID(discord_user.id.0.to_string()))
+        .get_or_create_user(&UserIdentifier::DiscordID(discord_user.id.to_string()))
         .expect("DB Error");
 
     if let Some(web_session) = current_session {
