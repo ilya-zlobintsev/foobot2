@@ -3,7 +3,7 @@ FROM docker.io/rust:slim-bullseye as builder
 WORKDIR /build
 
 RUN apt-get update
-RUN apt-get install --assume-yes libmariadb-dev-compat ca-certificates libssl-dev pkg-config
+RUN apt-get install --assume-yes libmariadb-dev-compat ca-certificates libssl-dev pkg-config git
 
 # Avoid having to install/build all dependencies by copying
 # the Cargo files and making a dummy src/main.rs
