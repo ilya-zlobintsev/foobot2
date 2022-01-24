@@ -32,4 +32,6 @@ COPY static ./static
 COPY templates ./templates
 COPY Rocket.toml .
 
+STOPSIGNAL SIGINT
+
 CMD ["/app/foobot2"]
