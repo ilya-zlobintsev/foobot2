@@ -12,13 +12,14 @@ use crate::database::{models::User, Database};
 use crate::platform::{
     ChannelIdentifier, ExecutionContext, Permissions, ServerExecutionContext, UserIdentifierError,
 };
-use crate::{web, get_version};
+use crate::{get_version, web};
 
 use anyhow::{anyhow, Context};
 use core::fmt;
 use reqwest::Client;
 use std::env::{self, VarError};
 use std::num::ParseIntError;
+use std::str::FromStr;
 use std::sync::{Arc, RwLock};
 use std::time::{Duration, Instant};
 
@@ -625,8 +626,7 @@ impl CommandHandler {
             .await?
             .unwrap_or_else(|| "Event triggered with no action".to_string());
 
-        self.send_to_channel(context.get_channel(), response)
-            .await
+        self.send_to_channel(context.get_channel(), response).await
     }
 
     pub async fn send_to_channel(
@@ -791,4 +791,18 @@ async fn start_supinic_heartbeat() {
             tokio::time::sleep(Duration::from_secs(3600)).await;
         }
     });
+}
+
+pub fn get_admin_channel() -> Option<ChannelIdentifier> {
+    if let Ok(admin_str) = env::var("ADMIN_USER") {
+        match ChannelIdentifier::from_str(&admin_str) {
+            Ok(admin_channel) => Some(admin_channel),
+            Err(e) => {
+                tracing::warn!("Failed to get admin channel: {}", e);
+                None
+            }
+        }
+    } else {
+        None
+    }
 }

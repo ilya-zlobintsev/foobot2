@@ -10,15 +10,14 @@ mod web;
 
 use dotenv::dotenv;
 use std::env;
-use std::str::FromStr;
 
-use command_handler::CommandHandler;
+use command_handler::{get_admin_channel, CommandHandler};
 use database::Database;
 
 use platform::discord::Discord;
 use platform::irc::Irc;
 use platform::twitch::Twitch;
-use platform::{ChannelIdentifier, ChatPlatform};
+use platform::ChatPlatform;
 
 #[tokio::main]
 async fn main() {
@@ -57,21 +56,14 @@ async fn main() {
         }
     }
 
-    if let Ok(admin_str) = env::var("ADMIN_USER") {
-        match ChannelIdentifier::from_str(&admin_str) {
-            Ok(admin_channel) => {
-                command_handler
-                    .send_to_channel(
-                        admin_channel,
-                        format!("Foobot2 {} up and running", get_version()),
-                    )
-                    .await
-                    .expect("Failed to send startup message");
-            }
-            Err(e) => {
-                tracing::warn!("Failed to get admin channel: {}", e);
-            }
-        }
+    if let Some(admin_channel) = get_admin_channel() {
+        command_handler
+            .send_to_channel(
+                admin_channel,
+                format!("Foobot2 {} up and running", get_version()),
+            )
+            .await
+            .expect("Failed to send startup message");
     }
 
     web::run(command_handler.clone()).await;

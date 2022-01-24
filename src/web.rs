@@ -6,6 +6,7 @@ mod profile;
 mod template_context;
 mod webhooks;
 use anyhow::anyhow;
+use tokio::task;
 
 use std::env;
 
@@ -15,7 +16,10 @@ use rocket_dyn_templates::Template;
 
 use template_context::*;
 
-use crate::{command_handler::CommandHandler, database::models::WebSession};
+use crate::{
+    command_handler::{get_admin_channel, CommandHandler},
+    database::models::WebSession,
+};
 
 #[get("/")]
 async fn index(cmd: &State<CommandHandler>, session: Option<WebSession>) -> Html<Template> {
@@ -33,7 +37,7 @@ async fn index(cmd: &State<CommandHandler>, session: Option<WebSession>) -> Html
 }
 
 pub async fn run(command_handler: CommandHandler) {
-    rocket::build()
+    let rocket = rocket::build()
         .attach(Template::custom(|engines| {
             engines.handlebars.set_strict_mode(true);
         }))
@@ -72,10 +76,25 @@ pub async fn run(command_handler: CommandHandler) {
         .register("/", catchers![errors::not_found, errors::not_authorized])
         .register("/channels", catchers![channel::not_found])
         .manage(Client::new())
-        .manage(command_handler)
-        .launch()
+        .manage(command_handler.clone())
+        .ignite()
         .await
-        .expect("Failed to launch web server")
+        .expect("Failed to ignite rocket");
+
+    let shutdown_handle = rocket.shutdown();
+
+    task::spawn(async move {
+        shutdown_handle.await;
+
+        if let Some(admin_channel) = get_admin_channel() {
+            command_handler
+                .send_to_channel(admin_channel, "Shutting down...".to_string())
+                .await
+                .expect("Failed to send shutdown message");
+        }
+    });
+
+    rocket.launch().await.expect("Failed to launch web server")
 }
 
 pub fn get_base_url() -> String {
