@@ -8,9 +8,11 @@ use async_trait::async_trait;
 
 use serde::{Deserialize, Serialize};
 
+use anyhow::anyhow;
 use std::cmp::Ordering;
 use std::env::{self, VarError};
 use std::fmt::{self, Display};
+use std::str::FromStr;
 
 #[async_trait]
 pub trait ChatPlatform {
@@ -169,6 +171,18 @@ impl ChannelIdentifier {
             ChannelIdentifier::DiscordGuildID(id) => Some(id),
             ChannelIdentifier::IrcChannel(channel) => Some(channel),
             ChannelIdentifier::Anonymous => None,
+        }
+    }
+}
+
+impl FromStr for ChannelIdentifier {
+    type Err = anyhow::Error;
+
+    fn from_str(s: &str) -> anyhow::Result<Self> {
+        if let Some((platform, id)) = s.split_once(":") {
+            ChannelIdentifier::new(platform, id.to_string())
+        } else {
+            Err(anyhow!("Delimiter missing from channel identifier"))
         }
     }
 }

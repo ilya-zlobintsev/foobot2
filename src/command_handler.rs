@@ -12,7 +12,7 @@ use crate::database::{models::User, Database};
 use crate::platform::{
     ChannelIdentifier, ExecutionContext, Permissions, ServerExecutionContext, UserIdentifierError,
 };
-use crate::web;
+use crate::{web, get_version};
 
 use anyhow::{anyhow, Context};
 use core::fmt;
@@ -431,7 +431,7 @@ impl CommandHandler {
 
         format!(
             "Pong! Version: {}, Uptime {}, RAM usage: {} MiB",
-            env!("CARGO_PKG_VERSION"),
+            get_version(),
             uptime,
             mem_usage / 1024,
         )
@@ -625,7 +625,16 @@ impl CommandHandler {
             .await?
             .unwrap_or_else(|| "Event triggered with no action".to_string());
 
-        match context.get_channel() {
+        self.send_to_channel(context.get_channel(), response)
+            .await
+    }
+
+    pub async fn send_to_channel(
+        &self,
+        channel: ChannelIdentifier,
+        msg: String,
+    ) -> anyhow::Result<()> {
+        match channel {
             ChannelIdentifier::TwitchChannelID(channel_id) => {
                 let twitch_api = self.twitch_api.as_ref().unwrap();
 
@@ -635,7 +644,7 @@ impl CommandHandler {
 
                 let chat_client = chat_client_guard.as_ref().expect("Chat client missing");
 
-                chat_client.say(broadcaster.login, response).await?;
+                chat_client.say(broadcaster.login, msg).await?;
 
                 Ok(())
             }
