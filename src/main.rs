@@ -57,13 +57,15 @@ async fn main() {
     }
 
     if let Some(admin_channel) = get_admin_channel() {
-        command_handler
+        if let Err(e) = command_handler
             .send_to_channel(
                 admin_channel,
                 format!("Foobot2 {} up and running", get_version()),
             )
             .await
-            .expect("Failed to send startup message");
+        {
+            tracing::warn!("Failed to send startup message: {}", e);
+        }
     }
 
     web::run(command_handler.clone()).await;
