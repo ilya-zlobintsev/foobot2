@@ -41,6 +41,8 @@ pub struct Database {
     web_sessions_cache: Arc<DashMap<String, WebSession>>,
     users_cache: Arc<DashMap<u64, User>>,
     user_identifiers_cache: Arc<DashMap<UserIdentifier, u64>>, // Caches the user IDs
+    prefixes_cache: Arc<DashMap<u64, Option<String>>>,
+    channels_cache: Arc<DashMap<ChannelIdentifier, Channel>>,
 }
 
 impl Database {
@@ -57,12 +59,16 @@ impl Database {
         let web_sessions_cache = Arc::new(DashMap::new());
         let users_cache = Arc::new(DashMap::new());
         let user_identifiers_cache = Arc::new(DashMap::new());
+        let prefixes_cache = Arc::new(DashMap::new());
+        let channels_cache = Arc::new(DashMap::new());
 
         Ok(Self {
             conn_pool,
             web_sessions_cache,
             users_cache,
             user_identifiers_cache,
+            prefixes_cache,
+            channels_cache,
         })
     }
 
@@ -173,11 +179,24 @@ impl Database {
         let mut conn = self.conn_pool.get().unwrap();
 
         if let Some(channel) = channel_identifier.get_channel() {
-            Ok(channels::table
-                .filter(channels::platform.eq_all(channel_identifier.get_platform_name().unwrap()))
-                .filter(channels::channel.eq_all(channel))
-                .first::<Channel>(&mut conn)
-                .optional()?)
+            if let Some(channel) = self.channels_cache.get(channel_identifier) {
+                Ok(Some(channel.value().clone()))
+            } else {
+                let channel = channels::table
+                    .filter(
+                        channels::platform.eq_all(channel_identifier.get_platform_name().unwrap()),
+                    )
+                    .filter(channels::channel.eq_all(channel))
+                    .first::<Channel>(&mut conn)
+                    .optional()?;
+
+                if let Some(channel) = &channel {
+                    self.channels_cache
+                        .insert(channel_identifier.clone(), channel.clone());
+                }
+
+                Ok(channel)
+            }
         } else {
             Ok(None)
         }
@@ -658,6 +677,35 @@ impl Database {
         Credentials {
             db: self.clone(),
             user_id,
+        }
+    }
+
+    pub fn get_prefix(&self, channel_id: u64) -> Result<Option<String>, DatabaseError> {
+        let mut conn = self.conn_pool.get().unwrap();
+
+        match self.prefixes_cache.get(&channel_id) {
+            Some(prefix_entry) => Ok(prefix_entry.value().clone()),
+            None => {
+                let prefix = prefixes::table
+                    .first::<Prefix>(&mut conn)
+                    .optional()?
+                    .map(|p| p.prefix);
+
+                self.prefixes_cache.insert(channel_id, prefix.clone());
+
+                Ok(prefix)
+            }
+        }
+    }
+
+    pub fn get_prefix_in_channel(
+        &self,
+        channel: &ChannelIdentifier,
+    ) -> Result<Option<String>, DatabaseError> {
+        if let Some(channel) = self.get_channel(channel)? {
+            self.get_prefix(channel.id)
+        } else {
+            Ok(None)
         }
     }
 }

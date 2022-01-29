@@ -139,7 +139,7 @@ pub enum UserIdentifierError {
     InvalidPlatform,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Hash)]
 pub enum ChannelIdentifier {
     TwitchChannelID(String),
     DiscordGuildID(String),

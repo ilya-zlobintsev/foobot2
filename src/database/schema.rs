@@ -34,8 +34,8 @@ table! {
 
 table! {
     prefixes (channel_id) {
-        prefix -> Nullable<Tinytext>,
         channel_id -> Unsigned<Bigint>,
+        prefix -> Tinytext,
     }
 }
 

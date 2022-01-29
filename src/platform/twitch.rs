@@ -192,12 +192,12 @@ impl TwitchMessage for WhisperMessage {
     }
 }
 
-pub struct TwitchExecutionContext<'a, M: TwitchMessage + std::marker::Sync> {
-    msg: &'a M,
+pub struct TwitchExecutionContext<M: TwitchMessage + std::marker::Sync> {
+    msg: M,
 }
 
 #[async_trait]
-impl<T: TwitchMessage + std::marker::Sync> ExecutionContext for TwitchExecutionContext<'_, T> {
+impl<T: TwitchMessage + std::marker::Sync> ExecutionContext for TwitchExecutionContext<T> {
     async fn get_permissions_internal(&self) -> Permissions {
         if self
             .msg
@@ -224,7 +224,7 @@ impl<T: TwitchMessage + std::marker::Sync> ExecutionContext for TwitchExecutionC
 }
 
 impl Twitch {
-    async fn handle_message<T: 'static + TwitchMessage + Send + Sync>(&self, msg: T) {
+    async fn handle_message<T: 'static + TwitchMessage + Send + Sync + Clone>(&self, msg: T) {
         if msg.get_sender().id == "82008718" && msg.get_content() == "pajaS 🚨 ALERT" {
             let client = self.client.lock().await;
 
@@ -236,11 +236,30 @@ impl Twitch {
                 .unwrap();
         }
 
+        let context = TwitchExecutionContext { msg: msg.clone() };
+
         let mut message_text = String::new();
 
-        for prefix in &self.possible_prefixes {
-            if let Some(text) = msg.get_content().strip_prefix(prefix) {
+        if let Some(custom_prefix) = self
+            .command_handler
+            .db
+            .get_prefix_in_channel(&context.get_channel())
+            .expect("DB error")
+        {
+            if let Some(text) = msg.get_content().strip_prefix(&custom_prefix) {
+                tracing::info!(
+                    "Using custom prefix {} in channel {:?}",
+                    custom_prefix,
+                    context.get_channel()
+                );
+
                 message_text = text.to_owned();
+            }
+        } else {
+            for prefix in &self.possible_prefixes {
+                if let Some(text) = msg.get_content().strip_prefix(prefix) {
+                    message_text = text.to_owned();
+                }
             }
         }
 
@@ -258,8 +277,6 @@ impl Twitch {
             } = self.clone();
 
             task::spawn(async move {
-                let context = TwitchExecutionContext { msg: &msg };
-
                 let response = command_handler
                     .handle_command_message(&message_text, context)
                     .await;

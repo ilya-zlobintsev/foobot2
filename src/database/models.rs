@@ -29,7 +29,7 @@ pub struct NewUser<'a> {
     pub irc_name: Option<&'a str>,
 }
 
-#[derive(Queryable, Debug, PartialEq, Eq, Serialize)]
+#[derive(Queryable, Debug, PartialEq, Eq, Serialize, Clone)]
 pub struct Channel {
     pub id: u64,
     pub platform: String,
@@ -100,4 +100,10 @@ pub struct EventSubTrigger {
     pub event_type: String,
     pub action: String,
     pub creation_payload: String,
+}
+
+#[derive(Queryable)]
+pub struct Prefix {
+    pub channel_id: u64,
+    pub prefix: String,
 }
