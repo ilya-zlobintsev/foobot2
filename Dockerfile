@@ -1,9 +1,14 @@
 FROM docker.io/rust:slim-bullseye as builder
 
-WORKDIR /build
-
 RUN apt-get update
 RUN apt-get install --assume-yes libmariadb-dev-compat ca-certificates libssl-dev pkg-config git
+
+RUN cargo install sccache
+
+ENV RUSTC_WRAPPER="/usr/local/cargo/bin/sccache"
+ARG SCCACHE_MEMCACHED
+
+WORKDIR /build
 
 # Avoid having to install/build all dependencies by copying
 # the Cargo files and making a dummy src/main.rs
