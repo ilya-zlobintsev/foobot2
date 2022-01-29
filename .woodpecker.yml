@@ -3,7 +3,7 @@ pipeline:
     image: docker
     commands:
       - echo $DOCKER_PASSWORD | docker login -u $DOCKER_USERNAME --password-stdin
-      - docker build --build-arg=SCCACHE_MEMCACHED="$SCCACHE_MEMCACHED" . -t docker.io/ilyazzz/foobot2 .
+      - docker build --build-arg=SCCACHE_MEMCACHED="$SCCACHE_MEMCACHED" -t docker.io/ilyazzz/foobot2 .
       - docker push docker.io/ilyazzz/foobot2
     secrets: [ DOCKER_USERNAME, DOCKER_PASSWORD, SCCACHE_MEMCACHED ]
     volumes:
