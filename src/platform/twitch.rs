@@ -25,7 +25,6 @@ pub struct Twitch {
     command_handler: CommandHandler,
     possible_prefixes: [String; 5],
     last_messages: Arc<DashMap<String, String>>,
-    login: String,
 }
 
 #[async_trait]
@@ -46,10 +45,10 @@ impl ChatPlatform for Twitch {
 
         let possible_prefixes = [
             Self::get_prefix(),
-            login.clone(),
-            format!("{},", login),
-            format!("@{}", login),
-            format!("@{},", login),
+            format!("{},", &login),
+            format!("@{}", &login),
+            format!("@{},", &login),
+            login,
         ];
 
         Ok(Box::new(Self {
@@ -57,7 +56,6 @@ impl ChatPlatform for Twitch {
             command_handler,
             possible_prefixes,
             last_messages: Arc::new(DashMap::new()),
-            login,
         }))
     }
 
