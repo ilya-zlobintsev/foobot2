@@ -23,7 +23,7 @@ pub type TwitchClient = TwitchIRCClient<SecureTCPTransport, Credentials>;
 pub struct Twitch {
     client: Arc<Mutex<Option<TwitchClient>>>,
     command_handler: CommandHandler,
-    possible_prefixes: [String; 5],
+    possible_prefixes: Arc<[String; 5]>,
     last_messages: Arc<DashMap<String, String>>,
 }
 
@@ -43,13 +43,13 @@ impl ChatPlatform for Twitch {
             .map_err(|_| super::ChatPlatformError::MissingAuthentication)?
             .login;
 
-        let possible_prefixes = [
+        let possible_prefixes = Arc::new([
             Self::get_prefix(),
             format!("{},", &login),
             format!("@{}", &login),
             format!("@{},", &login),
             login,
-        ];
+        ]);
 
         Ok(Box::new(Self {
             client: Arc::new(Mutex::new(None)),
@@ -236,47 +236,46 @@ impl Twitch {
                 .unwrap();
         }
 
-        let context = TwitchExecutionContext { msg: msg.clone() };
+        let Self {
+            command_handler,
+            last_messages,
+            possible_prefixes,
+            client,
+            ..
+        } = self.clone();
 
-        let mut message_text = String::new();
+        task::spawn(async move {
+            let context = TwitchExecutionContext { msg: msg.clone() };
 
-        if let Some(custom_prefix) = self
-            .command_handler
-            .db
-            .get_prefix_in_channel(&context.get_channel())
-            .expect("DB error")
-        {
-            if let Some(text) = msg.get_content().strip_prefix(&custom_prefix) {
-                tracing::info!(
-                    "Using custom prefix {} in channel {:?}",
-                    custom_prefix,
-                    context.get_channel()
-                );
+            let mut message_text = String::new();
 
-                message_text = text.to_owned();
-            }
-        } else {
-            for prefix in &self.possible_prefixes {
-                if let Some(text) = msg.get_content().strip_prefix(prefix) {
+            if let Some(custom_prefix) = command_handler
+                .db
+                .get_prefix_in_channel(&context.get_channel())
+                .expect("DB error")
+            {
+                if let Some(text) = msg.get_content().strip_prefix(&custom_prefix) {
+                    tracing::info!(
+                        "Using custom prefix {} in channel {:?}",
+                        custom_prefix,
+                        context.get_channel()
+                    );
+
                     message_text = text.to_owned();
                 }
+            } else {
+                for prefix in &*possible_prefixes {
+                    if let Some(text) = msg.get_content().strip_prefix(prefix) {
+                        message_text = text.to_owned();
+                    }
+                }
             }
-        }
 
-        if !message_text.is_empty() {
-            let recieved_instant = Instant::now();
+            if !message_text.is_empty() {
+                let recieved_instant = Instant::now();
 
-            tracing::debug!("Recieved a command at {:?}", recieved_instant);
+                tracing::debug!("Recieved a command at {:?}", recieved_instant);
 
-            let client = self.client.clone();
-
-            let Self {
-                command_handler,
-                last_messages,
-                ..
-            } = self.clone();
-
-            task::spawn(async move {
                 let response = command_handler
                     .handle_command_message(&message_text, context)
                     .await;
@@ -359,7 +358,7 @@ impl Twitch {
 
                     sleep(Duration::from_secs(1)).await; // This is needed to adhere to the twitch rate limits
                 }
-            });
-        }
+            }
+        });
     }
 }
