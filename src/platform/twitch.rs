@@ -23,7 +23,7 @@ pub type TwitchClient = TwitchIRCClient<SecureTCPTransport, Credentials>;
 pub struct Twitch {
     client: Arc<Mutex<Option<TwitchClient>>>,
     command_handler: CommandHandler,
-    command_prefix: String,
+    possible_prefixes: [String; 5],
     last_messages: Arc<DashMap<String, String>>,
     login: String,
 }
@@ -31,8 +31,6 @@ pub struct Twitch {
 #[async_trait]
 impl ChatPlatform for Twitch {
     async fn init(command_handler: CommandHandler) -> Result<Box<Self>, super::ChatPlatformError> {
-        let command_prefix = Self::get_prefix();
-
         let twitch_api = command_handler
             .twitch_api
             .as_ref()
@@ -46,10 +44,18 @@ impl ChatPlatform for Twitch {
             .map_err(|_| super::ChatPlatformError::MissingAuthentication)?
             .login;
 
+        let possible_prefixes = [
+            Self::get_prefix(),
+            login.clone(),
+            format!("{},", login),
+            format!("@{}", login),
+            format!("@{},", login),
+        ];
+
         Ok(Box::new(Self {
             client: Arc::new(Mutex::new(None)),
             command_handler,
-            command_prefix,
+            possible_prefixes,
             last_messages: Arc::new(DashMap::new()),
             login,
         }))
@@ -234,12 +240,10 @@ impl Twitch {
 
         let mut message_text = String::new();
 
-        if let Some(text) = msg.get_content().strip_prefix(&self.command_prefix) {
-            message_text = text.to_owned();
-        }
-
-        if let Some(text) = msg.get_content().strip_prefix(&self.login) {
-            message_text = text.to_owned();
+        for prefix in &self.possible_prefixes {
+            if let Some(text) = msg.get_content().strip_prefix(prefix) {
+                message_text = text.to_owned();
+            }
         }
 
         if !message_text.is_empty() {
