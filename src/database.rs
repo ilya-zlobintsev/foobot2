@@ -687,6 +687,7 @@ impl Database {
             Some(prefix_entry) => Ok(prefix_entry.value().clone()),
             None => {
                 let prefix = prefixes::table
+                    .filter(prefixes::channel_id.eq_all(channel_id))
                     .first::<Prefix>(&mut conn)
                     .optional()?
                     .map(|p| p.prefix);
