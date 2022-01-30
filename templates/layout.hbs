@@ -102,7 +102,7 @@
                     width="16" /></a>
         </div>
         {{ else }}
-        <a class="user" href="/authenticate"><b>Login</b></a>
+        <a id="authenticate" class="user" href="/authenticate?redirect_to="><b>Login</b></a>
         {{ /with }}
     </header>
     {{~> page}}
@@ -110,5 +110,14 @@
         <a href="https://github.com/ilyazzz/foobot2">source code</a>
     </footer>
 </body>
+
+<script>
+    let authenticateA = document.getElementById("authenticate");
+
+    if (authenticateA) {
+        authenticateA.href += window.location.pathname;
+    }
+</script>
+
 
 </html>

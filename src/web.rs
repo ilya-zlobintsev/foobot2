@@ -6,6 +6,7 @@ mod profile;
 mod template_context;
 mod webhooks;
 use anyhow::anyhow;
+use dashmap::DashMap;
 use tokio::task;
 
 use std::env;
@@ -37,6 +38,8 @@ async fn index(cmd: &State<CommandHandler>, session: Option<WebSession>) -> Html
 }
 
 pub async fn run(command_handler: CommandHandler) {
+    let state_storage: DashMap<String, String> = DashMap::new();
+
     let rocket = rocket::build()
         .attach(Template::custom(|engines| {
             engines.handlebars.set_strict_mode(true);
@@ -77,6 +80,7 @@ pub async fn run(command_handler: CommandHandler) {
         .register("/channels", catchers![channel::not_found])
         .manage(Client::new())
         .manage(command_handler.clone())
+        .manage(state_storage)
         .ignite()
         .await
         .expect("Failed to ignite rocket");

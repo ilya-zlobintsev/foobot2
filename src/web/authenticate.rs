@@ -1,6 +1,8 @@
 use std::{collections::HashMap, env};
 
 use chrono::{Duration, Utc};
+use dashmap::DashMap;
+use passwords::PasswordGenerator;
 use reqwest::Client;
 use rocket::get;
 use rocket::http::{Cookie, CookieJar, SameSite};
@@ -38,6 +40,8 @@ const TWITCH_BOT_SCOPES: &[&str] = &[
     "channel:moderate",
 ];
 
+type StateStorage = State<DashMap<String, String>>;
+
 #[get("/")]
 pub async fn index(session: Option<WebSession>) -> Html<Template> {
     Html(Template::render(
@@ -57,25 +61,37 @@ pub async fn logout(jar: &CookieJar<'_>) -> Redirect {
     Redirect::to("/")
 }
 
-#[get("/twitch")]
-pub async fn authenticate_twitch() -> Redirect {
+#[get("/twitch?<redirect_to>")]
+pub async fn authenticate_twitch(
+    state_storage: &StateStorage,
+    redirect_to: Option<String>,
+) -> Redirect {
     tracing::info!("Authenticating with Twitch...");
+
+    let token = generate_state_token();
 
     let client_id = twitch_api::get_client_id().expect("Twitch client ID not specified");
 
-    Redirect::to(AuthPlatform::Twitch.construct_uri(
+    let redirect_uri = AuthPlatform::Twitch.construct_uri(
         &client_id,
         &TWITCH_AUTH_SCOPES.join(" "),
         false,
         None,
-    ))
+        Some(&token),
+    );
+
+    state_storage.insert(token, redirect_to.unwrap_or_else(|| "/profile".to_string()));
+
+    Redirect::to(redirect_uri)
 }
 
-#[get("/twitch/bot")]
+#[get("/twitch/bot?<redirect_to>")]
 
 pub async fn admin_authenticate_twitch_bot(
     cmd: &State<CommandHandler>,
     current_session: WebSession,
+    state_storage: &StateStorage,
+    redirect_to: Option<String>,
 ) -> Result<Redirect, status::Unauthorized<&'static str>> {
     if let Ok(Some(admin_user)) = cmd.db.get_admin_user() {
         if admin_user.id == current_session.user_id {
@@ -83,12 +99,17 @@ pub async fn admin_authenticate_twitch_bot(
 
             let client_id = twitch_api::get_client_id().expect("Twitch client ID not specified");
 
+            let token = generate_state_token();
+
             let uri = AuthPlatform::Twitch.construct_uri(
                 &client_id,
                 &TWITCH_BOT_SCOPES.join("%20"),
                 true,
                 Some("bot"),
+                Some(&token),
             );
+
+            state_storage.insert(token, redirect_to.unwrap_or_else(|| "/profile".to_string()));
 
             tracing::info!("{}", uri);
 
@@ -101,16 +122,24 @@ pub async fn admin_authenticate_twitch_bot(
     }
 }
 
-#[get("/twitch/manage")]
-pub async fn authenticate_twitch_manage() -> Redirect {
+#[get("/twitch/manage?<redirect_to>")]
+pub async fn authenticate_twitch_manage(
+    state_storage: &StateStorage,
+    redirect_to: Option<String>,
+) -> Redirect {
     let client_id = twitch_api::get_client_id().expect("Twitch client ID not specified");
+
+    let token = generate_state_token();
 
     let uri = AuthPlatform::Twitch.construct_uri(
         &client_id,
         &TWITCH_MANAGE_SCOPES.join("%20"),
         true,
         Some("manage"),
+        Some(&token),
     );
+
+    state_storage.insert(token, redirect_to.unwrap_or_else(|| "/profile".to_string()));
 
     tracing::info!("{}", uri);
 
@@ -144,14 +173,22 @@ pub async fn twitch_manage_redirect(
     Ok(Redirect::to("/profile"))
 }
 
-#[get("/twitch/redirect?<code>")]
+#[get("/twitch/redirect?<code>&<state>")]
 pub async fn twitch_redirect(
     cmd: &State<CommandHandler>,
     client: &State<Client>,
     code: &str,
     jar: &CookieJar<'_>,
     current_session: Option<WebSession>,
-) -> Redirect {
+    state_storage: &StateStorage,
+    state: Option<&str>,
+) -> Result<Redirect, status::Unauthorized<&'static str>> {
+    let redirect_to = if let Some(state) = state {
+        consume_state(state, state_storage)?
+    } else {
+        "/profile".to_string()
+    };
+
     let auth_info = trade_twitch_code(client, code)
         .await
         .expect("Failed to get tokens");
@@ -186,7 +223,7 @@ pub async fn twitch_redirect(
         jar.add_private(cookie);
     }
 
-    Redirect::found("/profile")
+    Ok(Redirect::found(redirect_to))
 }
 
 #[get("/twitch/redirect/bot?<code>")]
@@ -269,23 +306,38 @@ async fn trade_twitch_code(
     Ok(response.json::<TwitchAuthenticationResponse>().await?)
 }
 
-#[get("/discord")]
-pub fn authenticate_discord() -> Redirect {
+#[get("/discord?<redirect_to>")]
+pub fn authenticate_discord(state_storage: &StateStorage, redirect_to: Option<String>) -> Redirect {
     tracing::info!("Authenticating with Discord...");
 
     let client_id = env::var("DISCORD_CLIENT_ID").expect("DISCORD_CLIENT_ID missing");
 
-    Redirect::to(AuthPlatform::Discord.construct_uri(&client_id, DISCORD_SCOPES, false, None))
+    let token = generate_state_token();
+
+    let redirect_uri =
+        AuthPlatform::Discord.construct_uri(&client_id, DISCORD_SCOPES, false, None, Some(&token));
+
+    state_storage.insert(token, redirect_to.unwrap_or_else(|| "/profile".to_string()));
+
+    Redirect::to(redirect_uri)
 }
 
-#[get("/discord/redirect?<code>")]
+#[get("/discord/redirect?<code>&<state>")]
 pub async fn discord_redirect(
     client: &State<Client>,
     cmd: &State<CommandHandler>,
     code: String,
     jar: &CookieJar<'_>,
     current_session: Option<WebSession>,
-) -> Redirect {
+    state_storage: &StateStorage,
+    state: Option<&str>,
+) -> Result<Redirect, status::Unauthorized<&'static str>> {
+    let redirect_to = if let Some(state) = state {
+        consume_state(state, state_storage)?
+    } else {
+        "/profile".to_string()
+    };
+
     let db = &cmd.db;
 
     let mut payload = HashMap::new();
@@ -353,7 +405,7 @@ pub async fn discord_redirect(
         jar.add_private(cookie);
     }
 
-    Redirect::found("/profile")
+    Ok(Redirect::to(redirect_to))
 }
 
 #[get("/spotify")]
@@ -364,6 +416,7 @@ pub fn authenticate_spotify(_session: WebSession) -> Redirect {
         &client_id,
         &SPOTIFY_SCOPES.join("%20"),
         false,
+        None,
         None,
     ))
 }
@@ -438,6 +491,33 @@ fn create_user_session(db: &Database, user_id: u64, display_name: String) -> Coo
         .finish()
 }
 
+fn generate_state_token() -> String {
+    PasswordGenerator {
+        length: 16,
+        numbers: true,
+        lowercase_letters: true,
+        uppercase_letters: false,
+        symbols: false,
+        spaces: false,
+        exclude_similar_characters: false,
+        strict: true,
+    }
+    .generate_one()
+    .expect("Failed to generate token")
+}
+
+// Returns the associated redirect uri
+fn consume_state(
+    state: &str,
+    state_storage: &StateStorage,
+) -> Result<String, status::Unauthorized<&'static str>> {
+    if let Some((_, redirect_to)) = state_storage.remove(state) {
+        Ok(redirect_to)
+    } else {
+        Err(status::Unauthorized(Some("State token not found")))
+    }
+}
+
 #[derive(serde::Deserialize)]
 struct TwitchAuthenticationResponse {
     pub access_token: String,
@@ -484,6 +564,7 @@ impl AuthPlatform {
         scopes: &str,
         force_verify: bool,
         suffix: Option<&str>,
+        state: Option<&str>,
     ) -> String {
         let mut redirect_uri = format!(
             "{}/authenticate/{}/redirect",
@@ -499,12 +580,13 @@ impl AuthPlatform {
         tracing::info!("Using redirect_uri {}", redirect_uri);
 
         format!(
-            "{}?client_id={}&redirect_uri={}&response_type=code&scope={}&force_verify={}",
+            "{}?client_id={}&redirect_uri={}&response_type=code&scope={}&force_verify={}&state={}",
             self.get_auth_uri(),
             client_id,
             redirect_uri,
             scopes,
-            force_verify
+            force_verify,
+            state.unwrap_or_default(),
         )
     }
 }
