@@ -11,8 +11,7 @@ use crate::database::models::NewEventSubTrigger;
 use crate::database::DatabaseError;
 use crate::database::{models::User, Database};
 use crate::platform::{
-    twitch, ChannelIdentifier, ExecutionContext, Permissions, ServerExecutionContext,
-    UserIdentifierError,
+    ChannelIdentifier, ExecutionContext, Permissions, ServerExecutionContext, UserIdentifierError,
 };
 use crate::{get_version, web};
 
@@ -37,12 +36,11 @@ use lingva_api::LingvaApi;
 use owm_api::OwmApi;
 use twitch_api::TwitchApi;
 
-use twitch_irc::login::{LoginCredentials, RefreshingLoginCredentials};
+use twitch_irc::login::RefreshingLoginCredentials;
 
 use self::finnhub_api::FinnhubApi;
 use self::twitch_api::eventsub::conditions::*;
 use self::twitch_api::eventsub::EventSubSubscriptionType;
-use self::twitch_api::helix::HelixApi;
 
 #[derive(Clone, Debug)]
 pub struct CommandHandler {
@@ -511,7 +509,7 @@ impl CommandHandler {
                     Ok("Trigger successfully added".to_string())
                 }
                 "remove" | "delete" => {
-                    let (subscription_type, action) = get_subscription(arguments)?;
+                    let (subscription_type, _) = get_subscription(arguments)?;
 
                     let subscriptions = app_api
                         .get_eventsub_subscriptions(Some(subscription_type.get_type()))
@@ -531,6 +529,18 @@ impl CommandHandler {
                     }
 
                     return Err(anyhow!("Unable to find matching subscription"));
+                }
+                "show" => {
+                    let (subscription_type, _) = get_subscription(arguments)?;
+
+                    if let Some(action) = self
+                        .db
+                        .get_eventsub_redeem_action(&broadcaster_id, subscription_type.get_type())?
+                    {
+                        Ok(action)
+                    } else {
+                        Ok("Specified subscription not found".to_string())
+                    }
                 }
                 "list" => {
                     let triggers = self
