@@ -94,6 +94,7 @@ impl CommandHandler {
         template_registry.register_helper("translate", Box::new(lingva_api));
         template_registry.register_helper("args", Box::new(inquiry_helper::args_helper));
         template_registry.register_helper("spotify", Box::new(SpotifyHelper { db: db.clone() }));
+        template_registry.register_helper("spotify_last_song", Box::new(SpotifyLastHelper { db: db.clone() }));
         template_registry.register_helper("choose", Box::new(random_helper));
         template_registry.register_helper("sleep", Box::new(sleep_helper));
 

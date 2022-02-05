@@ -203,6 +203,39 @@ impl HelperDef for WeatherHelper {
     }
 }
 
+fn get_spotify_api(db: Database, ctx: &Context, h: &Helper) -> Result<SpotifyApi, RenderError> {
+    let context = serde_json::from_value::<InquiryContext>(ctx.data().clone())
+        .expect("Failed to get command context");
+
+    let user_id = match h.param(0) {
+        Some(param) => {
+            tracing::info!("Spotify param: {:?}", param);
+            let user_identifier = UserIdentifier::from_string(&param.render())
+                .map_err(|_| RenderError::new("invalid user"))?;
+
+            db.get_user(&user_identifier)
+                .expect("DB Error")
+                .ok_or_else(|| RenderError::new("invalid user"))?
+                .id
+        }
+        None => context.user.id,
+    };
+
+    tracing::info!("Looking for spotify token for user ID {}", user_id);
+
+    let access_token = db
+        .get_spotify_access_token(user_id)
+        .map_err(|e| RenderError::new(format!("DB Error: {}", e)))?
+        .ok_or_else(|| {
+            RenderError::new(format!(
+                "Not configured for user! You can set up Spotify by going to {}/profile",
+                env::var("BASE_URL").unwrap()
+            ))
+        })?;
+
+    Ok(SpotifyApi::new(&access_token))
+}
+
 #[derive(Clone)]
 pub struct SpotifyHelper {
     pub db: Database,
@@ -217,40 +250,9 @@ impl HelperDef for SpotifyHelper {
         _: &mut RenderContext<'reg, 'rc>,
         out: &mut dyn Output,
     ) -> HelperResult {
-        let context = serde_json::from_value::<InquiryContext>(ctx.data().clone())
-            .expect("Failed to get command context");
+        let spotify_api = get_spotify_api(self.db.clone(), ctx, h)?;
 
         let runtime = tokio::runtime::Handle::current();
-
-        let user_id = match h.param(0) {
-            Some(param) => {
-                tracing::info!("Spotify param: {:?}", param);
-                let user_identifier = UserIdentifier::from_string(&param.render())
-                    .map_err(|_| RenderError::new("invalid user"))?;
-
-                self.db
-                    .get_user(&user_identifier)
-                    .expect("DB Error")
-                    .ok_or_else(|| RenderError::new("invalid user"))?
-                    .id
-            }
-            None => context.user.id,
-        };
-
-        tracing::info!("Looking for spotify token for user ID {}", user_id);
-
-        let access_token = self
-            .db
-            .get_spotify_access_token(user_id)
-            .map_err(|e| RenderError::new(format!("DB Error: {}", e)))?
-            .ok_or_else(|| {
-                RenderError::new(format!(
-                    "Not configured for user! You can set up Spotify by going to {}/profile",
-                    env::var("BASE_URL").unwrap()
-                ))
-            })?;
-
-        let spotify_api = SpotifyApi::new(&access_token);
 
         match runtime
             .block_on(spotify_api.get_current_song())
@@ -279,6 +281,34 @@ impl HelperDef for SpotifyHelper {
             }
             None => out.write("No song is currently playing")?,
         };
+
+        Ok(())
+    }
+}
+
+#[derive(Clone)]
+pub struct SpotifyLastHelper {
+    pub db: Database,
+}
+
+impl HelperDef for SpotifyLastHelper {
+    fn call<'reg: 'rc, 'rc>(
+        &self,
+        h: &Helper<'reg, 'rc>,
+        _: &'reg Handlebars<'reg>,
+        ctx: &'rc Context,
+        _: &mut RenderContext<'reg, 'rc>,
+        out: &mut dyn Output,
+    ) -> HelperResult {
+        let spotify_api = get_spotify_api(self.db.clone(), ctx, h)?;
+
+        let runtime = tokio::runtime::Handle::current();
+
+        let last_played = runtime
+            .block_on(spotify_api.get_recently_played())
+            .map_err(|e| RenderError::new(format!("Spotify API Error: {}", e)))?;
+
+        out.write(&last_played)?;
 
         Ok(())
     }
