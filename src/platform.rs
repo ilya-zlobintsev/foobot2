@@ -191,6 +191,7 @@ impl FromStr for ChannelIdentifier {
 pub enum Permissions {
     Default,
     ChannelMod,
+    ChannelOwner,
     Admin,
 }
 
@@ -202,6 +203,7 @@ impl Display for Permissions {
             match self {
                 Permissions::Default => "default",
                 Permissions::ChannelMod => "channel_mod",
+                Permissions::ChannelOwner => "channel_owner",
                 Permissions::Admin => "admin",
             }
         )
@@ -213,15 +215,24 @@ impl PartialOrd for Permissions {
         match self {
             Permissions::Admin => match other {
                 Permissions::Admin => Some(Ordering::Equal),
+                Permissions::ChannelOwner | Permissions::ChannelMod | Permissions::Default => {
+                    Some(Ordering::Greater)
+                }
+            },
+            Permissions::ChannelOwner => match other {
+                Permissions::Admin => Some(Ordering::Less),
+                Permissions::ChannelOwner => Some(Ordering::Equal),
                 Permissions::ChannelMod | Permissions::Default => Some(Ordering::Greater),
             },
             Permissions::ChannelMod => match other {
-                Permissions::Admin => Some(Ordering::Less),
+                Permissions::Admin | Permissions::ChannelOwner => Some(Ordering::Less),
                 Permissions::ChannelMod => Some(Ordering::Equal),
                 Permissions::Default => Some(Ordering::Greater),
             },
             Permissions::Default => match other {
-                Permissions::ChannelMod | Permissions::Admin => Some(Ordering::Less),
+                Permissions::ChannelMod | Permissions::ChannelOwner | Permissions::Admin => {
+                    Some(Ordering::Less)
+                }
                 Permissions::Default => Some(Ordering::Equal),
             },
         }
