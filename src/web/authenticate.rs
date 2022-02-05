@@ -28,7 +28,7 @@ use crate::{
 use super::template_context::AuthenticateContext;
 
 const TWITCH_AUTH_SCOPES: &[&str] = &[""];
-const TWITCH_MANAGE_SCOPES: &[&str] = &["channel:read:predictions", "channel:read:redemptions"];
+const TWITCH_MANAGE_SCOPES: &[&str] = &["channel:read:predictions", "channel:read:redemptions", "channel:manage:redemptions"];
 const DISCORD_SCOPES: &str = "identify";
 const SPOTIFY_SCOPES: &[&str] = &["user-read-playback-state", "user-read-recently-played"];
 
