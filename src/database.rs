@@ -544,6 +544,16 @@ impl Database {
         Ok(eventsub_triggers::table.load(&mut conn)?)
     }
 
+    pub fn get_eventsub_triggers_for_broadcaster(
+        &self,
+        broadcaster_id: &str,
+    ) -> Result<Vec<EventSubTrigger>, DatabaseError> {
+        let mut conn = self.conn_pool.get().unwrap();
+
+        Ok(eventsub_triggers::table
+            .filter(eventsub_triggers::broadcaster_id.eq(broadcaster_id))
+            .load(&mut conn)?)
+    }
     pub fn set_user_data(
         &self,
         user_data: &UserData,
@@ -668,6 +678,21 @@ impl Database {
 
         diesel::insert_into(eventsub_triggers::table)
             .values(trigger)
+            .execute(&mut conn)?;
+
+        Ok(())
+    }
+
+    pub fn delete_eventsub_trigger(
+        &self,
+        event_type: &str,
+        broadcaster_id: &str,
+    ) -> Result<(), DatabaseError> {
+        let mut conn = self.conn_pool.get().unwrap();
+
+        diesel::delete(eventsub_triggers::table)
+            .filter(eventsub_triggers::event_type.eq(event_type))
+            .filter(eventsub_triggers::broadcaster_id.eq(broadcaster_id))
             .execute(&mut conn)?;
 
         Ok(())

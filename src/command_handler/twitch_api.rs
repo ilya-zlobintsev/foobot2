@@ -70,7 +70,7 @@ impl<C: LoginCredentials + Clone> TwitchApi<C> {
 
         for subscription in twitch_api
             .helix_api_app
-            .get_eventsub_subscriptions()
+            .get_eventsub_subscriptions(None)
             .await?
         {
             let twitch_api = twitch_api.clone();

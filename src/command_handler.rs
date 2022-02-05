@@ -7,10 +7,12 @@ pub mod owm_api;
 pub mod spotify_api;
 pub mod twitch_api;
 
+use crate::database::models::NewEventSubTrigger;
 use crate::database::DatabaseError;
 use crate::database::{models::User, Database};
 use crate::platform::{
-    ChannelIdentifier, ExecutionContext, Permissions, ServerExecutionContext, UserIdentifierError,
+    twitch, ChannelIdentifier, ExecutionContext, Permissions, ServerExecutionContext,
+    UserIdentifierError,
 };
 use crate::{get_version, web};
 
@@ -22,6 +24,7 @@ use std::num::ParseIntError;
 use std::str::FromStr;
 use std::sync::{Arc, RwLock};
 use std::time::{Duration, Instant};
+use std::vec::IntoIter;
 
 use handlebars::Handlebars;
 use inquiry_helper::*;
@@ -34,9 +37,12 @@ use lingva_api::LingvaApi;
 use owm_api::OwmApi;
 use twitch_api::TwitchApi;
 
-use twitch_irc::login::RefreshingLoginCredentials;
+use twitch_irc::login::{LoginCredentials, RefreshingLoginCredentials};
 
 use self::finnhub_api::FinnhubApi;
+use self::twitch_api::eventsub::conditions::*;
+use self::twitch_api::eventsub::EventSubSubscriptionType;
+use self::twitch_api::helix::HelixApi;
 
 #[derive(Clone, Debug)]
 pub struct CommandHandler {
@@ -298,6 +304,19 @@ impl CommandHandler {
                         _ => return Err(CommandError::NoPermissions),
                     }
                 }
+                "eventsub" => {
+                    let mut arguments = arguments.into_iter();
+
+                    let action = arguments.next().context("action not specified")?;
+
+                    (
+                        Some(
+                            self.manage_eventsub(action, arguments, execution_context)
+                                .await?,
+                        ),
+                        None,
+                    )
+                }
                 _ => match self
                     .db
                     .get_command(&execution_context.get_channel(), command)?
@@ -436,6 +455,103 @@ impl CommandHandler {
             uptime,
             mem_usage / 1024,
         )
+    }
+
+    async fn manage_eventsub<C: ExecutionContext + Sync>(
+        &self,
+        action: &str,
+        arguments: IntoIter<&str>,
+        execution_context: C,
+    ) -> anyhow::Result<String> {
+        if execution_context.get_permissions().await < Permissions::ChannelMod {
+            return Err(CommandError::NoPermissions.into());
+        }
+
+        if let ChannelIdentifier::TwitchChannelID(broadcaster_id) = execution_context.get_channel()
+        {
+            let app_api = &self.twitch_api.as_ref().unwrap().helix_api_app;
+
+            let get_subscription =
+                |mut arguments: IntoIter<&str>| -> anyhow::Result<(EventSubSubscriptionType, String)> {
+                    let sub_type = arguments.next().context("Missing subscription type")?;
+
+                    let subscription = match sub_type {
+                        "channel.update" => {
+                            EventSubSubscriptionType::ChannelUpdate(ChannelUpdateCondition {
+                                broadcaster_user_id: broadcaster_id.clone(),
+                            })
+                        }
+                        _ => return Err(anyhow!("Invalid subscription type {}", sub_type)),
+                    };
+
+                    let action = arguments.collect::<Vec<&str>>().join(" ");
+
+                    Ok((subscription, action))
+                };
+
+            match action {
+                "add" | "create" => {
+                    let (subscription, action) = get_subscription(arguments)?;
+
+                    if action.is_empty() {
+                        return Err(anyhow!("Action not specified"));
+                    }
+
+                    app_api
+                        .add_eventsub_subscription(subscription.clone())
+                        .await?;
+
+                    self.db.add_eventsub_trigger(NewEventSubTrigger {
+                        broadcaster_id: &broadcaster_id,
+                        event_type: subscription.get_type(),
+                        action: &action,
+                        creation_payload: &serde_json::to_string(&subscription)?,
+                    })?;
+
+                    Ok("Trigger successfully added".to_string())
+                }
+                "remove" | "delete" => {
+                    let (subscription_type, action) = get_subscription(arguments)?;
+
+                    let subscriptions = app_api
+                        .get_eventsub_subscriptions(Some(subscription_type.get_type()))
+                        .await?;
+
+                    for subscription in subscriptions {
+                        if subscription.condition == subscription_type.get_condition() {
+                            app_api
+                                .delete_eventsub_subscription(&subscription.id)
+                                .await?;
+
+                            self.db
+                                .delete_eventsub_trigger(&subscription.sub_type, &broadcaster_id)?;
+
+                            return Ok("Trigger succesfully removed".to_string());
+                        }
+                    }
+
+                    return Err(anyhow!("Unable to find matching subscription"));
+                }
+                "list" => {
+                    let triggers = self
+                        .db
+                        .get_eventsub_triggers_for_broadcaster(&broadcaster_id)?;
+
+                    if !triggers.is_empty() {
+                        Ok(triggers
+                            .iter()
+                            .map(|trigger| trigger.event_type.clone())
+                            .collect::<Vec<String>>()
+                            .join(", "))
+                    } else {
+                        Ok("No eventsub triggers registered".to_string())
+                    }
+                }
+                _ => Err(anyhow!("invalid action {}", action)),
+            }
+        } else {
+            Err(anyhow!("EventSub can only be used on Twitch"))
+        }
     }
 
     async fn edit_cmds<C: ExecutionContext + Sync>(

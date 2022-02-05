@@ -201,15 +201,28 @@ impl<C: LoginCredentials> HelixApi<C> {
             .send()
             .await?;
 
-        response_ok(&response)?;
+        if let Err(e) = response_ok(&response) {
+            tracing::info!("{}", response.text().await?);
+
+            return Err(e);
+        }
 
         tracing::info!("Succesfully added EventSub subscription {:?}", subscription);
 
         Ok(())
     }
 
-    pub async fn get_eventsub_subscriptions(&self) -> anyhow::Result<Vec<EventSubSubscription>> {
-        let response = self.get("/eventsub/subscriptions").await?.send().await?;
+    pub async fn get_eventsub_subscriptions(
+        &self,
+        sub_type: Option<&str>,
+    ) -> anyhow::Result<Vec<EventSubSubscription>> {
+        let mut request = self.get("/eventsub/subscriptions").await?;
+
+        if let Some(sub_type) = sub_type {
+            request = request.query(&[("type", sub_type)]);
+        }
+
+        let response = request.send().await?;
 
         let mut v: Value = response.json().await?;
 
