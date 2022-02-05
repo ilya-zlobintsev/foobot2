@@ -43,11 +43,11 @@
     <div class="authentication">
         <h1>Choose a platform to authenticate with:</h1>
         <div class="platformlist">
-            <a href="/authenticate/twitch?redirect_to=" style="background-color: #6441a5;">
+            <a href="/authenticate/twitch" style="background-color: #6441a5;" class="auth-link">
                 <img src="/static/twitch-brands.svg" alt="Twitch icon" height="32" width="32" /> <b>Login with
                     Twitch</b>
             </a>
-            <a href="/authenticate/discord?redirect_to=" style="background-color: #5567e2;">
+            <a href="/authenticate/discord" style="background-color: #5567e2;" class="auth-link">
                 <img src="/static/discord-brands.svg" alt="Discord icon" height="32" width="32" /> <b>Login with
                     Discord</b>
             </a>
@@ -60,10 +60,14 @@
 
     let redirect_to = params.get("redirect_to");
 
-    const links = document.getElementsByTagName("a");
+    if (redirect_to) {
+        const links = document.getElementsByClassName("auth-link");
 
-    for (let link of links) {
-        link.href += redirect_to;
+        for (let link of links) {
+            link.href += "?redirect_to=";
+            link.href += redirect_to;
+
+        }
     }
 </script>
 
