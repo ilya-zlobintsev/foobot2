@@ -199,7 +199,7 @@ pub struct TwitchExecutionContext<M: TwitchMessage + std::marker::Sync> {
 #[async_trait]
 impl<T: TwitchMessage + std::marker::Sync> ExecutionContext for TwitchExecutionContext<T> {
     async fn get_permissions_internal(&self) -> Permissions {
-        let badges_iter = self.msg.get_badges().iter();
+        let mut badges_iter = self.msg.get_badges().iter();
 
         if badges_iter.any(|badge| (badge.name) == "broadcaster") {
             Permissions::ChannelOwner
