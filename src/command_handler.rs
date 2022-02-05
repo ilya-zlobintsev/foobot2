@@ -94,7 +94,10 @@ impl CommandHandler {
         template_registry.register_helper("translate", Box::new(lingva_api));
         template_registry.register_helper("args", Box::new(inquiry_helper::args_helper));
         template_registry.register_helper("spotify", Box::new(SpotifyHelper { db: db.clone() }));
-        template_registry.register_helper("spotify_last_song", Box::new(SpotifyLastHelper { db: db.clone() }));
+        template_registry.register_helper(
+            "spotify_last_song",
+            Box::new(SpotifyLastHelper { db: db.clone() }),
+        );
         template_registry.register_helper("choose", Box::new(random_helper));
         template_registry.register_helper("sleep", Box::new(sleep_helper));
 
@@ -479,6 +482,14 @@ impl CommandHandler {
                             EventSubSubscriptionType::ChannelUpdate(ChannelUpdateCondition {
                                 broadcaster_user_id: broadcaster_id.clone(),
                             })
+                        }
+                        "channel.channel_points_custom_reward_redemption.add" | "points.redeem" => {
+                            EventSubSubscriptionType::ChannelPointsCustomRewardRedemptionAdd(
+                                ChannelPointsCustomRewardRedemptionAddCondition {
+                                    broadcaster_user_id: broadcaster_id.clone(),
+                                    reward_id: None,
+                                }
+                            )
                         }
                         _ => return Err(anyhow!("Invalid subscription type {}", sub_type)),
                     };

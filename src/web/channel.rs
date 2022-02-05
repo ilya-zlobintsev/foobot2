@@ -1,8 +1,4 @@
-use crate::{
-    command_handler::twitch_api::eventsub::{conditions::*, EventSubSubscriptionType},
-    database::models::NewCommand,
-    platform::Permissions,
-};
+use crate::{database::models::NewCommand, platform::Permissions};
 
 use super::api::ApiError;
 use super::*;

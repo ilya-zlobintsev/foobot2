@@ -16,12 +16,16 @@ use self::events::*;
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum EventSubSubscriptionType {
     ChannelUpdate(ChannelUpdateCondition),
+    ChannelPointsCustomRewardRedemptionAdd(ChannelPointsCustomRewardRedemptionAddCondition),
 }
 
 impl EventSubSubscriptionType {
     pub fn get_type(&self) -> &str {
         match self {
             Self::ChannelUpdate(_) => "channel.update",
+            Self::ChannelPointsCustomRewardRedemptionAdd(_) => {
+                "channel.channel_points_custom_reward_redemption.add"
+            }
         }
     }
 
@@ -34,6 +38,9 @@ impl EventSubSubscriptionType {
     pub fn get_condition(&self) -> Value {
         match self {
             Self::ChannelUpdate(condition) => serde_json::to_value(condition).unwrap(),
+            Self::ChannelPointsCustomRewardRedemptionAdd(condition) => {
+                serde_json::to_value(condition).unwrap()
+            }
         }
     }
 
