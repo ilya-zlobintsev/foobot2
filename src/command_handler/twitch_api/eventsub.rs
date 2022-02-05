@@ -97,6 +97,11 @@ impl EventSubNotification {
             "channel.update" => {
                 EventSubEventType::ChannelUpdate(serde_json::from_value(self.event)?)
             }
+            "channel.channel_points_custom_reward_redemption.add" => {
+                EventSubEventType::ChannelPointsCustomRewardRedemptionAdd(serde_json::from_value(
+                    self.event,
+                )?)
+            }
             _ => unimplemented!(),
         })
     }
