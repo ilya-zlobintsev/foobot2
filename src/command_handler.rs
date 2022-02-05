@@ -530,7 +530,7 @@ impl CommandHandler {
 
                     return Err(anyhow!("Unable to find matching subscription"));
                 }
-                "show" => {
+                "show" | "check" => {
                     let (subscription_type, _) = get_subscription(arguments)?;
 
                     if let Some(action) = self
