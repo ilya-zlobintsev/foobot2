@@ -601,7 +601,7 @@ impl CommandHandler {
                 let reward = rewards_response
                     .data
                     .iter()
-                    .find(|reward| reward.title == reward_name)
+                    .find(|reward| reward.title.trim() == reward_name)
                     .with_context(|| format!("Failed to find reward \"{}\"", reward_name))?;
 
                 EventSubSubscriptionType::ChannelPointsCustomRewardRedemptionAdd(
