@@ -1,8 +1,12 @@
-use crate::{database::models::NewCommand, platform::Permissions};
+use crate::{
+    database::models::NewCommand,
+    platform::{ChannelIdentifier, Permissions},
+};
 
 use super::api::ApiError;
 use super::*;
 
+use http::StatusCode;
 use rocket::{catch, form::Form, get, post, response::Redirect, Request, State};
 use rocket_dyn_templates::Template;
 
@@ -22,11 +26,23 @@ pub async fn commands_page(
     cmd: &State<CommandHandler>,
     session: Option<WebSession>,
     channel_id: u64,
-) -> Html<Template> {
+) -> Result<Html<Template>, ApiError> {
+    let channel = cmd
+        .db
+        .get_channel_by_id(channel_id)?
+        .ok_or(ApiError::NotFound)?;
+
+    let channel_identifier = ChannelIdentifier::new(&channel.platform, channel.channel).unwrap();
+
     let moderator = {
         if let Some(session) = &session {
+            let user = cmd
+                .db
+                .get_user_by_id(session.user_id)?
+                .expect("Invalid user");
+
             match cmd
-                .get_permissions_in_channel_by_id(session.user_id, channel_id)
+                .get_permissions_in_channel(user, &channel_identifier)
                 .await
             {
                 Ok(permissions) => {
@@ -40,9 +56,10 @@ pub async fn commands_page(
             false
         }
     };
+
     tracing::debug!("Moderator: {}", moderator);
 
-    Html(Template::render(
+    Ok(Html(Template::render(
         "commands",
         &CommandsContext {
             parent_context: LayoutContext::new_with_auth(session),
@@ -52,8 +69,14 @@ pub async fn commands_page(
                 .get_commands(channel_id)
                 .expect("Failed to get commands"),
             moderator,
+            eventsub_triggers: match channel_identifier {
+                ChannelIdentifier::TwitchChannelID(broadcaster_id) => cmd
+                    .db
+                    .get_eventsub_triggers_for_broadcaster(&broadcaster_id)?,
+                _ => Vec::new(),
+            },
         },
-    ))
+    )))
 }
 
 #[post("/<channel_id>/commands", data = "<command_form>")]

@@ -124,12 +124,12 @@
 <section>
     <h2>Built-in commands:</h2>
     <p></p>
-        ping<br>
-        commands<br>
-        commands add/remove/check (mods only)<br>
-        debug (mods only)<br>
-        whoami<br>
-        
+    ping<br>
+    commands<br>
+    commands add/remove/check (mods only)<br>
+    debug (mods only)<br>
+    whoami<br>
+
     </p>
     <h1>Custom commands in channel {{ channel }}</h1>
     <table id="commands_table" border=1>
@@ -177,6 +177,27 @@
     </table>
     {{ #if moderator }}
     <button type="button" id="add-command-button" onclick="showCommandEditDialog(null)">Add command</button>
+    {{ /if }}
+    {{ #if eventsub_triggers }}
+    <h1>Event triggers</h1>
+    <table id="commands_table" border=1>
+        <col style="width:25%">
+        <col style="width:50%">
+        <col style="width:25%">
+        <thead>
+            <th>Event Type</th>
+            <th>Condition</th>
+            <th>Action</th>
+        </thead>
+        <tbody>
+            {{#each eventsub_triggers }}
+            <tr>
+                <td>{{ this.event_type }}</td>
+                <td>{{ creation_payload }}</td>
+                <td class="last">{{ this.action }}</td>
+            </tr>
+            {{ /each }}
+    </table>
     {{ /if }}
 </section>
 

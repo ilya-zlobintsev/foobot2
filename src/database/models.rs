@@ -94,7 +94,7 @@ pub struct NewEventSubTrigger<'a> {
     pub creation_payload: &'a str,
 }
 
-#[derive(Queryable)]
+#[derive(Queryable, Serialize)]
 pub struct EventSubTrigger {
     pub broadcaster_id: String,
     pub event_type: String,

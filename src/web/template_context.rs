@@ -2,7 +2,7 @@ use rocket::{http::Status, outcome::Outcome, request::FromRequest};
 use serde::Serialize;
 
 use crate::command_handler::CommandHandler;
-use crate::database::models::{Channel, Command, User, WebSession};
+use crate::database::models::{Channel, Command, EventSubTrigger, User, WebSession};
 
 #[derive(Serialize)]
 pub struct IndexContext {
@@ -21,6 +21,7 @@ pub struct CommandsContext {
     pub parent_context: LayoutContext,
     pub channel: u64,
     pub commands: Vec<Command>,
+    pub eventsub_triggers: Vec<EventSubTrigger>,
     pub moderator: bool,
 }
 

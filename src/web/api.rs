@@ -22,6 +22,7 @@ pub async fn set_lastfm_name(
 
 #[derive(Debug)]
 pub enum ApiError {
+    NotFound,
     InvalidUser,
     DatabaseError(DatabaseError),
     RequestError(reqwest::Error),
