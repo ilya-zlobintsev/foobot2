@@ -6,7 +6,6 @@ use crate::{
 use super::api::ApiError;
 use super::*;
 
-use http::StatusCode;
 use rocket::{catch, form::Form, get, post, response::Redirect, Request, State};
 use rocket_dyn_templates::Template;
 

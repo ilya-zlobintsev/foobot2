@@ -1,6 +1,8 @@
 use std::env;
+use std::sync::Arc;
 use std::time::Duration;
 
+use dashmap::DashMap;
 use handlebars::{
     Context, Handlebars, Helper, HelperDef, HelperResult, JsonRender, Output, RenderContext,
     RenderError, ScopedJson,
@@ -13,7 +15,7 @@ use tokio::time::sleep;
 use twitch_irc::login::RefreshingLoginCredentials;
 
 use crate::database::{models::User, Database};
-use crate::platform::UserIdentifier;
+use crate::platform::{ChannelIdentifier, UserIdentifier};
 
 use super::finnhub_api::FinnhubApi;
 use super::lastfm_api::LastFMApi;
@@ -26,6 +28,7 @@ pub struct InquiryContext {
     pub user: User,
     pub arguments: Vec<String>,
     pub display_name: String,
+    pub channel: ChannelIdentifier,
 }
 
 pub struct TwitchUserHelper {
@@ -615,5 +618,116 @@ pub fn concat_helper(
         Ok(())
     } else {
         Err(RenderError::new("missing items to choose from"))
+    }
+}
+
+pub struct SetTempData {
+    pub data: Arc<DashMap<String, String>>,
+}
+
+impl HelperDef for SetTempData {
+    fn call<'reg: 'rc, 'rc>(
+        &self,
+        h: &Helper,
+        _: &Handlebars,
+        ctx: &Context,
+        _: &mut RenderContext,
+        _: &mut dyn Output,
+    ) -> HelperResult {
+        let raw_params = h
+            .params()
+            .iter()
+            .map(|param| param.value().render())
+            .collect::<Vec<String>>()
+            .join(" ");
+
+        let context = serde_json::from_value::<InquiryContext>(ctx.data().clone())
+            .expect("Failed to get command context");
+
+        let mut params = raw_params.split_whitespace().into_iter();
+
+        let key = format!(
+            "{}-{}-{}",
+            context.channel.get_platform_name().unwrap_or_default(),
+            context
+                .channel
+                .get_channel()
+                .unwrap_or(&context.display_name),
+            params
+                .next()
+                .ok_or_else(|| RenderError::new("key missing"))?
+        );
+
+        let value = params
+            .next()
+            .ok_or_else(|| RenderError::new("value missing"))?;
+
+        tracing::info!("Set custom data {}: {}", key, value);
+
+        self.data.insert(key, value.to_string());
+
+        Ok(())
+    }
+}
+
+pub struct GetTempData {
+    pub data: Arc<DashMap<String, String>>,
+}
+
+impl HelperDef for GetTempData {
+    fn call<'reg: 'rc, 'rc>(
+        &self,
+        h: &Helper,
+        _: &Handlebars,
+        ctx: &Context,
+        _: &mut RenderContext,
+        out: &mut dyn Output,
+    ) -> HelperResult {
+        let context = serde_json::from_value::<InquiryContext>(ctx.data().clone())
+            .expect("Failed to get command context");
+
+        let raw_params = h
+            .params()
+            .iter()
+            .map(|param| param.value().render())
+            .collect::<Vec<String>>()
+            .join(" ");
+
+        let mut params = raw_params.split_whitespace().into_iter();
+
+        let response = match params.next() {
+            Some(key) => {
+                let key = format!(
+                    "{}-{}-{}",
+                    context.channel.get_platform_name().unwrap_or_default(),
+                    context
+                        .channel
+                        .get_channel()
+                        .unwrap_or(&context.display_name),
+                    key,
+                );
+
+                match self.data.get(&key) {
+                    Some(value) => value.value().to_string(),
+                    None => return Err(RenderError::new("value not found")),
+                }
+            }
+            None => {
+                let keys = self
+                    .data
+                    .iter()
+                    .map(|e| e.key().as_str())
+                    .collect::<Vec<&str>>();
+
+                if keys.is_empty() {
+                    return Err(RenderError::new("No data"));
+                }
+                keys.join(", ")
+            }
+        };
+
+        out.write(&response)?;
+
+        Ok(())
     }
 }

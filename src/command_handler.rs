@@ -17,6 +17,7 @@ use crate::{get_version, web};
 
 use anyhow::{anyhow, Context};
 use core::fmt;
+use dashmap::DashMap;
 use reqwest::Client;
 use std::env::{self, VarError};
 use std::num::ParseIntError;
@@ -141,6 +142,17 @@ impl CommandHandler {
         template_registry.register_helper("get", Box::new(HttpHelper::init()));
 
         template_registry.register_helper("song", Box::new(inquiry_helper::song_helper));
+
+        let temp_data = Arc::new(DashMap::new());
+
+        template_registry.register_helper(
+            "data_get",
+            Box::new(GetTempData {
+                data: temp_data.clone(),
+            }),
+        );
+
+        template_registry.register_helper("data_set", Box::new(SetTempData { data: temp_data }));
 
         template_registry.set_strict_mode(true);
 
@@ -389,6 +401,7 @@ impl CommandHandler {
         let template_registry = self.template_registry.clone();
 
         let display_name = execution_context.get_display_name().to_string();
+        let channel = execution_context.get_channel();
 
         let response = match task::spawn_blocking(move || {
             template_registry.render_template(
@@ -397,6 +410,7 @@ impl CommandHandler {
                     user,
                     arguments: arguments.iter().map(|s| s.to_owned()).collect(),
                     display_name,
+                    channel,
                 }),
             )
         })
