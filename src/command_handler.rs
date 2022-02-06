@@ -564,14 +564,23 @@ impl CommandHandler {
     ) -> anyhow::Result<(EventSubSubscriptionType, String)> {
         let sub_type = arguments.next().context("Missing subscription type")?;
 
-        let action = arguments.collect::<Vec<&str>>().join(" ");
+        let mut action = arguments.collect::<Vec<&str>>().join(" ");
 
         let subscription = match sub_type {
             "channel.update" => EventSubSubscriptionType::ChannelUpdate(ChannelUpdateCondition {
                 broadcaster_user_id: broadcaster_id.clone(),
             }),
             "channel.channel_points_custom_reward_redemption.add" | "points.redeem" => {
-                let reward_name = action.clone(); // TODO
+                let action_clone = action.clone();
+
+                let (reward_name, action_str) = action_clone.split_once(";").context(
+                    "Action not specified (separate redeem name and action with semicolon)",
+                )?;
+                
+                tracing::info!("Searching for reward {}", reward_name);
+
+                action = action_str.trim().to_string();
+                let reward_name = reward_name.trim();
 
                 let streamer_credentials = self.db.make_twitch_credentials(broadcaster_id.clone());
                 let refreshing_credentials = RefreshingLoginCredentials::init(
