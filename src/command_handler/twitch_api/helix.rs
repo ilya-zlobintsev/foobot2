@@ -175,7 +175,7 @@ impl<C: LoginCredentials> HelixApi<C> {
     }
 
     /// Returns a list of Custom Reward objects for the Custom Rewards on the authenticated user's channel.
-    pub async fn get_custom_rewards(&self) -> anyhow::Result<Vec<CustomReward>> {
+    pub async fn get_custom_rewards(&self) -> anyhow::Result<CustomRewardsResponse> {
         let broadcaster_id = self.get_self_user().await?.id;
 
         let response = self
@@ -186,12 +186,8 @@ impl<C: LoginCredentials> HelixApi<C> {
             .await?;
 
         response_ok(&response)?;
-        
-        let text = response.text().await?;
-        
-        tracing::debug!("{}", text);
 
-        Ok(serde_json::from_str(&text)?)
+        Ok(response.json().await?)
     }
 
     pub async fn add_eventsub_subscription(

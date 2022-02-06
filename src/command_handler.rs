@@ -587,9 +587,10 @@ impl CommandHandler {
 
                 let streamer_api = HelixApi::with_credentials(refreshing_credentials).await;
 
-                let rewards = streamer_api.get_custom_rewards().await?;
+                let rewards_response = streamer_api.get_custom_rewards().await?;
 
-                let reward = rewards
+                let reward = rewards_response
+                    .data
                     .iter()
                     .find(|reward| reward.title == reward_name)
                     .with_context(|| format!("Failed to find reward \"{}\"", reward_name))?;
