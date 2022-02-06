@@ -48,6 +48,8 @@ pub async fn eventsub_callback(
                     let cmd = (*cmd).clone();
 
                     task::spawn(async move {
+                        let twitch_api = &cmd.twitch_api.as_ref().unwrap().helix_api;
+
                         let broadcaster_id = event.get_broadcaster_id();
 
                         if let Some(action) = cmd
@@ -59,14 +61,17 @@ pub async fn eventsub_callback(
                             .expect("DB error")
                         {
                             let user_id = match event {
-                                EventSubEventType::ChannelUpdate(event) => {
-                                    event.broadcaster_user_id
-                                }
-                                EventSubEventType::StreamOnline(event) => event.broadcaster_user_id,
+                                EventSubEventType::ChannelUpdate(_)
+                                | EventSubEventType::StreamOnline(_) => broadcaster_id.clone(),
                                 EventSubEventType::ChannelPointsCustomRewardRedemptionAdd(
                                     event,
                                 ) => event.user_id,
                             };
+
+                            let user = twitch_api
+                                .get_user_by_id(&user_id)
+                                .await
+                                .expect("Failed to get user");
 
                             let context = ServerExecutionContext {
                                 target_channel: ChannelIdentifier::TwitchChannelID(
@@ -74,6 +79,7 @@ pub async fn eventsub_callback(
                                 ),
                                 executing_user: UserIdentifier::TwitchID(user_id),
                                 cmd: cmd.clone(),
+                                display_name: user.display_name,
                             };
 
                             cmd.handle_server_message(action, context)

@@ -102,6 +102,7 @@ impl CommandHandler {
         );
         template_registry.register_helper("choose", Box::new(random_helper));
         template_registry.register_helper("sleep", Box::new(sleep_helper));
+        template_registry.register_helper("username", Box::new(username_helper));
 
         if let Ok(api_key) = env::var("FINNHUB_API_KEY") {
             template_registry.register_helper("stock", Box::new(FinnhubApi::init(api_key)));
@@ -378,13 +379,15 @@ impl CommandHandler {
     async fn execute_command_action<C: ExecutionContext>(
         &self,
         action: String,
-        _execution_context: C,
+        execution_context: C,
         user: User,
         arguments: Vec<String>,
     ) -> Result<Option<String>, CommandError> {
         tracing::info!("Parsing action {}", action);
 
         let template_registry = self.template_registry.clone();
+        
+        let display_name = execution_context.get_display_name().to_string();
 
         let response = match task::spawn_blocking(move || {
             template_registry.render_template(
@@ -392,6 +395,7 @@ impl CommandHandler {
                 &(InquiryContext {
                     user,
                     arguments: arguments.iter().map(|s| s.to_owned()).collect(),
+                    display_name,
                 }),
             )
         })

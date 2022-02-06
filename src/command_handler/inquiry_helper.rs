@@ -25,6 +25,7 @@ use super::{owm_api::OwmApi, spotify_api::SpotifyApi};
 pub struct InquiryContext {
     pub user: User,
     pub arguments: Vec<String>,
+    pub display_name: String,
 }
 
 pub struct TwitchUserHelper {
@@ -576,4 +577,19 @@ impl HelperDef for HttpHelper {
             Err(e) => Err(RenderError::new(e.to_string())),
         }
     }
+}
+
+pub fn username_helper(
+    h: &Helper,
+    _: &Handlebars,
+    ctx: &Context,
+    _: &mut RenderContext,
+    out: &mut dyn Output,
+) -> HelperResult {
+    let context = serde_json::from_value::<InquiryContext>(ctx.data().clone())
+        .expect("Failed to get command context");
+
+    out.write(&context.display_name)?;
+
+    Ok(())
 }

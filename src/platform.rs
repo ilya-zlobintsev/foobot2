@@ -42,6 +42,8 @@ pub trait ExecutionContext {
     fn get_channel(&self) -> ChannelIdentifier;
 
     fn get_user_identifier(&self) -> UserIdentifier;
+    
+    fn get_display_name(&self) -> &str;
 }
 
 #[derive(Clone)]
@@ -49,6 +51,7 @@ pub struct ServerExecutionContext {
     pub target_channel: ChannelIdentifier,
     pub executing_user: UserIdentifier,
     pub cmd: CommandHandler,
+    pub display_name: String,
 }
 
 #[async_trait]
@@ -73,6 +76,10 @@ impl ExecutionContext for ServerExecutionContext {
 
     fn get_user_identifier(&self) -> UserIdentifier {
         self.executing_user.clone()
+    }
+
+    fn get_display_name(&self) -> &str {
+        &self.display_name
     }
 }
 

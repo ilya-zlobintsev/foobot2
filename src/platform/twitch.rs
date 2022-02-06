@@ -220,6 +220,10 @@ impl<T: TwitchMessage + std::marker::Sync> ExecutionContext for TwitchExecutionC
     fn get_user_identifier(&self) -> UserIdentifier {
         UserIdentifier::TwitchID(self.msg.get_sender().id.clone())
     }
+
+    fn get_display_name(&self) -> &str {
+        &self.msg.get_sender().name
+    }
 }
 
 impl Twitch {

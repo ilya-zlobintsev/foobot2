@@ -120,4 +120,8 @@ impl ExecutionContext for IrcExecutionContext<'_> {
     fn get_user_identifier(&self) -> UserIdentifier {
         UserIdentifier::IrcName(self.0.source_nickname().unwrap().to_owned())
     }
+
+    fn get_display_name(&self) -> &str {
+        self.0.source_nickname().unwrap()
+    }
 }

@@ -157,4 +157,8 @@ impl ExecutionContext for DiscordExecutionContext<'_> {
     fn get_user_identifier(&self) -> UserIdentifier {
         UserIdentifier::DiscordID(self.msg.author.id.to_string())
     }
+    
+    fn get_display_name(&self) -> &str {
+        &self.msg.author.name
+    }
 }
