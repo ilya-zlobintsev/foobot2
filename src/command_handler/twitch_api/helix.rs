@@ -186,8 +186,12 @@ impl<C: LoginCredentials> HelixApi<C> {
             .await?;
 
         response_ok(&response)?;
+        
+        let text = response.text().await?;
+        
+        tracing::debug!("{}", text);
 
-        Ok(response.json().await?)
+        Ok(serde_json::from_str(&text)?)
     }
 
     pub async fn add_eventsub_subscription(
