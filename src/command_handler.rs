@@ -103,6 +103,7 @@ impl CommandHandler {
         template_registry.register_helper("choose", Box::new(random_helper));
         template_registry.register_helper("sleep", Box::new(sleep_helper));
         template_registry.register_helper("username", Box::new(username_helper));
+        template_registry.register_helper("concat", Box::new(concat_helper));
 
         if let Ok(api_key) = env::var("FINNHUB_API_KEY") {
             template_registry.register_helper("stock", Box::new(FinnhubApi::init(api_key)));

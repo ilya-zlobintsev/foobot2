@@ -580,7 +580,7 @@ impl HelperDef for HttpHelper {
 }
 
 pub fn username_helper(
-    h: &Helper,
+    _: &Helper,
     _: &Handlebars,
     ctx: &Context,
     _: &mut RenderContext,
@@ -592,4 +592,28 @@ pub fn username_helper(
     out.write(&context.display_name)?;
 
     Ok(())
+}
+
+pub fn concat_helper(
+    h: &Helper,
+    _: &Handlebars,
+    _: &Context,
+    _: &mut RenderContext,
+    out: &mut dyn Output,
+) -> HelperResult {
+    let len = h.params().len();
+
+    if len != 0 {
+        let result = h
+            .params()
+            .into_iter()
+            .map(|param| param.value().render())
+            .collect::<Vec<String>>()
+            .join("");
+
+        out.write(&result)?;
+        Ok(())
+    } else {
+        Err(RenderError::new("missing items to choose from"))
+    }
 }
