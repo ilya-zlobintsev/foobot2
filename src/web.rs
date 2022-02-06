@@ -92,7 +92,10 @@ pub async fn run(command_handler: CommandHandler) {
 
         if let Some(admin_channel) = get_admin_channel() {
             command_handler
-                .send_to_channel(admin_channel, "Shutting down...".to_string())
+                .send_to_channel(
+                    admin_channel,
+                    format!("Foobot2 {} Shutting down...", crate::get_version()),
+                )
                 .await
                 .expect("Failed to send shutdown message");
         }

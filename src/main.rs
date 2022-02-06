@@ -72,5 +72,10 @@ async fn main() {
 }
 
 pub fn get_version() -> String {
-    format!("{}, commit {}", env!("CARGO_PKG_VERSION"), env!("GIT_HASH"),)
+    format!(
+        "{}, commit {} ({})",
+        env!("CARGO_PKG_VERSION"),
+        env!("GIT_HASH"),
+        env!("PROFILE")
+    )
 }

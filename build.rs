@@ -1,4 +1,4 @@
-use std::process::Command;
+use std::{env, process::Command};
 
 fn main() {
     println!("cargo:rerun-if-changed=.git/");
@@ -11,4 +11,6 @@ fn main() {
     let version = String::from_utf8(commit_output.stdout).unwrap();
 
     println!("cargo:rustc-env=GIT_HASH={}", version);
+
+    println!("cargo:rustc-env=PROFILE={}", env::var("PROFILE").unwrap());
 }
