@@ -577,9 +577,10 @@ impl CommandHandler {
             "channel.channel_points_custom_reward_redemption.add" | "points.redeem" => {
                 let action_clone = action.clone();
 
-                let (reward_name, action_str) = action_clone.split_once(";").context(
-                    "Action not specified (separate redeem name and action with semicolon)",
-                )?;
+                let (reward_name, action_str) = match action_clone.split_once(";") {
+                    Some((reward_name, action_str)) => (reward_name, action_str),
+                    None => (action_clone.as_str(), ""),
+                };
                 
                 tracing::info!("Searching for reward {}", reward_name);
 
