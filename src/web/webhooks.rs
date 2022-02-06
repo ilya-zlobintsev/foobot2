@@ -30,6 +30,10 @@ pub async fn eventsub_callback(
 
     let secret_key = rocket::Config::SECRET_KEY;
 
+    if properties.message_retry > 1 {
+        tracing::warn!("Received EventSub message retry");
+    }
+
     match verify_twitch_signature(&properties, &body, secret_key).await {
         true => Ok({
             tracing::info!("Request signature verified");

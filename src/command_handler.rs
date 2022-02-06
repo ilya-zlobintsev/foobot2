@@ -387,7 +387,7 @@ impl CommandHandler {
         tracing::info!("Parsing action {}", action);
 
         let template_registry = self.template_registry.clone();
-        
+
         let display_name = execution_context.get_display_name().to_string();
 
         let response = match task::spawn_blocking(move || {
@@ -582,7 +582,7 @@ impl CommandHandler {
                     Some((reward_name, action_str)) => (reward_name, action_str),
                     None => (action_clone.as_str(), ""),
                 };
-                
+
                 tracing::info!("Searching for reward {}", reward_name);
 
                 action = action_str.trim().to_string();

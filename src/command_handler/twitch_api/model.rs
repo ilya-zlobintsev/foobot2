@@ -70,7 +70,6 @@ pub struct CustomRewardsResponse {
     pub data: Vec<CustomReward>,
 }
 
-
 #[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct CustomReward {
     pub broadcaster_name: String,

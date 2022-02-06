@@ -42,7 +42,7 @@ pub trait ExecutionContext {
     fn get_channel(&self) -> ChannelIdentifier;
 
     fn get_user_identifier(&self) -> UserIdentifier;
-    
+
     fn get_display_name(&self) -> &str;
 }
 

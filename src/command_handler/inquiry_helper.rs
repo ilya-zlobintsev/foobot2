@@ -606,7 +606,7 @@ pub fn concat_helper(
     if len != 0 {
         let result = h
             .params()
-            .into_iter()
+            .iter()
             .map(|param| param.value().render())
             .collect::<Vec<String>>()
             .join("");
