@@ -36,11 +36,13 @@ use lingva_api::LingvaApi;
 use owm_api::OwmApi;
 use twitch_api::TwitchApi;
 
-use twitch_irc::login::RefreshingLoginCredentials;
+use twitch_irc::login::{LoginCredentials, RefreshingLoginCredentials};
 
 use self::finnhub_api::FinnhubApi;
 use self::twitch_api::eventsub::conditions::*;
 use self::twitch_api::eventsub::EventSubSubscriptionType;
+use self::twitch_api::helix::HelixApi;
+use self::twitch_api::{get_client_id, get_client_secret};
 
 #[derive(Clone, Debug)]
 pub struct CommandHandler {
@@ -473,35 +475,11 @@ impl CommandHandler {
         {
             let app_api = &self.twitch_api.as_ref().unwrap().helix_api_app;
 
-            let get_subscription =
-                |mut arguments: IntoIter<&str>| -> anyhow::Result<(EventSubSubscriptionType, String)> {
-                    let sub_type = arguments.next().context("Missing subscription type")?;
-
-                    let subscription = match sub_type {
-                        "channel.update" => {
-                            EventSubSubscriptionType::ChannelUpdate(ChannelUpdateCondition {
-                                broadcaster_user_id: broadcaster_id.clone(),
-                            })
-                        }
-                        "channel.channel_points_custom_reward_redemption.add" | "points.redeem" => {
-                            EventSubSubscriptionType::ChannelPointsCustomRewardRedemptionAdd(
-                                ChannelPointsCustomRewardRedemptionAddCondition {
-                                    broadcaster_user_id: broadcaster_id.clone(),
-                                    reward_id: None,
-                                }
-                            )
-                        }
-                        _ => return Err(anyhow!("Invalid subscription type {}", sub_type)),
-                    };
-
-                    let action = arguments.collect::<Vec<&str>>().join(" ");
-
-                    Ok((subscription, action))
-                };
-
             match action {
                 "add" | "create" => {
-                    let (subscription, action) = get_subscription(arguments)?;
+                    let (subscription, action) = self
+                        .get_subscription(arguments, broadcaster_id.clone())
+                        .await?;
 
                     if action.is_empty() {
                         return Err(anyhow!("Action not specified"));
@@ -521,7 +499,9 @@ impl CommandHandler {
                     Ok("Trigger successfully added".to_string())
                 }
                 "remove" | "delete" => {
-                    let (subscription_type, _) = get_subscription(arguments)?;
+                    let (subscription_type, _) = self
+                        .get_subscription(arguments, broadcaster_id.clone())
+                        .await?;
 
                     let subscriptions = app_api
                         .get_eventsub_subscriptions(Some(subscription_type.get_type()))
@@ -543,7 +523,9 @@ impl CommandHandler {
                     return Err(anyhow!("Unable to find matching subscription"));
                 }
                 "show" | "check" => {
-                    let (subscription_type, _) = get_subscription(arguments)?;
+                    let (subscription_type, _) = self
+                        .get_subscription(arguments, broadcaster_id.clone())
+                        .await?;
 
                     if let Some(action) = self
                         .db
@@ -574,6 +556,55 @@ impl CommandHandler {
         } else {
             Err(anyhow!("EventSub can only be used on Twitch"))
         }
+    }
+    async fn get_subscription(
+        &self,
+        mut arguments: IntoIter<&str>,
+        broadcaster_id: String,
+    ) -> anyhow::Result<(EventSubSubscriptionType, String)> {
+        let sub_type = arguments.next().context("Missing subscription type")?;
+
+        let action = arguments.collect::<Vec<&str>>().join(" ");
+
+        let subscription = match sub_type {
+            "channel.update" => EventSubSubscriptionType::ChannelUpdate(ChannelUpdateCondition {
+                broadcaster_user_id: broadcaster_id.clone(),
+            }),
+            "channel.channel_points_custom_reward_redemption.add" | "points.redeem" => {
+                let reward_name = action.clone(); // TODO
+
+                let streamer_credentials = self.db.make_twitch_credentials(broadcaster_id.clone());
+                let refreshing_credentials = RefreshingLoginCredentials::init(
+                    get_client_id().unwrap(),
+                    get_client_secret().unwrap(),
+                    streamer_credentials,
+                );
+
+                refreshing_credentials
+                    .get_credentials()
+                    .await
+                    .context("Streamer not authenticated to manage channel points!")?;
+
+                let streamer_api = HelixApi::with_credentials(refreshing_credentials).await;
+
+                let rewards = streamer_api.get_custom_rewards().await?;
+
+                let reward = rewards
+                    .iter()
+                    .find(|reward| reward.title == reward_name)
+                    .with_context(|| format!("Failed to find reward \"{}\"", reward_name))?;
+
+                EventSubSubscriptionType::ChannelPointsCustomRewardRedemptionAdd(
+                    ChannelPointsCustomRewardRedemptionAddCondition {
+                        broadcaster_user_id: broadcaster_id,
+                        reward_id: Some(reward.id.clone()),
+                    },
+                )
+            }
+            _ => return Err(anyhow!("Invalid subscription type {}", sub_type)),
+        };
+
+        Ok((subscription, action))
     }
 
     async fn edit_cmds<C: ExecutionContext + Sync>(
