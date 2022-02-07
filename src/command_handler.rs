@@ -816,11 +816,12 @@ impl CommandHandler {
         &self,
         action: String,
         context: ServerExecutionContext,
+        arguments: Vec<String>,
     ) -> anyhow::Result<()> {
         let user = self.db.get_or_create_user(&context.executing_user)?;
 
         let response = self
-            .execute_command_action(action, context.clone(), user, Vec::new()) // TODO
+            .execute_command_action(action, context.clone(), user, arguments) // TODO
             .await?
             .unwrap_or_else(|| "Event triggered with no action".to_string());
 

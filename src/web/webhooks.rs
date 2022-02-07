@@ -64,12 +64,14 @@ pub async fn eventsub_callback(
                             )
                             .expect("DB error")
                         {
-                            let user_id = match event {
+                            let (user_id, arguments) = match event {
                                 EventSubEventType::ChannelUpdate(_)
-                                | EventSubEventType::StreamOnline(_) => broadcaster_id.clone(),
+                                | EventSubEventType::StreamOnline(_) => {
+                                    (broadcaster_id.clone(), String::new())
+                                }
                                 EventSubEventType::ChannelPointsCustomRewardRedemptionAdd(
                                     event,
-                                ) => event.user_id,
+                                ) => (event.user_id, event.reward.prompt),
                             };
 
                             let user = twitch_api
@@ -86,9 +88,16 @@ pub async fn eventsub_callback(
                                 display_name: user.display_name,
                             };
 
-                            cmd.handle_server_message(action, context)
-                                .await
-                                .expect("Failed to handle event");
+                            cmd.handle_server_message(
+                                action,
+                                context,
+                                arguments
+                                    .split_whitespace()
+                                    .map(|s| s.to_string())
+                                    .collect(),
+                            )
+                            .await
+                            .expect("Failed to handle event");
                         } else {
                             tracing::warn!("Unregistered EventSub notification (no cleanup?)");
                         }
