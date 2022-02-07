@@ -71,7 +71,7 @@ pub async fn eventsub_callback(
                                 }
                                 EventSubEventType::ChannelPointsCustomRewardRedemptionAdd(
                                     event,
-                                ) => (event.user_id, event.reward.prompt),
+                                ) => (event.user_id, event.user_input),
                             };
 
                             let user = twitch_api
