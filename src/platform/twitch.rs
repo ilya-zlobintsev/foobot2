@@ -291,6 +291,11 @@ impl Twitch {
                 );
 
                 if let Some(mut response) = response {
+                    if response.trim().is_empty() {
+                        tracing::info!("Empty command response");
+                        return;
+                    }
+
                     let channel = msg.get_channel().unwrap_or(&msg.get_sender().login);
 
                     if let Some(last_msg) = last_messages.get(channel) {
