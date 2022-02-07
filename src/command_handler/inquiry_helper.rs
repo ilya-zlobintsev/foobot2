@@ -710,7 +710,7 @@ impl HelperDef for GetTempData {
 
                 match self.data.get(&key) {
                     Some(value) => value.value().to_string(),
-                    None => return Err(RenderError::new("value not found")),
+                    None => String::new(),
                 }
             }
             None => {
