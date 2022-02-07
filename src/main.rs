@@ -58,6 +58,7 @@ async fn main() {
 
     if let Some(admin_channel) = get_admin_channel() {
         if let Err(e) = command_handler
+            .platform_handler
             .send_to_channel(
                 admin_channel,
                 format!("Foobot2 {} up and running", get_version()),

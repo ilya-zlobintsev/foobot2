@@ -92,6 +92,7 @@ pub async fn run(command_handler: CommandHandler) {
 
         if let Some(admin_channel) = get_admin_channel() {
             command_handler
+                .platform_handler
                 .send_to_channel(
                     admin_channel,
                     format!("Foobot2 {} Shutting down...", crate::get_version()),

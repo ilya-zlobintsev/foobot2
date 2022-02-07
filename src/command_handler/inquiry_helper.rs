@@ -20,6 +20,7 @@ use crate::platform::{ChannelIdentifier, UserIdentifier};
 use super::finnhub_api::FinnhubApi;
 use super::lastfm_api::LastFMApi;
 use super::lingva_api::LingvaApi;
+use super::platform_handler::PlatformHandler;
 use super::twitch_api::TwitchApi;
 use super::{owm_api::OwmApi, spotify_api::SpotifyApi};
 
@@ -727,6 +728,45 @@ impl HelperDef for GetTempData {
         };
 
         out.write(&response)?;
+
+        Ok(())
+    }
+}
+
+pub struct SayHelper {
+    pub platform_handler: PlatformHandler,
+}
+impl HelperDef for SayHelper {
+    fn call<'reg: 'rc, 'rc>(
+        &self,
+        h: &Helper,
+        _: &Handlebars,
+        ctx: &Context,
+        _: &mut RenderContext,
+        _: &mut dyn Output,
+    ) -> HelperResult {
+        let params = h
+            .params()
+            .iter()
+            .map(|param| param.value().render())
+            .collect::<Vec<String>>()
+            .join(" ");
+
+        let context = serde_json::from_value::<InquiryContext>(ctx.data().clone())
+            .expect("Failed to get command context");
+
+        let runtime = tokio::runtime::Handle::current();
+
+        let platform_handler = self.platform_handler.clone();
+
+        runtime.spawn(async move {
+            if let Err(e) = platform_handler
+                .send_to_channel(context.channel, params)
+                .await
+            {
+                tracing::warn!("Failed sending message from inqury context: {}", e);
+            }
+        });
 
         Ok(())
     }

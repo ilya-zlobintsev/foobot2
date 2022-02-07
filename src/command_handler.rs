@@ -158,6 +158,13 @@ impl CommandHandler {
             }),
         );
 
+        template_registry.register_helper(
+            "say",
+            Box::new(inquiry_helper::SayHelper {
+                platform_handler: platform_handler.clone(),
+            }),
+        );
+
         template_registry.register_helper("data_set", Box::new(SetTempData { data: temp_data }));
 
         template_registry.set_strict_mode(true);
@@ -836,32 +843,9 @@ impl CommandHandler {
             .await?
             .unwrap_or_else(|| "Event triggered with no action".to_string());
 
-        self.send_to_channel(context.get_channel(), response).await
-    }
-
-    pub async fn send_to_channel(
-        &self,
-        channel: ChannelIdentifier,
-        msg: String,
-    ) -> anyhow::Result<()> {
-        match channel {
-            ChannelIdentifier::TwitchChannelID(channel_id) => {
-                let twitch_api = self.platform_handler.twitch_api.as_ref().unwrap();
-
-                let broadcaster = twitch_api.helix_api.get_user_by_id(&channel_id).await?;
-
-                let chat_client_guard = twitch_api.chat_client.lock().await;
-
-                let chat_client = chat_client_guard.as_ref().expect("Chat client missing");
-
-                chat_client.say(broadcaster.login, msg).await?;
-
-                Ok(())
-            }
-            _ => Err(anyhow!(
-                "Remotely triggered commands not supported for this platform"
-            )),
-        }
+        self.platform_handler
+            .send_to_channel(context.get_channel(), response)
+            .await
     }
 
     pub async fn join_channel(&self, channel: &ChannelIdentifier) -> anyhow::Result<()> {
