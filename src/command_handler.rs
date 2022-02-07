@@ -4,6 +4,7 @@ pub mod inquiry_helper;
 pub mod lastfm_api;
 pub mod lingva_api;
 pub mod owm_api;
+mod platform_handler;
 pub mod spotify_api;
 pub mod twitch_api;
 
@@ -40,6 +41,7 @@ use twitch_api::TwitchApi;
 use twitch_irc::login::{LoginCredentials, RefreshingLoginCredentials};
 
 use self::finnhub_api::FinnhubApi;
+use self::platform_handler::PlatformHandler;
 use self::twitch_api::eventsub::conditions::*;
 use self::twitch_api::eventsub::EventSubSubscriptionType;
 use self::twitch_api::helix::HelixApi;
@@ -48,8 +50,7 @@ use self::twitch_api::{get_client_id, get_client_secret};
 #[derive(Clone, Debug)]
 pub struct CommandHandler {
     pub db: Database,
-    pub twitch_api: Option<TwitchApi<RefreshingLoginCredentials<Database>>>,
-    pub discord_api: Option<DiscordApi>,
+    pub platform_handler: PlatformHandler,
     startup_time: Arc<Instant>,
     template_registry: Arc<Handlebars<'static>>,
     cooldowns: Arc<RwLock<Vec<(u64, String)>>>, // User id and command
@@ -83,6 +84,11 @@ impl CommandHandler {
         let discord_api = match env::var("DISCORD_TOKEN") {
             Ok(token) => Some(DiscordApi::new(token)),
             Err(_) => None,
+        };
+
+        let platform_handler = PlatformHandler {
+            twitch_api,
+            discord_api,
         };
 
         let lingva_url = match env::var("LINGVA_INSTANCE_URL") {
@@ -130,7 +136,7 @@ impl CommandHandler {
             )
         }
 
-        if let Some(twitch_api) = &twitch_api {
+        if let Some(twitch_api) = &platform_handler.twitch_api {
             template_registry.register_helper(
                 "twitchuser",
                 Box::new(TwitchUserHelper {
@@ -162,10 +168,9 @@ impl CommandHandler {
 
         Self {
             db,
-            twitch_api,
+            platform_handler,
             startup_time: Arc::new(Instant::now()),
             template_registry: Arc::new(template_registry),
-            discord_api,
             cooldowns,
         }
     }
@@ -492,7 +497,12 @@ impl CommandHandler {
 
         if let ChannelIdentifier::TwitchChannelID(broadcaster_id) = execution_context.get_channel()
         {
-            let app_api = &self.twitch_api.as_ref().unwrap().helix_api_app;
+            let app_api = &self
+                .platform_handler
+                .twitch_api
+                .as_ref()
+                .unwrap()
+                .helix_api_app;
 
             match action {
                 "add" | "create" => {
@@ -741,6 +751,7 @@ impl CommandHandler {
                     .ok_or_else(|| anyhow!("Not registered on this platform"))?;
 
                 let twitch_api = self
+                    .platform_handler
                     .twitch_api
                     .as_ref()
                     .ok_or_else(|| anyhow!("Twitch not configured"))?;
@@ -772,7 +783,7 @@ impl CommandHandler {
                     .parse()
                     .unwrap();
 
-                let discord_api = self.discord_api.as_ref().unwrap();
+                let discord_api = self.platform_handler.discord_api.as_ref().unwrap();
 
                 match discord_api
                     .get_permissions_in_guild(user_id, guild_id.parse().unwrap())
@@ -835,7 +846,7 @@ impl CommandHandler {
     ) -> anyhow::Result<()> {
         match channel {
             ChannelIdentifier::TwitchChannelID(channel_id) => {
-                let twitch_api = self.twitch_api.as_ref().unwrap();
+                let twitch_api = self.platform_handler.twitch_api.as_ref().unwrap();
 
                 let broadcaster = twitch_api.helix_api.get_user_by_id(&channel_id).await?;
 
@@ -856,7 +867,11 @@ impl CommandHandler {
     pub async fn join_channel(&self, channel: &ChannelIdentifier) -> anyhow::Result<()> {
         match channel {
             ChannelIdentifier::TwitchChannelID(id) => {
-                let twitch_api = self.twitch_api.as_ref().context("Twitch not initialized")?;
+                let twitch_api = self
+                    .platform_handler
+                    .twitch_api
+                    .as_ref()
+                    .context("Twitch not initialized")?;
 
                 let user = twitch_api.helix_api.get_user_by_id(id).await?;
 

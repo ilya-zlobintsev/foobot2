@@ -52,7 +52,7 @@ pub async fn eventsub_callback(
                     let cmd = (*cmd).clone();
 
                     task::spawn(async move {
-                        let twitch_api = &cmd.twitch_api.as_ref().unwrap().helix_api;
+                        let twitch_api = &cmd.platform_handler.twitch_api.as_ref().unwrap().helix_api;
 
                         let broadcaster_id = event.get_broadcaster_id();
 

@@ -32,7 +32,7 @@ async fn main() {
 
     let command_handler = CommandHandler::init(db).await;
 
-    match &command_handler.twitch_api {
+    match &command_handler.platform_handler.twitch_api {
         Some(_) => match Twitch::init(command_handler.clone()).await {
             Ok(twitch) => twitch.run().await,
             Err(e) => tracing::warn!("Error loading Twitch: {:?}", e),

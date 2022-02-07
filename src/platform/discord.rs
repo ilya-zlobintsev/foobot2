@@ -130,6 +130,7 @@ impl ExecutionContext for DiscordExecutionContext<'_> {
             Some(guild_id) => {
                 let permissions = self
                     .cmd
+                    .platform_handler
                     .discord_api
                     .as_ref()
                     .unwrap()

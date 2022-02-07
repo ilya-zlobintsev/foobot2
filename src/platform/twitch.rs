@@ -31,6 +31,7 @@ pub struct Twitch {
 impl ChatPlatform for Twitch {
     async fn init(command_handler: CommandHandler) -> Result<Box<Self>, super::ChatPlatformError> {
         let twitch_api = command_handler
+            .platform_handler
             .twitch_api
             .as_ref()
             .expect("Twitch API is not initialized");
@@ -62,6 +63,7 @@ impl ChatPlatform for Twitch {
     async fn run(self) {
         let twitch_api = self
             .command_handler
+            .platform_handler
             .twitch_api
             .as_ref()
             .expect("Twitch API is not initialized");
