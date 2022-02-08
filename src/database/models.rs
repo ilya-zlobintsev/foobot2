@@ -92,6 +92,7 @@ pub struct NewEventSubTrigger<'a> {
     pub event_type: &'a str,
     pub action: &'a str,
     pub creation_payload: &'a str,
+    pub id: &'a str,
 }
 
 #[derive(Queryable, Serialize)]
@@ -100,6 +101,7 @@ pub struct EventSubTrigger {
     pub event_type: String,
     pub action: String,
     pub creation_payload: String,
+    pub id: String,
 }
 
 #[derive(Queryable)]

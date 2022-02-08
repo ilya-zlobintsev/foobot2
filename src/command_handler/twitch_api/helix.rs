@@ -13,7 +13,7 @@ use twitch_irc::login::{LoginCredentials, StaticLoginCredentials};
 use crate::{command_handler::twitch_api::model::UsersResponse, web::response_ok};
 
 use super::{
-    eventsub::{EventSubSubscription, EventSubSubscriptionType},
+    eventsub::{EventSubSubscription, EventSubSubscriptionResponse, EventSubSubscriptionType},
     get_client_id,
     model::*,
 };
@@ -193,7 +193,7 @@ impl<C: LoginCredentials> HelixApi<C> {
     pub async fn add_eventsub_subscription(
         &self,
         subscription: EventSubSubscriptionType,
-    ) -> anyhow::Result<()> {
+    ) -> anyhow::Result<EventSubSubscriptionResponse> {
         let response = self
             .post("/eventsub/subscriptions")
             .await?
@@ -209,7 +209,7 @@ impl<C: LoginCredentials> HelixApi<C> {
 
         tracing::info!("Succesfully added EventSub subscription {:?}", subscription);
 
-        Ok(())
+        Ok(response.json().await?)
     }
 
     pub async fn get_eventsub_subscriptions(

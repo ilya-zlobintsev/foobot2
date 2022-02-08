@@ -1,0 +1,1 @@
+ALTER TABLE eventsub_triggers ADD id VARCHAR(255) PRIMARY KEY

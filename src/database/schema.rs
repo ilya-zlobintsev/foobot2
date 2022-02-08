@@ -24,11 +24,12 @@ table! {
 }
 
 table! {
-    eventsub_triggers (broadcaster_id, event_type) {
+    eventsub_triggers (id) {
         broadcaster_id -> Varchar,
         event_type -> Varchar,
         action -> Mediumtext,
         creation_payload -> Longtext,
+        id -> Varchar,
     }
 }
 

@@ -124,3 +124,8 @@ pub struct EventSubVerficationCallback {
     pub subscription: EventSubSubscription,
     pub challenge: String,
 }
+
+#[derive(Debug, Clone, Deserialize)]
+pub struct EventSubSubscriptionResponse {
+    pub data: Vec<EventSubSubscription>,
+}

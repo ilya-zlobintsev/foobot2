@@ -2,7 +2,6 @@ pub mod eventsub;
 pub mod helix;
 pub mod model;
 
-use futures::future::join_all;
 use std::collections::HashMap;
 use std::env;
 use std::sync::{Arc, RwLock};
@@ -65,28 +64,6 @@ impl<C: LoginCredentials + Clone> TwitchApi<C> {
         };
 
         twitch_api.start_cron().await;
-
-        let mut request_handles = Vec::new();
-
-        for subscription in twitch_api
-            .helix_api_app
-            .get_eventsub_subscriptions(None)
-            .await?
-        {
-            let twitch_api = twitch_api.clone();
-
-            request_handles.push(task::spawn(async move {
-                tracing::info!("Removing old subscription {}", subscription.sub_type);
-
-                twitch_api
-                    .helix_api_app
-                    .delete_eventsub_subscription(&subscription.id)
-                    .await
-                    .expect("Failed to remove EventSub subscription");
-            }));
-        }
-
-        join_all(request_handles).await;
 
         Ok(twitch_api)
     }

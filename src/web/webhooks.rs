@@ -38,32 +38,35 @@ pub async fn eventsub_callback(
         true => Ok({
             tracing::info!("Request signature verified");
 
+            tracing::info!(
+                "Handling EventSub notification {}",
+                properties.subscription_type
+            );
+
             match properties.message_type {
                 EventSubNotificationType::Notification => {
                     let notification: EventSubNotification =
                         serde_json::from_value(message).expect("Invalid message format");
 
-                    let event = notification
-                        .get_event()
-                        .expect("Failed to get notification event");
-
-                    tracing::info!("Received EventSub notification: {:?}", event);
-
                     let cmd = (*cmd).clone();
 
                     task::spawn(async move {
-                        let twitch_api = &cmd.platform_handler.twitch_api.as_ref().unwrap().helix_api;
-
-                        let broadcaster_id = event.get_broadcaster_id();
+                        let twitch_api =
+                            &cmd.platform_handler.twitch_api.as_ref().unwrap().helix_api;
 
                         if let Some(action) = cmd
                             .db
-                            .get_eventsub_redeem_action(
-                                &broadcaster_id,
-                                &properties.subscription_type,
-                            )
+                            .get_eventsub_redeem_action(&notification.subscription.id)
                             .expect("DB error")
                         {
+                            let event = notification
+                                .get_event()
+                                .expect("Failed to get notification event");
+
+                            tracing::info!("Received EventSub notification: {:?}", event);
+
+                            let broadcaster_id = event.get_broadcaster_id();
+
                             let (user_id, arguments) = match event {
                                 EventSubEventType::ChannelUpdate(_)
                                 | EventSubEventType::StreamOnline(_) => {

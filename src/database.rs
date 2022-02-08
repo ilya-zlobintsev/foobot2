@@ -525,14 +525,12 @@ impl Database {
 
     pub fn get_eventsub_redeem_action(
         &self,
-        broadcaster_id: &str,
-        event_type: &str,
+        id: &str,
     ) -> Result<Option<String>, diesel::result::Error> {
         let mut conn = self.conn_pool.get().unwrap();
 
         eventsub_triggers::table
-            .filter(eventsub_triggers::broadcaster_id.eq_all(broadcaster_id))
-            .filter(eventsub_triggers::event_type.eq_all(event_type))
+            .filter(eventsub_triggers::id.eq_all(id))
             .select(eventsub_triggers::action)
             .first(&mut conn)
             .optional()
@@ -683,16 +681,26 @@ impl Database {
         Ok(())
     }
 
-    pub fn delete_eventsub_trigger(
-        &self,
-        event_type: &str,
-        broadcaster_id: &str,
-    ) -> Result<(), DatabaseError> {
+    pub fn delete_eventsub_trigger(&self, id: &str) -> Result<(), DatabaseError> {
         let mut conn = self.conn_pool.get().unwrap();
 
         diesel::delete(eventsub_triggers::table)
-            .filter(eventsub_triggers::event_type.eq(event_type))
-            .filter(eventsub_triggers::broadcaster_id.eq(broadcaster_id))
+            .filter(eventsub_triggers::id.eq(id))
+            .execute(&mut conn)?;
+
+        Ok(())
+    }
+
+    pub fn update_eventsub_trigger_id(
+        &self,
+        old_id: &str,
+        new_id: &str,
+    ) -> Result<(), DatabaseError> {
+        let mut conn = self.conn_pool.get().unwrap();
+
+        diesel::update(eventsub_triggers::table)
+            .filter(eventsub_triggers::id.eq(old_id))
+            .set(eventsub_triggers::id.eq(new_id))
             .execute(&mut conn)?;
 
         Ok(())

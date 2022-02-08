@@ -60,16 +60,33 @@ impl CommandHandler {
     pub async fn init(db: Database) -> Self {
         let twitch_api = match TwitchApi::init_refreshing(db.clone()).await {
             Ok(api) => {
-                for trigger in db.get_eventsub_triggers().expect("DB Error") {
-                    let subscription_type = serde_json::from_str(&trigger.creation_payload)
-                        .expect("Deserialization error");
+                let active_triggers = api
+                    .helix_api_app
+                    .get_eventsub_subscriptions(None)
+                    .await
+                    .expect("Failed to get EventSub triggers");
 
-                    if let Err(e) = api
-                        .helix_api_app
-                        .add_eventsub_subscription(subscription_type)
-                        .await
+                for trigger in db.get_eventsub_triggers().expect("DB Error") {
+                    if !active_triggers
+                        .iter()
+                        .any(|active_trigger| active_trigger.id == trigger.id)
                     {
-                        tracing::error!("Failed to add EventSub subscription! {}", e);
+                        let subscription_type = serde_json::from_str(&trigger.creation_payload)
+                            .expect("Deserialization error");
+
+                        match api
+                            .helix_api_app
+                            .add_eventsub_subscription(subscription_type)
+                            .await
+                        {
+                            Ok(response) => {
+                                let new_id = &response.data.first().unwrap().id;
+
+                                db.update_eventsub_trigger_id(&trigger.id, &new_id)
+                                    .expect("DB error");
+                            }
+                            Err(e) => tracing::error!("Failed to add EventSub subscription! {}", e),
+                        }
                     }
                 }
 
@@ -521,15 +538,19 @@ impl CommandHandler {
                         return Err(anyhow!("Action not specified"));
                     }
 
-                    app_api
+                    let subscription_response = app_api
                         .add_eventsub_subscription(subscription.clone())
-                        .await?;
+                        .await
+                        .map_err(|e| anyhow!("Failed to create subscription: {}", e))?;
+
+                    let id = &subscription_response.data.first().unwrap().id;
 
                     self.db.add_eventsub_trigger(NewEventSubTrigger {
                         broadcaster_id: &broadcaster_id,
                         event_type: subscription.get_type(),
                         action: &action,
                         creation_payload: &serde_json::to_string(&subscription)?,
+                        id,
                     })?;
 
                     Ok("Trigger successfully added".to_string())
@@ -549,28 +570,13 @@ impl CommandHandler {
                                 .delete_eventsub_subscription(&subscription.id)
                                 .await?;
 
-                            self.db
-                                .delete_eventsub_trigger(&subscription.sub_type, &broadcaster_id)?;
+                            self.db.delete_eventsub_trigger(&subscription.id)?;
 
                             return Ok("Trigger succesfully removed".to_string());
                         }
                     }
 
                     return Err(anyhow!("Unable to find matching subscription"));
-                }
-                "show" | "check" => {
-                    let (subscription_type, _) = self
-                        .get_subscription(arguments, broadcaster_id.clone())
-                        .await?;
-
-                    if let Some(action) = self
-                        .db
-                        .get_eventsub_redeem_action(&broadcaster_id, subscription_type.get_type())?
-                    {
-                        Ok(action)
-                    } else {
-                        Ok("Specified subscription not found".to_string())
-                    }
                 }
                 "list" => {
                     let triggers = self
