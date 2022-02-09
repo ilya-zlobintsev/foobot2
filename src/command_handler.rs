@@ -721,9 +721,13 @@ impl CommandHandler {
                         }
                     }
                     "del" | "delete" | "remove" => {
-                        let command_name = arguments.next().ok_or_else(|| {
+                        let mut command_name = arguments.next().ok_or_else(|| {
                             CommandError::MissingArgument("command name".to_string())
                         })?;
+
+                        if let Some(stripped_name) = command_name.strip_prefix('!') {
+                            command_name = stripped_name;
+                        }
 
                         match self.db.delete_command_from_channel(
                             &execution_context.get_channel(),
@@ -734,9 +738,13 @@ impl CommandHandler {
                         }
                     }
                     "show" | "check" => {
-                        let command_name = arguments.next().ok_or_else(|| {
+                        let mut command_name = arguments.next().ok_or_else(|| {
                             CommandError::MissingArgument("command name".to_string())
                         })?;
+
+                        if let Some(stripped_name) = command_name.strip_prefix('!') {
+                            command_name = stripped_name;
+                        }
 
                         match self
                             .db
