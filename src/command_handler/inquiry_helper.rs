@@ -292,6 +292,43 @@ impl HelperDef for SpotifyHelper {
 }
 
 #[derive(Clone)]
+pub struct SpotifyPlaylistHelper {
+    pub db: Database,
+}
+
+impl HelperDef for SpotifyPlaylistHelper {
+    fn call<'reg: 'rc, 'rc>(
+        &self,
+        h: &Helper<'reg, 'rc>,
+        _: &'reg Handlebars<'reg>,
+        ctx: &'rc Context,
+        _: &mut RenderContext<'reg, 'rc>,
+        out: &mut dyn Output,
+    ) -> HelperResult {
+        let spotify_api = get_spotify_api(self.db.clone(), ctx, h)?;
+
+        let runtime = tokio::runtime::Handle::current();
+
+        match runtime
+            .block_on(spotify_api.get_current_song())
+            .map_err(|e| RenderError::new(format!("Spotify API Error: {}", e)))?
+        {
+            Some(playback) => {
+                let response = match playback.context {
+                    Some(context) => context.external_urls.spotify,
+                    None => "not currently listening to a playlist".to_string(),
+                };
+
+                out.write(&response).unwrap();
+            }
+            None => out.write("No song is currently playing")?,
+        };
+
+        Ok(())
+    }
+}
+
+#[derive(Clone)]
 pub struct SpotifyLastHelper {
     pub db: Database,
 }
