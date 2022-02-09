@@ -689,9 +689,13 @@ impl CommandHandler {
                     CommandError::MissingArgument("must be either add or delete".to_string())
                 })? {
                     "add" | "create" => {
-                        let command_name = arguments.next().ok_or_else(|| {
+                        let mut command_name = arguments.next().ok_or_else(|| {
                             CommandError::MissingArgument("command name".to_string())
                         })?;
+
+                        if let Some(stripped_name) = command_name.strip_prefix('!') {
+                            command_name = stripped_name;
+                        }
 
                         let command_action = arguments.collect::<Vec<&str>>().join(" ");
 
