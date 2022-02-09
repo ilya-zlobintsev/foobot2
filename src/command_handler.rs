@@ -260,49 +260,29 @@ impl CommandHandler {
                         .await?,
                     Some(5),
                 ),
-                "cmd" | "command" | "commands" => (
+                "cmd" => (
                     self.edit_cmds(command, arguments, execution_context)
                         .await?,
                     Some(1),
                 ),
+                "command" | "commands" => (
+                    self.edit_cmds(command, vec![], execution_context).await?,
+                    Some(5),
+                ),
                 // Old commands for convenience
                 "addcmd" | "cmdadd" => (
-                    self.edit_cmds(
-                        "command",
-                        {
-                            let mut arguments = arguments;
-                            arguments.insert(0, "add");
-                            arguments
-                        },
-                        execution_context,
-                    )
-                    .await?,
+                    self.edit_cmds("command", vec!["add"], execution_context)
+                        .await?,
                     Some(1),
                 ),
                 "delcmd" | "cmddel" => (
-                    self.edit_cmds(
-                        "command",
-                        {
-                            let mut arguments = arguments;
-                            arguments.insert(0, "remove");
-                            arguments
-                        },
-                        execution_context,
-                    )
-                    .await?,
+                    self.edit_cmds("command", vec!["remove"], execution_context)
+                        .await?,
                     Some(1),
                 ),
                 "showcmd" | "checkcmd" => (
-                    self.edit_cmds(
-                        "command",
-                        {
-                            let mut arguments = arguments;
-                            arguments.insert(0, "show");
-                            arguments
-                        },
-                        execution_context,
-                    )
-                    .await?,
+                    self.edit_cmds("command", vec!["show"], execution_context)
+                        .await?,
                     Some(1),
                 ),
                 "debug" | "check" => {
