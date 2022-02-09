@@ -126,7 +126,7 @@ impl CommandHandler {
         );
         template_registry.register_helper(
             "spotify_playlist",
-            Box::new(SpotifyLastHelper { db: db.clone() }),
+            Box::new(SpotifyPlaylistHelper { db: db.clone() }),
         );
         template_registry.register_helper("choose", Box::new(random_helper));
         template_registry.register_helper("sleep", Box::new(sleep_helper));
