@@ -659,6 +659,31 @@ pub fn concat_helper(
     }
 }
 
+pub fn trim_matches_helper(
+    h: &Helper,
+    _: &Handlebars,
+    _: &Context,
+    _: &mut RenderContext,
+    out: &mut dyn Output,
+) -> HelperResult {
+    let v = h
+        .param(0)
+        .map(|v| v.value().render())
+        .ok_or(RenderError::new("param not found"))?;
+
+    tracing::info!("Before trimming: {}", v);
+
+    let x: &[_] = &vec!['@', ','];
+
+    let v = v.trim_matches(x);
+
+    tracing::info!("After trimming: {}", v);
+
+    out.write(v)?;
+
+    Ok(())
+}
+
 pub struct SetTempData {
     pub data: Arc<DashMap<String, String>>,
 }
