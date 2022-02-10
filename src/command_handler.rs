@@ -229,7 +229,7 @@ impl CommandHandler {
     async fn run_command<C: ExecutionContext + std::marker::Sync>(
         &self,
         command: &str,
-        arguments: Vec<&str>,
+        mut arguments: Vec<&str>,
         execution_context: C,
     ) -> Result<Option<String>, CommandError> {
         tracing::info!("Processing command {} with {:?}", command, arguments);
@@ -272,18 +272,39 @@ impl CommandHandler {
                 ),
                 // Old commands for convenience
                 "addcmd" | "cmdadd" => (
-                    self.edit_cmds("command", vec!["add"], execution_context)
-                        .await?,
+                    self.edit_cmds(
+                        "command",
+                        {
+                            arguments.insert(0, "add");
+                            arguments
+                        },
+                        execution_context,
+                    )
+                    .await?,
                     Some(1),
                 ),
                 "delcmd" | "cmddel" => (
-                    self.edit_cmds("command", vec!["remove"], execution_context)
-                        .await?,
+                    self.edit_cmds(
+                        "command",
+                        {
+                            arguments.insert(0, "remove");
+                            arguments
+                        },
+                        execution_context,
+                    )
+                    .await?,
                     Some(1),
                 ),
                 "showcmd" | "checkcmd" => (
-                    self.edit_cmds("command", vec!["show"], execution_context)
-                        .await?,
+                    self.edit_cmds(
+                        "command",
+                        {
+                            arguments.insert(0, "show");
+                            arguments
+                        },
+                        execution_context,
+                    )
+                    .await?,
                     Some(1),
                 ),
                 "debug" | "check" => {
