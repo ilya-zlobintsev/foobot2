@@ -779,8 +779,8 @@ impl HelperDef for GetTempData {
                 let keys = self
                     .data
                     .iter()
-                    .map(|e| e.key().as_str())
-                    .collect::<Vec<&str>>();
+                    .map(|e| e.key().as_str().to_string())
+                    .collect::<Vec<String>>();
 
                 if keys.is_empty() {
                     return Err(RenderError::new("No data"));
