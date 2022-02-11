@@ -4,9 +4,10 @@ use std::time::Duration;
 
 use dashmap::DashMap;
 use handlebars::{
-    Context, Handlebars, Helper, HelperDef, HelperResult, JsonRender, Output, RenderContext,
-    RenderError, ScopedJson,
+    Context, Handlebars, Helper, HelperDef, HelperResult, JsonRender, Output,
+    RenderContext, RenderError, ScopedJson, Decorator,
 };
+use serde_json::Value as Json;
 use rand::{thread_rng, Rng};
 use reqwest::Client;
 use serde::{Deserialize, Serialize};
@@ -831,5 +832,30 @@ impl HelperDef for SayHelper {
         });
 
         Ok(())
+    }
+}
+
+pub fn set_decorator(
+    d: &Decorator,
+    _: &Handlebars,
+    ctx: &Context,
+    rc: &mut RenderContext,
+) -> Result<(), RenderError> {
+    // get the input of decorator
+    let data_to_set = d.hash();
+    // retrieve the json value in current context
+    let ctx_data = ctx.data();
+
+    if let Json::Object(m) = ctx_data {
+        let mut new_ctx_data = m.clone();
+
+        for (k, v) in data_to_set {
+            new_ctx_data.insert(k.to_string(), v.value().clone());
+        }
+
+        rc.set_context(Context::wraps(new_ctx_data)?);
+        Ok(())
+    } else {
+        Err(RenderError::new("Cannot extend non-object data"))
     }
 }
