@@ -4,13 +4,13 @@ use std::time::Duration;
 
 use dashmap::DashMap;
 use handlebars::{
-    Context, Handlebars, Helper, HelperDef, HelperResult, JsonRender, Output,
-    RenderContext, RenderError, ScopedJson, Decorator,
+    Context, Decorator, Handlebars, Helper, HelperDef, HelperResult, JsonRender, Output,
+    RenderContext, RenderError, ScopedJson,
 };
-use serde_json::Value as Json;
 use rand::{thread_rng, Rng};
 use reqwest::Client;
 use serde::{Deserialize, Serialize};
+use serde_json::Value as Json;
 use tokio::runtime::Handle;
 use tokio::time::sleep;
 use twitch_irc::login::RefreshingLoginCredentials;
@@ -94,7 +94,7 @@ impl HelperDef for TwitchUserHelper {
 }
 
 pub fn args_helper(
-    _: &Helper,
+    h: &Helper,
     _: &Handlebars,
     ctx: &Context,
     _: &mut RenderContext,
@@ -103,7 +103,24 @@ pub fn args_helper(
     let context = serde_json::from_value::<InquiryContext>(ctx.data().clone())
         .expect("Failed to get command context");
 
-    out.write(&context.arguments.join(" "))?;
+    let output = match h.param(0) {
+        Some(param) => {
+            let param = param.value().render();
+
+            let index: usize = param
+                .parse()
+                .map_err(|_| RenderError::new("argument index must be an integer"))?;
+
+            context
+                .arguments
+                .get(index)
+                .ok_or_else(|| RenderError::new(format!("no argument at index {}", index)))?
+                .clone()
+        }
+        None => context.arguments.join(" "),
+    };
+
+    out.write(&output)?;
 
     Ok(())
 }
