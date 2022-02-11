@@ -1,7 +1,6 @@
 /target
 .env
 deploy.sh
-Cargo.lock
 
 
 .vscode/*
