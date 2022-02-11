@@ -12,7 +12,7 @@ WORKDIR /build
 
 # Avoid having to install/build all dependencies by copying
 # the Cargo files and making a dummy src/main.rs
-COPY Cargo.toml .
+COPY Cargo.lock Cargo.toml ./
 RUN mkdir src
 RUN echo "fn main() {}" > src/main.rs
 RUN cargo build --release
