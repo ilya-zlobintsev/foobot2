@@ -8,11 +8,10 @@ mod database;
 mod platform;
 mod web;
 
-use dotenv::dotenv;
-use std::env;
-
 use command_handler::{get_admin_channel, CommandHandler};
 use database::Database;
+use dotenv::dotenv;
+use std::env;
 
 use platform::discord::Discord;
 use platform::irc::Irc;

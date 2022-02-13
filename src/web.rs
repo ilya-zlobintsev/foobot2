@@ -7,6 +7,7 @@ mod template_context;
 mod webhooks;
 use anyhow::anyhow;
 use dashmap::DashMap;
+use rocket_prometheus::PrometheusMetrics;
 use tokio::task;
 
 use std::env;
@@ -38,12 +39,27 @@ async fn index(cmd: &State<CommandHandler>, session: Option<WebSession>) -> Html
 }
 
 pub async fn run(command_handler: CommandHandler) {
+    let prometheus = PrometheusMetrics::new();
+
+    prometheus
+        .registry()
+        .register(Box::new(crate::command_handler::COMMAND_COUNTER.clone()))
+        .unwrap();
+
+    prometheus
+        .registry()
+        .register(Box::new(
+            crate::command_handler::COMMAND_PROCESSING_HISTOGRAM.clone(),
+        ))
+        .unwrap();
+
     let state_storage: DashMap<String, String> = DashMap::new();
 
     let rocket = rocket::build()
         .attach(Template::custom(|engines| {
             engines.handlebars.set_strict_mode(true);
         }))
+        .attach(prometheus.clone())
         .mount("/static", FileServer::from("static"))
         .mount("/", routes![index])
         .mount(
@@ -76,6 +92,7 @@ pub async fn run(command_handler: CommandHandler) {
         .mount("/profile", routes![profile::profile, profile::join_twitch])
         .mount("/api", routes![api::set_lastfm_name])
         .mount("/hooks", routes![webhooks::eventsub_callback])
+        .mount("/metrics", prometheus)
         .register("/", catchers![errors::not_found, errors::not_authorized])
         .register("/channels", catchers![channel::not_found])
         .manage(Client::new())

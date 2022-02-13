@@ -182,6 +182,17 @@ impl ChannelIdentifier {
     }
 }
 
+impl Display for ChannelIdentifier {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(
+            f,
+            "{}-{}",
+            self.get_platform_name().unwrap_or("generic"),
+            self.get_channel().unwrap_or("anonymous")
+        )
+    }
+}
+
 impl FromStr for ChannelIdentifier {
     type Err = anyhow::Error;
 

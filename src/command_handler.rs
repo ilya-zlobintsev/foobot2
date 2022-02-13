@@ -19,6 +19,8 @@ use crate::{get_version, web};
 use anyhow::{anyhow, Context};
 use core::fmt;
 use dashmap::DashMap;
+use once_cell::sync::Lazy;
+use prometheus::{HistogramOpts, HistogramVec, IntCounterVec, Opts};
 use reqwest::Client;
 use std::env::{self, VarError};
 use std::num::ParseIntError;
@@ -46,6 +48,25 @@ use self::twitch_api::eventsub::conditions::*;
 use self::twitch_api::eventsub::EventSubSubscriptionType;
 use self::twitch_api::helix::HelixApi;
 use self::twitch_api::{get_client_id, get_client_secret};
+
+pub static COMMAND_COUNTER: Lazy<IntCounterVec> = Lazy::new(|| {
+    IntCounterVec::new(
+        Opts::new("command_counter", "Command call counter"),
+        &["command", "channel", "success"],
+    )
+    .expect("Failed to create counter")
+});
+
+pub static COMMAND_PROCESSING_HISTOGRAM: Lazy<HistogramVec> = Lazy::new(|| {
+    HistogramVec::new(
+        HistogramOpts::new(
+            "command_processing_duration",
+            "The time it took to process a command",
+        ),
+        &["command"],
+    )
+    .expect("Failed to create histogram")
+});
 
 #[derive(Clone, Debug)]
 pub struct CommandHandler {
@@ -220,7 +241,20 @@ impl CommandHandler {
 
             let arguments: Vec<&str> = split.collect();
 
-            match self.run_command(&command, arguments, context).await {
+            let timer = COMMAND_PROCESSING_HISTOGRAM
+                .with_label_values(&[&command])
+                .start_timer();
+            let channel = context.get_channel().to_string();
+
+            let command_result = self.run_command(&command, arguments, context).await;
+
+            timer.observe_duration();
+
+            COMMAND_COUNTER
+                .with_label_values(&[&command, &channel, &command_result.is_ok().to_string()])
+                .inc();
+
+            match command_result {
                 Ok(result) => result,
                 Err(e) => Some(e.to_string()),
             }
@@ -250,7 +284,7 @@ impl CommandHandler {
                 "ping" => (Some(self.ping().await), Some(5)),
                 "whoami" | "id" => (
                     Some(format!(
-                        "{:?}, identified as {}, channel: {:?}, permissions: {:?}",
+                        "{:?}, identified as {}, channel: {}, permissions: {:?}",
                         user,
                         user_identifier,
                         execution_context.get_channel(),
