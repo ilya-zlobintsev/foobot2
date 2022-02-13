@@ -250,13 +250,23 @@ impl CommandHandler {
 
             timer.observe_duration();
 
-            COMMAND_COUNTER
-                .with_label_values(&[&command, &channel, &command_result.is_ok().to_string()])
-                .inc();
-
             match command_result {
-                Ok(result) => result,
-                Err(e) => Some(e.to_string()),
+                Ok(result) => {
+                    if result.is_some() {
+                        COMMAND_COUNTER
+                            .with_label_values(&[&command, &channel, "true"])
+                            .inc();
+                    }
+
+                    result
+                }
+                Err(e) => {
+                    COMMAND_COUNTER
+                        .with_label_values(&[&command, &channel, "false"])
+                        .inc();
+
+                    Some(e.to_string())
+                }
             }
         }
     }
