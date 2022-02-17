@@ -186,6 +186,10 @@ impl CommandHandler {
                     twitch_api: twitch_api.clone(),
                 }),
             );
+            template_registry.register_helper(
+                "twitch_commercial",
+                Box::new(CommercialHelper { db: db.clone() }),
+            );
         }
 
         template_registry.register_helper("get", Box::new(HttpHelper::init()));
@@ -1009,6 +1013,7 @@ impl From<VarError> for CommandError {
         Self::ConfigurationError(e)
     }
 }
+
 impl From<ParseIntError> for CommandError {
     fn from(_: ParseIntError) -> Self {
         Self::InvalidArgument("expected a number".to_string())

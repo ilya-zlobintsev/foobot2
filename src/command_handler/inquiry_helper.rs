@@ -13,7 +13,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::Value as Json;
 use tokio::runtime::Handle;
 use tokio::time::sleep;
-use twitch_irc::login::RefreshingLoginCredentials;
+use twitch_irc::login::{LoginCredentials, RefreshingLoginCredentials};
 
 use crate::database::{models::User, Database};
 use crate::platform::{ChannelIdentifier, UserIdentifier};
@@ -22,7 +22,8 @@ use super::finnhub_api::FinnhubApi;
 use super::lastfm_api::LastFMApi;
 use super::lingva_api::LingvaApi;
 use super::platform_handler::PlatformHandler;
-use super::twitch_api::TwitchApi;
+use super::twitch_api::helix::HelixApi;
+use super::twitch_api::{get_client_id, get_client_secret, TwitchApi};
 use super::{owm_api::OwmApi, spotify_api::SpotifyApi};
 
 #[derive(Serialize, Deserialize)]
@@ -816,6 +817,7 @@ impl HelperDef for GetTempData {
 pub struct SayHelper {
     pub platform_handler: PlatformHandler,
 }
+
 impl HelperDef for SayHelper {
     fn call<'reg: 'rc, 'rc>(
         &self,
@@ -874,5 +876,65 @@ pub fn set_decorator(
         Ok(())
     } else {
         Err(RenderError::new("Cannot extend non-object data"))
+    }
+}
+
+pub struct CommercialHelper {
+    pub db: Database,
+}
+
+impl HelperDef for CommercialHelper {
+    fn call<'reg: 'rc, 'rc>(
+        &self,
+        h: &Helper,
+        _: &Handlebars,
+        ctx: &Context,
+        _: &mut RenderContext,
+        _: &mut dyn Output,
+    ) -> HelperResult {
+        let duration = h
+            .param(0)
+            .map(|v| v.value().render())
+            .ok_or(RenderError::new("commercial duration not specified"))?;
+
+        let length: i32 = duration
+            .parse()
+            .map_err(|_| RenderError::new("duration is not an integer"))?;
+
+        let context = serde_json::from_value::<InquiryContext>(ctx.data().clone())
+            .expect("Failed to get command context");
+
+        let broadcaster_id = match context.channel {
+            ChannelIdentifier::TwitchChannelID(id) => id,
+            _ => {
+                return Err(RenderError::new(
+                    "commercial cannot be used outside of Twitch!",
+                ));
+            }
+        };
+
+        let runtime = tokio::runtime::Handle::current();
+
+        let credentials = self.db.make_twitch_credentials(broadcaster_id);
+        let refreshing_credentials = RefreshingLoginCredentials::init(
+            get_client_id().unwrap(),
+            get_client_secret().unwrap(),
+            credentials,
+        );
+
+        runtime
+            .block_on(refreshing_credentials.get_credentials())
+            .map_err(|_| RenderError::new("streamer is not authorized"))?;
+
+        let helix_api = runtime.block_on(HelixApi::with_credentials(refreshing_credentials));
+
+        runtime
+            .block_on(helix_api.start_commercial(length))
+            .map_err(|e| {
+                tracing::warn!("{:?}", e);
+                RenderError::new("Failed to run commercial")
+            })?;
+
+        Ok(())
     }
 }

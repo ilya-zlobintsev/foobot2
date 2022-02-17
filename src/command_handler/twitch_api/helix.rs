@@ -6,7 +6,7 @@ use std::{
 use anyhow::{anyhow, Context};
 use http::{HeaderMap, Method};
 use reqwest::{Client, RequestBuilder};
-use serde_json::Value;
+use serde_json::{json, Value};
 use tokio::task;
 use twitch_irc::login::{LoginCredentials, StaticLoginCredentials};
 
@@ -240,6 +240,40 @@ impl<C: LoginCredentials> HelixApi<C> {
                 .send()
                 .await?,
         )
+    }
+
+    pub async fn start_commercial(&self, length: i32) -> anyhow::Result<StartCommercialInfo> {
+        if (length < 30) || (length > 180) || (length % 30 != 0) {
+            return Err(anyhow!(
+                "invalid commercial length! Valid options are 30, 60, 90, 120, 150, 180."
+            ));
+        }
+
+        let broadcaster_id = self.get_self_user().await?.id;
+
+        let payload = json!({
+            "broadcaster_id": broadcaster_id,
+            "length": length
+        });
+
+        let response = self
+            .post("/channels/commercial")
+            .await?
+            .json(&payload)
+            .send()
+            .await?;
+
+        response_ok(&response)?;
+
+        let mut data = response
+            .json::<GenericHelixResponse<StartCommercialInfo>>()
+            .await?;
+
+        let info = data.data.remove(0);
+
+        assert_eq!(info.length, length);
+
+        Ok(info)
     }
 }
 

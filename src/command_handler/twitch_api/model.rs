@@ -115,3 +115,15 @@ pub struct DefaultImage {
     pub url_2x: String,
     pub url_4x: String,
 }
+
+#[derive(Deserialize, Clone)]
+pub struct GenericHelixResponse<T> {
+    pub data: Vec<T>,
+}
+
+#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct StartCommercialInfo {
+    pub length: i32,
+    pub message: String,
+    pub retry_after: i32,
+}
