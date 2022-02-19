@@ -614,8 +614,15 @@ impl HelperDef for HttpHelper {
             Ok(response) => {
                 if response.status().is_success() {
                     match response.headers().get(http::header::CONTENT_TYPE) {
-                        Some(content_type) => match content_type.to_str().unwrap() {
-                            "text/plain" | "application/json" => {
+                        Some(content_type) => {
+                            let content_type = content_type.to_str().unwrap();
+
+                            const ALLOWED_CONTENT_TYPES: &[&str] = &["text/plain", "application/json"];
+
+                            if ALLOWED_CONTENT_TYPES
+                                .iter()
+                                .any(|t| content_type.starts_with(t))
+                            {
                                 let text = rt
                                     .block_on(response.text())
                                     .unwrap_or_else(|_| "<empty text>".to_owned());
@@ -623,9 +630,10 @@ impl HelperDef for HttpHelper {
                                 out.write(&text)?;
 
                                 Ok(())
+                            } else {
+                                Err(RenderError::new("Disallowed content type!"))
                             }
-                            _ => Err(RenderError::new("Disallowed content type!")),
-                        },
+                        }
                         None => Err(RenderError::new("server did not return content type!")),
                     }
                 } else {
