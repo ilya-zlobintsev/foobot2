@@ -57,3 +57,5 @@ irc = "0.15"
 prometheus = { version = "0.13", features = ["process"] }
 rocket_prometheus = "0.10.0-rc.1"
 once_cell = "1.9"
+
+rhai = { version = "1.5", features = ["sync", "serde"] }
