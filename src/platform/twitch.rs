@@ -309,6 +309,7 @@ impl Twitch {
                             if response.ends_with(magic_char) {
                                 response.remove(response.len() - 1);
                             } else {
+                                response.push(' ');
                                 response.push(magic_char);
                             }
                         }
