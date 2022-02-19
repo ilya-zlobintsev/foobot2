@@ -613,8 +613,8 @@ impl HelperDef for HttpHelper {
             Ok(response) => {
                 if response.status().is_success() {
                     match response.headers().get(http::header::CONTENT_TYPE) {
-                        Some(content_type) => {
-                            if content_type.to_str().unwrap().starts_with("text/plain") {
+                        Some(content_type) => match content_type.to_str().unwrap() {
+                            "text/plain" | "application/json" => {
                                 let text = rt
                                     .block_on(response.text())
                                     .unwrap_or_else(|_| "<empty text>".to_owned());
@@ -622,10 +622,9 @@ impl HelperDef for HttpHelper {
                                 out.write(&text)?;
 
                                 Ok(())
-                            } else {
-                                Err(RenderError::new("content type is not text/plain!"))
                             }
-                        }
+                            _ => Err(RenderError::new("Disallowed content type!")),
+                        },
                         None => Err(RenderError::new("server did not return content type!")),
                     }
                 } else {
@@ -936,5 +935,31 @@ impl HelperDef for CommercialHelper {
             })?;
 
         Ok(())
+    }
+}
+
+pub struct JsonHelper;
+
+impl HelperDef for JsonHelper {
+    fn call_inner<'reg: 'rc, 'rc>(
+        &self,
+        h: &Helper<'reg, 'rc>,
+        _: &'reg Handlebars<'reg>,
+        _: &'rc Context,
+        _: &mut RenderContext<'reg, 'rc>,
+    ) -> Result<handlebars::ScopedJson<'reg, 'rc>, RenderError> {
+        let json = h
+            .params()
+            .iter()
+            .map(|param| match param.relative_path() {
+                Some(path) => path.to_owned(),
+                None => param.render(),
+            })
+            .collect::<Vec<String>>()
+            .join("");
+
+        Ok(ScopedJson::Derived(serde_json::from_str(&json).map_err(
+            |e| RenderError::new(format!("Failed to parse json: {}", e)),
+        )?))
     }
 }
