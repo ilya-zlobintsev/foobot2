@@ -193,7 +193,7 @@ impl CommandHandler {
         }
 
         template_registry.register_helper("get", Box::new(HttpHelper::init()));
-        
+
         template_registry.register_helper("json", Box::new(JsonHelper));
 
         template_registry.register_helper("song", Box::new(inquiry_helper::song_helper));

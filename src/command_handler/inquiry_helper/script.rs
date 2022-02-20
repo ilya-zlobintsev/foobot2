@@ -1,5 +1,6 @@
-
-use handlebars::{HelperDef, Helper, Handlebars, Context, RenderContext, Output, HelperResult, RenderError};
+use handlebars::{
+    Context, Handlebars, Helper, HelperDef, HelperResult, Output, RenderContext, RenderError,
+};
 use reqwest::Client;
 use rhai::{Dynamic, Engine, EvalAltResult};
 
@@ -14,6 +15,7 @@ impl Default for RhaiHelper {
         };
 
         helper.engine.register_result_fn("get", get);
+        helper.engine.register_result_fn("get_json", get_json);
 
         helper
     }
@@ -30,6 +32,27 @@ fn get(url: &str) -> Result<String, Box<EvalAltResult>> {
                 let text = runtime.block_on(response.text()).unwrap();
 
                 Ok(text)
+            } else {
+                Err(format!("Response status {}", response.status()).into())
+            }
+        }
+        Err(e) => Err(e.to_string().into()),
+    }
+}
+
+fn get_json(url: &str) -> Result<Dynamic, Box<EvalAltResult>> {
+    let client = Client::new();
+
+    let runtime = tokio::runtime::Handle::current();
+
+    match runtime.block_on(client.get(url).send()) {
+        Ok(response) => {
+            if response.status().is_success() {
+                let json = runtime
+                    .block_on(response.json())
+                    .map_err(|e| EvalAltResult::from(&format!("deserialization error: {}", e)))?;
+
+                Ok(json)
             } else {
                 Err(format!("Response status {}", response.status()).into())
             }
