@@ -218,7 +218,7 @@ impl CommandHandler {
 
         template_registry.register_decorator("set", Box::new(set_decorator));
 
-        template_registry.register_helper("rhai", Box::new(RhaiHelper::default()));
+        template_registry.register_helper("rhai", Box::new(script::RhaiHelper::default()));
 
         template_registry.set_strict_mode(true);
 
