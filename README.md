@@ -31,7 +31,6 @@ You need to create a `.env` file that looks like this:
 ```
 BASE_URL=http://localhost:8000
 DATABASE_URL=mysql://db_username:db_password@127.0.0.1/db_name
-#TWITCH_LOGIN_NAME=your_bot_login_name
 #TWITCH_CLIENT_ID=twitch_client_id
 #TWITCH_CLIENT_SECRET=twitch_client_secret
 #DISCORD_TOKEN=discord_token_here
