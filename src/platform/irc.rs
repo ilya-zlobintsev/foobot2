@@ -73,7 +73,7 @@ impl ChatPlatform for Irc {
 
         let client = Client::from_config(config)
             .await
-            .expect("Failed to load IRC config");
+            .map_err(|_| ChatPlatformError::MissingAuthentication)?;
 
         Ok(Box::new(Self {
             command_prefix: Arc::new(command_prefix),
