@@ -34,24 +34,24 @@ async fn main() {
     match &command_handler.platform_handler.twitch_api {
         Some(_) => match Twitch::init(command_handler.clone()).await {
             Ok(twitch) => twitch.run().await,
-            Err(e) => tracing::warn!("Error loading Twitch: {:?}", e),
+            Err(e) => tracing::warn!("Platform {:?}", e),
         },
         None => {
-            tracing::info!("Twitch API not initialized! Not connecting to chat.");
+            tracing::info!("Twitch is not initialized! Not connecting to chat.");
         }
     }
 
     match Discord::init(command_handler.clone()).await {
         Ok(discord) => discord.run().await,
         Err(e) => {
-            tracing::error!("Error loading Discord: {:?}", e);
+            tracing::warn!("Error loading Discord: {:?}", e);
         }
     };
 
     match Irc::init(command_handler.clone()).await {
         Ok(irc) => irc.run().await,
         Err(e) => {
-            tracing::error!("Error loading IRC: {:?}", e);
+            tracing::warn!("Error loading IRC: {:?}", e);
         }
     }
 
