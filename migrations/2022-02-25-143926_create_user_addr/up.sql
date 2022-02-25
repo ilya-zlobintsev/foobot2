@@ -1,0 +1,1 @@
+ALTER TABLE users ADD local_addr TEXT UNIQUE

@@ -240,7 +240,7 @@ impl CommandHandler {
     where
         C: ExecutionContext + Sync,
     {
-        if message_text.is_empty() {
+        if message_text.trim().is_empty() {
             Some("❗".to_string())
         } else {
             let mut split = message_text.split_whitespace();
@@ -882,6 +882,7 @@ impl CommandHandler {
             }
             ChannelIdentifier::IrcChannel(_) => Ok(Permissions::Default), // TODO
             ChannelIdentifier::Anonymous => Ok(Permissions::Default),
+            ChannelIdentifier::LocalAddress(_) => Ok(Permissions::ChannelOwner), // on the local platform, each ip address is its own channel
         }
     }
 
@@ -956,6 +957,7 @@ impl CommandHandler {
             }
             ChannelIdentifier::DiscordGuildID(_) => Ok(()), // Discord guilds don't need to be joined client side and get added to the DB on demand
             ChannelIdentifier::IrcChannel(_) => Err(anyhow!("Not implemented yet")),
+            ChannelIdentifier::LocalAddress(_) => Err(anyhow!("This is not possible")),
             ChannelIdentifier::Anonymous => Err(anyhow!("Invalid channel specified")),
         }
     }
@@ -1062,7 +1064,7 @@ async fn start_supinic_heartbeat() {
                         tracing::info!("Supinic API error: {:?}", response.text().await);
                     }
                 }
-                Err(e) => tracing::warn!("Failed to ping Supinic API! {:?}", e),
+                Err(e) => tracing::warn!("Failed to ping Supinic API! {}", e),
             }
 
             tokio::time::sleep(Duration::from_secs(3600)).await;

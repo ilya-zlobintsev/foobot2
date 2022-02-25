@@ -388,6 +388,9 @@ impl Database {
                         query.filter(users::discord_id.eq(Some(user_id)))
                     }
                     UserIdentifier::IrcName(name) => query.filter(users::irc_name.eq(Some(name))),
+                    UserIdentifier::IpAddr(addr) => {
+                        query.filter(users::local_addr.eq(Some(addr.to_string())))
+                    }
                 };
 
                 Ok(query.first::<User>(&mut conn).optional()?.map(|user| {
@@ -437,16 +440,25 @@ impl Database {
                         twitch_id: Some(user_id),
                         discord_id: None,
                         irc_name: None,
+                        local_addr: None,
                     },
                     UserIdentifier::DiscordID(user_id) => NewUser {
                         twitch_id: None,
                         discord_id: Some(user_id),
                         irc_name: None,
+                        local_addr: None,
                     },
                     UserIdentifier::IrcName(name) => NewUser {
                         twitch_id: None,
                         discord_id: None,
                         irc_name: Some(name),
+                        local_addr: None,
+                    },
+                    UserIdentifier::IpAddr(addr) => NewUser {
+                        twitch_id: None,
+                        discord_id: None,
+                        irc_name: None,
+                        local_addr: Some(addr.to_string()),
                     },
                 };
 

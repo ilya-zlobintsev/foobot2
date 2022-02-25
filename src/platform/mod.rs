@@ -1,5 +1,6 @@
 pub mod discord;
 pub mod irc;
+pub mod local;
 pub mod twitch;
 
 use crate::command_handler::CommandHandler;
@@ -12,6 +13,7 @@ use anyhow::anyhow;
 use std::cmp::Ordering;
 use std::env::{self, VarError};
 use std::fmt::{self, Display};
+use std::net::IpAddr;
 use std::str::FromStr;
 
 #[async_trait]
@@ -87,6 +89,8 @@ impl ExecutionContext for ServerExecutionContext {
 pub enum ChatPlatformError {
     ReqwestError(reqwest::Error),
     MissingAuthentication,
+    MissingEnv(String),
+    ServiceError(String),
 }
 
 impl From<reqwest::Error> for ChatPlatformError {
@@ -106,6 +110,7 @@ pub enum UserIdentifier {
     TwitchID(String),
     DiscordID(String),
     IrcName(String),
+    IpAddr(IpAddr),
 }
 
 impl fmt::Display for UserIdentifier {
@@ -114,6 +119,7 @@ impl fmt::Display for UserIdentifier {
             UserIdentifier::TwitchID(id) => f.write_str(&format!("twitch:{}", id)),
             UserIdentifier::DiscordID(id) => f.write_str(&format!("discord:{}", id)),
             UserIdentifier::IrcName(name) => f.write_str(&format!("irc:{}", name)),
+            UserIdentifier::IpAddr(addr) => f.write_str(&format!("local:{}", addr.to_string())),
         }
     }
 }
@@ -151,6 +157,7 @@ pub enum ChannelIdentifier {
     TwitchChannelID(String),
     DiscordGuildID(String),
     IrcChannel(String),
+    LocalAddress(String),
     Anonymous, // Used for DMs and such
 }
 
@@ -168,6 +175,7 @@ impl ChannelIdentifier {
             ChannelIdentifier::TwitchChannelID(_) => Some("twitch"),
             ChannelIdentifier::DiscordGuildID(_) => Some("discord_guild"),
             ChannelIdentifier::IrcChannel(_) => Some("irc"),
+            ChannelIdentifier::LocalAddress(_) => Some("local"),
             ChannelIdentifier::Anonymous => None,
         }
     }
@@ -177,6 +185,7 @@ impl ChannelIdentifier {
             ChannelIdentifier::TwitchChannelID(id) => Some(id),
             ChannelIdentifier::DiscordGuildID(id) => Some(id),
             ChannelIdentifier::IrcChannel(channel) => Some(channel),
+            ChannelIdentifier::LocalAddress(addr) => Some(addr),
             ChannelIdentifier::Anonymous => None,
         }
     }

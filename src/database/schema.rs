@@ -41,11 +41,20 @@ table! {
 }
 
 table! {
+    scripts (channel_id, name) {
+        name -> Varchar,
+        content -> Longtext,
+        channel_id -> Unsigned<Bigint>,
+    }
+}
+
+table! {
     users (id) {
         id -> Unsigned<Bigint>,
         twitch_id -> Nullable<Text>,
         discord_id -> Nullable<Text>,
         irc_name -> Nullable<Text>,
+        local_addr -> Nullable<Text>,
     }
 }
 
@@ -68,6 +77,7 @@ table! {
 
 joinable!(commands -> channels (channel_id));
 joinable!(prefixes -> channels (channel_id));
+joinable!(scripts -> channels (channel_id));
 joinable!(user_data -> users (user_id));
 joinable!(web_sessions -> users (user_id));
 
@@ -77,6 +87,7 @@ allow_tables_to_appear_in_same_query!(
     commands,
     eventsub_triggers,
     prefixes,
+    scripts,
     users,
     user_data,
     web_sessions,

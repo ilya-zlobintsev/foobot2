@@ -11,6 +11,7 @@ mod web;
 use command_handler::{get_admin_channel, CommandHandler};
 use database::Database;
 use dotenv::dotenv;
+use platform::local::Local;
 use std::env;
 
 use platform::discord::Discord;
@@ -53,6 +54,11 @@ async fn main() {
         Err(e) => {
             tracing::warn!("Error loading IRC: {:?}", e);
         }
+    }
+
+    match Local::init(command_handler.clone()).await {
+        Ok(local) => local.run().await,
+        Err(e) => tracing::warn!("Failed to initialize the local platform: {:?}", e),
     }
 
     if let Some(admin_channel) = get_admin_channel() {
