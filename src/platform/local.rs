@@ -37,7 +37,7 @@ impl ChatPlatform for Local {
     }
 
     async fn run(self) {
-        loop {
+        tokio::spawn(async move {
             match self.listener.accept().await {
                 Ok((stream, addr)) => {
                     let command_handler = self.command_handler.clone();
@@ -50,7 +50,7 @@ impl ChatPlatform for Local {
                 }
                 Err(e) => tracing::warn!("Failed to handle connection: {}", e),
             }
-        }
+        });
     }
 }
 
