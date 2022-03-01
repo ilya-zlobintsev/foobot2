@@ -73,6 +73,10 @@ impl ChatPlatform for Irc {
         let client = Client::from_config(config)
             .await
             .map_err(|_| ChatPlatformError::MissingAuthentication)?;
+        {
+            let mut platform_handler = command_handler.platform_handler.write().await;
+            platform_handler.irc_sender = Some(client.sender());
+        }
 
         Ok(Box::new(Self {
             command_prefix: Arc::new(command_prefix),

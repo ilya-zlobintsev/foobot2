@@ -30,19 +30,21 @@ pub struct Twitch {
 #[async_trait]
 impl ChatPlatform for Twitch {
     async fn init(command_handler: CommandHandler) -> Result<Box<Self>, super::ChatPlatformError> {
-        let twitch_api = command_handler
-            .platform_handler
-            .twitch_api
-            .as_ref()
-            .expect("Twitch API is not initialized");
+        let login = {
+            let platform_handler = command_handler.platform_handler.read().await;
+            let twitch_api = platform_handler
+                .twitch_api
+                .as_ref()
+                .expect("Twitch API is not initialized");
 
-        let login = twitch_api
-            .helix_api
-            .credentials
-            .get_credentials()
-            .await
-            .map_err(|_| super::ChatPlatformError::MissingAuthentication)?
-            .login;
+            twitch_api
+                .helix_api
+                .credentials
+                .get_credentials()
+                .await
+                .map_err(|_| super::ChatPlatformError::MissingAuthentication)?
+                .login
+        };
 
         let possible_prefixes = Arc::new([
             Self::get_prefix(),
@@ -61,9 +63,8 @@ impl ChatPlatform for Twitch {
     }
 
     async fn run(self) {
-        let twitch_api = self
-            .command_handler
-            .platform_handler
+        let platform_handler = self.command_handler.platform_handler.read().await;
+        let twitch_api = platform_handler
             .twitch_api
             .as_ref()
             .expect("Twitch API is not initialized");
@@ -106,6 +107,7 @@ impl ChatPlatform for Twitch {
                 tracing::warn!("Failed to fetch channels {:?}", e);
             }
         }
+        drop(platform_handler);
 
         tokio::spawn(async move {
             while let Some(message) = incoming_messages.recv().await {

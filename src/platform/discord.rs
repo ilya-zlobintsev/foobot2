@@ -124,9 +124,9 @@ impl ExecutionContext for DiscordExecutionContext<'_> {
 
         match self.msg.guild_id {
             Some(guild_id) => {
-                let permissions = self
-                    .cmd
-                    .platform_handler
+                let platform_handler = self.cmd.platform_handler.read().await;
+
+                let permissions = platform_handler
                     .discord_api
                     .as_ref()
                     .unwrap()

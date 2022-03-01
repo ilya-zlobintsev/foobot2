@@ -32,7 +32,7 @@ async fn main() {
 
     let command_handler = CommandHandler::init(db).await;
 
-    match &command_handler.platform_handler.twitch_api {
+    match &command_handler.platform_handler.read().await.twitch_api {
         Some(_) => match Twitch::init(command_handler.clone()).await {
             Ok(twitch) => twitch.run().await,
             Err(e) => tracing::warn!("Platform {:?}", e),
@@ -62,8 +62,8 @@ async fn main() {
     }
 
     if let Some(admin_channel) = get_admin_channel() {
-        if let Err(e) = command_handler
-            .platform_handler
+        let platform_handler = command_handler.platform_handler.read().await;
+        if let Err(e) = platform_handler
             .send_to_channel(
                 admin_channel,
                 format!("Foobot2 {} up and running", get_version()),

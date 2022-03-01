@@ -26,9 +26,10 @@ use std::collections::HashMap;
 use std::env::{self, VarError};
 use std::num::ParseIntError;
 use std::str::FromStr;
-use std::sync::{Arc, RwLock};
+use std::sync::Arc;
 use std::time::{Duration, Instant};
 use std::vec::IntoIter;
+use tokio::sync::RwLock;
 
 use handlebars::Handlebars;
 use inquiry_helper::*;
@@ -72,7 +73,7 @@ pub static COMMAND_PROCESSING_HISTOGRAM: Lazy<HistogramVec> = Lazy::new(|| {
 #[derive(Clone, Debug)]
 pub struct CommandHandler {
     pub db: Database,
-    pub platform_handler: PlatformHandler,
+    pub platform_handler: Arc<RwLock<PlatformHandler>>,
     startup_time: Arc<Instant>,
     template_registry: Arc<Handlebars<'static>>,
     cooldowns: Arc<RwLock<Vec<(u64, String)>>>, // User id and command
@@ -129,6 +130,7 @@ impl CommandHandler {
         let platform_handler = PlatformHandler {
             twitch_api,
             discord_api,
+            irc_sender: None,
         };
 
         let lingva_url = match env::var("LINGVA_INSTANCE_URL") {
@@ -246,7 +248,7 @@ impl CommandHandler {
 
         Self {
             db,
-            platform_handler,
+            platform_handler: Arc::new(RwLock::new(platform_handler)),
             startup_time: Arc::new(Instant::now()),
             template_registry: Arc::new(template_registry),
             cooldowns,
@@ -272,6 +274,7 @@ impl CommandHandler {
             let display_name = context.get_display_name().to_string();
 
             tokio::spawn(async move {
+                let platform_handler = platform_handler.read().await;
                 if let Err(e) = platform_handler
                     .send_to_channel(
                         mirror_channel,
@@ -352,7 +355,7 @@ impl CommandHandler {
         if !self
             .cooldowns
             .read()
-            .unwrap()
+            .await
             .contains(&(user.id, command.to_string()))
         {
             let result = match command {
@@ -523,12 +526,12 @@ impl CommandHandler {
         let cooldowns = self.cooldowns.clone();
         task::spawn(async move {
             {
-                let mut cooldowns = cooldowns.write().unwrap();
+                let mut cooldowns = cooldowns.write().await;
                 cooldowns.push((user_id, command.clone()));
             }
             tokio::time::sleep(Duration::from_secs(cooldown)).await;
             {
-                let mut cooldowns = cooldowns.write().unwrap();
+                let mut cooldowns = cooldowns.write().await;
                 tracing::debug!("{:?}", cooldowns);
                 cooldowns.retain(|(id, cmd)| id != &user_id && cmd != &command)
             }
@@ -638,12 +641,9 @@ impl CommandHandler {
 
         if let ChannelIdentifier::TwitchChannelID(broadcaster_id) = execution_context.get_channel()
         {
-            let app_api = &self
-                .platform_handler
-                .twitch_api
-                .as_ref()
-                .unwrap()
-                .helix_api_app;
+            let platform_handler = self.platform_handler.read().await;
+
+            let app_api = &platform_handler.twitch_api.as_ref().unwrap().helix_api_app;
 
             match action {
                 "add" | "create" => {
@@ -892,8 +892,9 @@ impl CommandHandler {
                     .twitch_id
                     .ok_or_else(|| anyhow!("Not registered on this platform"))?;
 
-                let twitch_api = self
-                    .platform_handler
+                let platform_handler = self.platform_handler.read().await;
+
+                let twitch_api = platform_handler
                     .twitch_api
                     .as_ref()
                     .ok_or_else(|| anyhow!("Twitch not configured"))?;
@@ -925,7 +926,8 @@ impl CommandHandler {
                     .parse()
                     .unwrap();
 
-                let discord_api = self.platform_handler.discord_api.as_ref().unwrap();
+                let platform_handler = self.platform_handler.read().await;
+                let discord_api = platform_handler.discord_api.as_ref().unwrap();
 
                 match discord_api
                     .get_permissions_in_guild(user_id, guild_id.parse().unwrap())
@@ -980,6 +982,8 @@ impl CommandHandler {
             .unwrap_or_else(|| "Event triggered with no action".to_string());
 
         self.platform_handler
+            .read()
+            .await
             .send_to_channel(context.get_channel(), response)
             .await
     }
@@ -987,8 +991,8 @@ impl CommandHandler {
     pub async fn join_channel(&self, channel: &ChannelIdentifier) -> anyhow::Result<()> {
         match channel {
             ChannelIdentifier::TwitchChannelID(id) => {
-                let twitch_api = self
-                    .platform_handler
+                let platform_handler = self.platform_handler.read().await;
+                let twitch_api = platform_handler
                     .twitch_api
                     .as_ref()
                     .context("Twitch not initialized")?;
