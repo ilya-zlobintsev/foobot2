@@ -273,18 +273,21 @@ impl CommandHandler {
             let channel = context.get_channel();
             let display_name = context.get_display_name().to_string();
 
-            tokio::spawn(async move {
-                let platform_handler = platform_handler.read().await;
-                if let Err(e) = platform_handler
-                    .send_to_channel(
-                        mirror_channel,
-                        format!("[{}] {}: {}", channel, display_name, message_text),
-                    )
-                    .await
-                {
-                    tracing::warn!("Failed to mirror message: {}", e);
-                }
-            });
+            // TODO
+            if display_name != "egsbot" {
+                tokio::spawn(async move {
+                    let platform_handler = platform_handler.read().await;
+                    if let Err(e) = platform_handler
+                        .send_to_channel(
+                            mirror_channel,
+                            format!("[{}] {}: {}", channel, display_name, message_text),
+                        )
+                        .await
+                    {
+                        tracing::warn!("Failed to mirror message: {}", e);
+                    }
+                });
+            }
         }
 
         for prefix in context.get_prefixes() {
