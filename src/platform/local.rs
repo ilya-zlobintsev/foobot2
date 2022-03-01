@@ -65,7 +65,7 @@ impl Local {
 
         while reader.read_line(&mut buf).await? != 0 {
             let context = LocalExecutionContext {
-                addr_str: addr.to_string(),
+                addr_str: addr.ip().to_string(),
                 addr,
             };
 
@@ -81,6 +81,7 @@ impl Local {
     }
 }
 
+#[derive(Clone)]
 struct LocalExecutionContext {
     pub addr: SocketAddr,
     pub addr_str: String,

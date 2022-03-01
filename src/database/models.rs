@@ -1,3 +1,7 @@
+use std::str::FromStr;
+
+use crate::platform::ChannelIdentifier;
+
 use super::schema::*;
 use serde::{Deserialize, Serialize};
 
@@ -36,6 +40,12 @@ pub struct Channel {
     pub id: u64,
     pub platform: String,
     pub channel: String,
+}
+
+impl Channel {
+    pub fn get_identifier(&self) -> ChannelIdentifier {
+        ChannelIdentifier::from_str(&format!("{}:{}", self.platform, self.channel)).unwrap()
+    }
 }
 
 #[derive(Insertable)]
@@ -110,4 +120,32 @@ pub struct EventSubTrigger {
 pub struct Prefix {
     pub channel_id: u64,
     pub prefix: String,
+}
+
+#[derive(Queryable, Insertable)]
+#[diesel(table_name = mirror_connections)]
+pub struct MirrorConnection {
+    pub from_channel_id: u64,
+    pub to_channel_id: u64,
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::platform::ChannelIdentifier;
+
+    use super::Channel;
+
+    #[test]
+    fn channel_to_identifier() {
+        let channel = Channel {
+            id: 1,
+            platform: String::from("twitch"),
+            channel: String::from("123"),
+        };
+
+        assert_eq!(
+            channel.get_identifier(),
+            ChannelIdentifier::TwitchChannelID(String::from("123"))
+        )
+    }
 }

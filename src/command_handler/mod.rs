@@ -22,6 +22,7 @@ use dashmap::DashMap;
 use once_cell::sync::Lazy;
 use prometheus::{HistogramOpts, HistogramVec, IntCounterVec, Opts};
 use reqwest::Client;
+use std::collections::HashMap;
 use std::env::{self, VarError};
 use std::num::ParseIntError;
 use std::str::FromStr;
@@ -75,6 +76,7 @@ pub struct CommandHandler {
     startup_time: Arc<Instant>,
     template_registry: Arc<Handlebars<'static>>,
     cooldowns: Arc<RwLock<Vec<(u64, String)>>>, // User id and command
+    mirror_connections: Arc<HashMap<ChannelIdentifier, ChannelIdentifier>>, // from and to channel
 }
 
 impl CommandHandler {
@@ -224,6 +226,22 @@ impl CommandHandler {
 
         let cooldowns = Arc::new(RwLock::new(Vec::new()));
 
+        let mut mirror_connections = HashMap::new();
+        for connection in db.get_mirror_connections().expect("DB error") {
+            let from_channel = db
+                .get_channel_by_id(connection.from_channel_id)
+                .unwrap()
+                .expect("Invalid channel connection");
+
+            let to_channel = db
+                .get_channel_by_id(connection.to_channel_id)
+                .unwrap()
+                .expect("Invalid channel connection");
+
+            mirror_connections.insert(from_channel.get_identifier(), to_channel.get_identifier());
+        }
+        tracing::info!("Mirroring channels: {:?}", mirror_connections);
+
         start_supinic_heartbeat().await;
 
         Self {
@@ -232,6 +250,7 @@ impl CommandHandler {
             startup_time: Arc::new(Instant::now()),
             template_registry: Arc::new(template_registry),
             cooldowns,
+            mirror_connections: Arc::new(mirror_connections),
         }
     }
 
@@ -239,6 +258,32 @@ impl CommandHandler {
     where
         C: ExecutionContext + Sync,
     {
+        if let Some(mirror_channel) = self.mirror_connections.get(&context.get_channel()) {
+            tracing::info!(
+                "Mirroring message from {} to {}",
+                context.get_channel(),
+                mirror_channel
+            );
+
+            let message_text = message_text.to_string();
+            let platform_handler = self.platform_handler.clone();
+            let mirror_channel = mirror_channel.clone();
+            let channel = context.get_channel();
+            let display_name = context.get_display_name().to_string();
+
+            tokio::spawn(async move {
+                if let Err(e) = platform_handler
+                    .send_to_channel(
+                        mirror_channel,
+                        format!("[{}] {}: {}", channel, display_name, message_text),
+                    )
+                    .await
+                {
+                    tracing::warn!("Failed to mirror message: {}", e);
+                }
+            });
+        }
+
         for prefix in context.get_prefixes() {
             if let Some(command_msg) = message_text.strip_prefix(prefix) {
                 return self.handle_command_message(command_msg, context).await;

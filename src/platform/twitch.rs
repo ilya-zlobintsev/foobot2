@@ -194,13 +194,14 @@ impl TwitchMessage for WhisperMessage {
     }
 }
 
-pub struct TwitchExecutionContext<M: TwitchMessage + std::marker::Sync> {
+#[derive(Clone)]
+pub struct TwitchExecutionContext<M: TwitchMessage + std::marker::Sync + Clone> {
     msg: M,
     prefixes: Vec<String>,
 }
 
 #[async_trait]
-impl<T: TwitchMessage + std::marker::Sync> ExecutionContext for TwitchExecutionContext<T> {
+impl<T: TwitchMessage + std::marker::Sync + Clone> ExecutionContext for TwitchExecutionContext<T> {
     async fn get_permissions_internal(&self) -> Permissions {
         let mut badges_iter = self.msg.get_badges().iter();
 

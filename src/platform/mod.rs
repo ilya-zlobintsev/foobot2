@@ -172,6 +172,8 @@ impl ChannelIdentifier {
         match platform {
             "twitch" => Ok(Self::TwitchChannelID(id)),
             "discord_guild" => Ok(Self::DiscordGuildID(id.parse()?)),
+            "local" => Ok(Self::LocalAddress(id)),
+            "irc" => Ok(Self::IrcChannel(id)),
             _ => Err(anyhow::anyhow!("invalid platform")),
         }
     }

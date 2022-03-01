@@ -754,6 +754,24 @@ impl Database {
             Ok(None)
         }
     }
+
+    pub fn get_mirror_connections(&self) -> Result<Vec<MirrorConnection>, DatabaseError> {
+        let mut conn = self.conn_pool.get().unwrap();
+
+        Ok(mirror_connections::table.load(&mut conn)?)
+    }
+
+    pub fn create_mirror_connection(
+        &self,
+        connection: MirrorConnection,
+    ) -> Result<(), DatabaseError> {
+        let mut conn = self.conn_pool.get().unwrap();
+
+        diesel::insert_into(mirror_connections::table)
+            .values(&connection)
+            .execute(&mut conn)?;
+        Ok(())
+    }
 }
 
 #[derive(Debug)]

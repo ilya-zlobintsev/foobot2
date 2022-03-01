@@ -34,6 +34,13 @@ table! {
 }
 
 table! {
+    mirror_connections (from_channel_id, to_channel_id) {
+        from_channel_id -> Unsigned<Bigint>,
+        to_channel_id -> Unsigned<Bigint>,
+    }
+}
+
+table! {
     prefixes (channel_id) {
         channel_id -> Unsigned<Bigint>,
         prefix -> Tinytext,
@@ -86,6 +93,7 @@ allow_tables_to_appear_in_same_query!(
     channels,
     commands,
     eventsub_triggers,
+    mirror_connections,
     prefixes,
     scripts,
     users,

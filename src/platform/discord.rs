@@ -106,6 +106,7 @@ impl ChatPlatform for Discord {
     }
 }
 
+#[derive(Clone)]
 pub struct DiscordExecutionContext<'a> {
     msg: &'a MessageCreate,
     cmd: &'a CommandHandler,
