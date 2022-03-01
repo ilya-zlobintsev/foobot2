@@ -69,7 +69,7 @@ impl Local {
                 addr,
             };
 
-            if let Some(response) = command_handler.handle_command_message(&buf, context).await {
+            if let Some(response) = command_handler.handle_message(&buf, context).await {
                 reader.write_all(response.as_bytes()).await?;
                 reader.write_all(b"\n").await?;
             }
@@ -106,5 +106,9 @@ impl ExecutionContext for LocalExecutionContext {
 
     fn get_display_name(&self) -> &str {
         &self.addr_str
+    }
+
+    fn get_prefixes(&self) -> Vec<&str> {
+        vec![""]
     }
 }

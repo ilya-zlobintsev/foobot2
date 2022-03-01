@@ -9,50 +9,43 @@ use crate::command_handler::CommandHandler;
 
 use super::{ChannelIdentifier, ChatPlatform, ExecutionContext, UserIdentifier};
 
+#[derive(Clone)]
 pub struct Discord {
     token: String,
     command_handler: CommandHandler,
-    prefix: String,
-    self_mention: String,
+    prefix: Arc<String>,
+    self_mention: Arc<String>,
 }
 
 impl Discord {
     async fn handle_msg(&self, msg: MessageCreate, http: Arc<Client>) {
         tracing::debug!("{:?}", msg);
 
-        let mut content = String::new();
+        let Self {
+            command_handler,
+            prefix,
+            self_mention,
+            ..
+        } = self.clone();
 
-        if let Some(text) = msg.content.strip_prefix(&self.prefix) {
-            content = text.to_owned();
-        }
+        tokio::spawn(async move {
+            let context = DiscordExecutionContext {
+                msg: &msg,
+                cmd: &command_handler,
+                prefix,
+                self_mention,
+            };
 
-        if let Some(text) = msg.content.strip_prefix(&self.self_mention) {
-            content = text.to_owned();
-        }
-
-        if !content.is_empty() {
-            let command_handler = self.command_handler.clone();
-
-            tokio::spawn(async move {
-                let context = DiscordExecutionContext {
-                    msg: &msg,
-                    cmd: &command_handler,
-                };
-
-                if let Some(response) = command_handler
-                    .handle_command_message(&content, context)
+            if let Some(response) = command_handler.handle_message(&msg.content, context).await {
+                http.create_message(msg.channel_id)
+                    .reply(msg.id)
+                    .content(&response)
+                    .expect("Failed to construct message")
+                    .exec()
                     .await
-                {
-                    http.create_message(msg.channel_id)
-                        .reply(msg.id)
-                        .content(&response)
-                        .expect("Failed to construct message")
-                        .exec()
-                        .await
-                        .expect("Failed to reply in Discord");
-                }
-            });
-        }
+                    .expect("Failed to reply in Discord");
+            }
+        });
     }
 }
 
@@ -64,11 +57,11 @@ impl ChatPlatform for Discord {
         Ok(Box::new(Self {
             token,
             command_handler,
-            prefix: Self::get_prefix(),
-            self_mention: format!(
+            prefix: Arc::new(Self::get_prefix()),
+            self_mention: Arc::new(format!(
                 "<@!{}>",
                 env::var("DISCORD_CLIENT_ID").expect("DISCORD_CLIENT_ID not specified")
-            ),
+            )),
         }))
     }
 
@@ -116,6 +109,8 @@ impl ChatPlatform for Discord {
 pub struct DiscordExecutionContext<'a> {
     msg: &'a MessageCreate,
     cmd: &'a CommandHandler,
+    prefix: Arc<String>,
+    self_mention: Arc<String>,
 }
 
 #[async_trait]
@@ -161,5 +156,9 @@ impl ExecutionContext for DiscordExecutionContext<'_> {
 
     fn get_display_name(&self) -> &str {
         &self.msg.author.name
+    }
+
+    fn get_prefixes(&self) -> Vec<&str> {
+        vec![&self.prefix, &self.self_mention]
     }
 }

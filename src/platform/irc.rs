@@ -27,17 +27,16 @@ impl Irc {
 
         task::spawn(async move {
             if let Command::PRIVMSG(_, content) = &message.command {
-                if let Some(command_text) = content.strip_prefix(&*command_prefix) {
-                    if let Some(response) = command_handler
-                        .handle_command_message(command_text, IrcExecutionContext(&message))
-                        .await
-                    {
-                        let client = client.read().unwrap();
+                let context = IrcExecutionContext {
+                    message: &message,
+                    command_prefix,
+                };
+                if let Some(response) = command_handler.handle_message(content, context).await {
+                    let client = client.read().unwrap();
 
-                        client
-                            .send_privmsg(message.response_target().unwrap(), response)
-                            .expect("Failed to send PRIVMSG");
-                    }
+                    client
+                        .send_privmsg(message.response_target().unwrap(), response)
+                        .expect("Failed to send PRIVMSG");
                 }
             }
         });
@@ -103,7 +102,10 @@ impl ChatPlatform for Irc {
     }
 }
 
-struct IrcExecutionContext<'a>(&'a Message);
+struct IrcExecutionContext<'a> {
+    message: &'a Message,
+    command_prefix: Arc<String>,
+}
 
 // TODO remove the unwraps
 #[async_trait]
@@ -114,14 +116,18 @@ impl ExecutionContext for IrcExecutionContext<'_> {
     }
 
     fn get_channel(&self) -> ChannelIdentifier {
-        ChannelIdentifier::IrcChannel(self.0.response_target().unwrap().to_owned())
+        ChannelIdentifier::IrcChannel(self.message.response_target().unwrap().to_owned())
     }
 
     fn get_user_identifier(&self) -> UserIdentifier {
-        UserIdentifier::IrcName(self.0.source_nickname().unwrap().to_owned())
+        UserIdentifier::IrcName(self.message.source_nickname().unwrap().to_owned())
     }
 
     fn get_display_name(&self) -> &str {
-        self.0.source_nickname().unwrap()
+        self.message.source_nickname().unwrap()
+    }
+
+    fn get_prefixes(&self) -> Vec<&str> {
+        vec![&self.command_prefix]
     }
 }

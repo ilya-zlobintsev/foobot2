@@ -235,8 +235,20 @@ impl CommandHandler {
         }
     }
 
+    pub async fn handle_message<C>(&self, message_text: &str, context: C) -> Option<String>
+    where
+        C: ExecutionContext + Sync,
+    {
+        for prefix in context.get_prefixes() {
+            if let Some(command_msg) = message_text.strip_prefix(prefix) {
+                return self.handle_command_message(command_msg, context).await;
+            }
+        }
+        None
+    }
+
     /// This function expects a raw message that appears to be a command without the leading command prefix.
-    pub async fn handle_command_message<C>(&self, message_text: &str, context: C) -> Option<String>
+    async fn handle_command_message<C>(&self, message_text: &str, context: C) -> Option<String>
     where
         C: ExecutionContext + Sync,
     {

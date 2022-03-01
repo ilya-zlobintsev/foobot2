@@ -46,6 +46,8 @@ pub trait ExecutionContext {
     fn get_user_identifier(&self) -> UserIdentifier;
 
     fn get_display_name(&self) -> &str;
+
+    fn get_prefixes(&self) -> Vec<&str>;
 }
 
 #[derive(Clone)]
@@ -82,6 +84,10 @@ impl ExecutionContext for ServerExecutionContext {
 
     fn get_display_name(&self) -> &str {
         &self.display_name
+    }
+
+    fn get_prefixes(&self) -> Vec<&str> {
+        vec![""]
     }
 }
 
