@@ -1,4 +1,5 @@
 use std::sync::RwLock;
+use std::time::Duration;
 use std::{env, sync::Arc};
 
 use crate::command_handler::CommandHandler;
@@ -103,7 +104,10 @@ impl ChatPlatform for Irc {
                         self.handle_message(message).await;
                     }
                     Ok(None) => (),
-                    Err(e) => tracing::warn!("IRC error: {}", e),
+                    Err(e) => {
+                        tracing::warn!("IRC error: {}", e);
+                        tokio::time::sleep(Duration::from_secs(5)).await;
+                    }
                 }
             }
         });
