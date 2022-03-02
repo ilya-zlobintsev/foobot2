@@ -162,7 +162,7 @@ pub enum UserIdentifierError {
 }
 
 // The optional values are just used for visuals, not for functionality
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, Serialize, Deserialize, Hash)]
 pub enum ChannelIdentifier {
     TwitchChannel((String, Option<String>)), // Channel id, channel name
     DiscordChannel(String),
@@ -240,6 +240,20 @@ impl FromStr for ChannelIdentifier {
         }
     }
 }
+
+impl PartialEq for ChannelIdentifier {
+    fn eq(&self, other: &Self) -> bool {
+        match (self, other) {
+            (Self::TwitchChannel((l0, _)), Self::TwitchChannel((r0, _))) => l0 == r0,
+            (Self::DiscordChannel(l0), Self::DiscordChannel(r0)) => l0 == r0,
+            (Self::IrcChannel(l0), Self::IrcChannel(r0)) => l0 == r0,
+            (Self::LocalAddress(l0), Self::LocalAddress(r0)) => l0 == r0,
+            (Self::TelegramChat((l0, _)), Self::TelegramChat((r0, _))) => l0 == r0,
+            _ => core::mem::discriminant(self) == core::mem::discriminant(other),
+        }
+    }
+}
+impl Eq for ChannelIdentifier {}
 
 #[derive(Debug, PartialEq, Eq, Serialize, Deserialize, Clone)]
 pub enum Permissions {

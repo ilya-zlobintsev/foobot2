@@ -70,6 +70,8 @@ impl ChatPlatform for Telegram {
                                             None => "[unknown chat]",
                                         };
                                         display_name.push_str(name)
+                                    } else if let Some(title) = &message.chat.title {
+                                        display_name.push_str(title);
                                     } else {
                                         display_name.push_str("[unhandled source]")
                                     }
