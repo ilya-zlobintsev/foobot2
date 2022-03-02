@@ -31,9 +31,12 @@ impl PlatformHandler {
 
                 tracing::info!("Sending {} to {}", msg, broadcaster.login);
 
-                let msg = msg.split_whitespace().collect::<Vec<&str>>().join(" ");
+                let mut msg = msg.split_whitespace().collect::<Vec<&str>>().join(" ");
+                if msg.len() > 300 {
+                    msg.truncate(300);
+                }
 
-                chat_client.privmsg(broadcaster.login, msg[..300].to_string()).await?;
+                chat_client.privmsg(broadcaster.login, msg).await?;
 
                 Ok(())
             }
