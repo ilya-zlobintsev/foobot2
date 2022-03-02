@@ -62,7 +62,7 @@ impl ChatPlatform for Telegram {
                                     None
                                 };
 
-                                if let Some(message_text) = maybe_message {
+                                if let Some(message_text) = maybe_text {
                                     let prefix = self.prefix.clone();
 
                                     let mut display_name = String::new();
