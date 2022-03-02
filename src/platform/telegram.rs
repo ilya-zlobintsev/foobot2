@@ -33,7 +33,7 @@ impl ChatPlatform for Telegram {
 
     async fn run(self) {
         let mut update_params_builder = GetUpdatesParamsBuilder::default();
-        update_params_builder.allowed_updates(vec!["message".to_string()]);
+        update_params_builder.allowed_updates(vec!["message".to_string(), "channel_post".to_string()]);
 
         let mut update_params = update_params_builder.build().unwrap();
 
