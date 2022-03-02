@@ -62,6 +62,7 @@ table! {
         discord_id -> Nullable<Text>,
         irc_name -> Nullable<Text>,
         local_addr -> Nullable<Text>,
+        telegram_id -> Nullable<Text>,
     }
 }
 

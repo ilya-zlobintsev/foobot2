@@ -261,29 +261,23 @@ impl CommandHandler {
         C: ExecutionContext + Sync,
     {
         if let Some(mirror_channel) = self.mirror_connections.get(&context.get_channel()) {
-            tracing::info!(
-                "Mirroring message from {} to {}",
-                context.get_channel(),
-                mirror_channel
-            );
-
-            let message_text = message_text.to_string();
             let platform_handler = self.platform_handler.clone();
             let mirror_channel = mirror_channel.clone();
             let channel = context.get_channel();
             let display_name = context.get_display_name().to_string();
 
+            let msg = format!("[{}] {}: {}", channel, display_name, message_text);
+            tracing::info!(
+                "Mirroring message from {} to {}: {}",
+                context.get_channel(),
+                mirror_channel,
+                msg
+            );
             // TODO
             if display_name != "egsbot" {
                 tokio::spawn(async move {
                     let platform_handler = platform_handler.read().await;
-                    if let Err(e) = platform_handler
-                        .send_to_channel(
-                            mirror_channel,
-                            format!("[{}] {}: {}", channel, display_name, message_text),
-                        )
-                        .await
-                    {
+                    if let Err(e) = platform_handler.send_to_channel(mirror_channel, msg).await {
                         tracing::warn!("Failed to mirror message: {}", e);
                     }
                 });
@@ -945,6 +939,7 @@ impl CommandHandler {
             ChannelIdentifier::IrcChannel(_) => Ok(Permissions::Default), // TODO
             ChannelIdentifier::Anonymous => Ok(Permissions::Default),
             ChannelIdentifier::LocalAddress(_) => Ok(Permissions::ChannelOwner), // on the local platform, each ip address is its own channel
+            ChannelIdentifier::TelegramChatId(_) => Ok(Permissions::Default),    // TODO
         }
     }
 
@@ -1020,6 +1015,7 @@ impl CommandHandler {
                 Ok(())
             }
             ChannelIdentifier::DiscordGuildID(_) => Ok(()), // Discord guilds don't need to be joined client side and get added to the DB on demand
+            ChannelIdentifier::TelegramChatId(_) => todo!(),
             ChannelIdentifier::IrcChannel(_) => Err(anyhow!("Not implemented yet")),
             ChannelIdentifier::LocalAddress(_) => Err(anyhow!("This is not possible")),
             ChannelIdentifier::Anonymous => Err(anyhow!("Invalid channel specified")),

@@ -18,6 +18,7 @@ use platform::discord::Discord;
 use platform::irc::Irc;
 use platform::twitch::Twitch;
 use platform::ChatPlatform;
+use platform::telegram::Telegram;
 
 #[tokio::main]
 async fn main() {
@@ -54,6 +55,11 @@ async fn main() {
         Err(e) => {
             tracing::warn!("Error loading IRC: {:?}", e);
         }
+    }
+
+    match Telegram::init(command_handler.clone()).await {
+        Ok(telegram) => telegram.run().await,
+        Err(e) => tracing::warn!("Error loading Telegram: {:?}", e),
     }
 
     match Local::init(command_handler.clone()).await {

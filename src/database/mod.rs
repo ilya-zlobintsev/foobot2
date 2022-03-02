@@ -387,6 +387,9 @@ impl Database {
                     UserIdentifier::DiscordID(user_id) => {
                         query.filter(users::discord_id.eq(Some(user_id)))
                     }
+                    UserIdentifier::TelegramId(id) => {
+                        query.filter(users::telegram_id.eq(Some(id.to_string())))
+                    }
                     UserIdentifier::IrcName(name) => query.filter(users::irc_name.eq(Some(name))),
                     UserIdentifier::IpAddr(addr) => {
                         query.filter(users::local_addr.eq(Some(addr.to_string())))
@@ -438,28 +441,24 @@ impl Database {
                 let new_user = match &user_identifier {
                     UserIdentifier::TwitchID(user_id) => NewUser {
                         twitch_id: Some(user_id),
-                        discord_id: None,
-                        irc_name: None,
-                        local_addr: None,
+                        ..Default::default()
                     },
                     UserIdentifier::DiscordID(user_id) => NewUser {
-                        twitch_id: None,
                         discord_id: Some(user_id),
-                        irc_name: None,
-                        local_addr: None,
+                        ..Default::default()
                     },
                     UserIdentifier::IrcName(name) => NewUser {
-                        twitch_id: None,
-                        discord_id: None,
-                        irc_name: Some(name),
-                        local_addr: None,
+                        irc_name: Some(&*name),
+                        ..Default::default()
                     },
                     UserIdentifier::IpAddr(addr) => NewUser {
-                        twitch_id: None,
-                        discord_id: None,
-                        irc_name: None,
                         local_addr: Some(addr.to_string()),
+                        ..Default::default()
                     },
+                    UserIdentifier::TelegramId(id) => NewUser {
+                        telegram_id: Some(id.to_string()),
+                        ..Default::default()
+                    }
                 };
 
                 diesel::insert_into(users::table)

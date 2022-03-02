@@ -2,6 +2,7 @@ pub mod discord;
 pub mod irc;
 pub mod local;
 pub mod twitch;
+pub mod telegram;
 
 use crate::command_handler::CommandHandler;
 
@@ -116,6 +117,7 @@ pub enum UserIdentifier {
     TwitchID(String),
     DiscordID(String),
     IrcName(String),
+    TelegramId(u64),
     IpAddr(IpAddr),
 }
 
@@ -124,6 +126,7 @@ impl fmt::Display for UserIdentifier {
         match self {
             UserIdentifier::TwitchID(id) => f.write_str(&format!("twitch:{}", id)),
             UserIdentifier::DiscordID(id) => f.write_str(&format!("discord:{}", id)),
+            UserIdentifier::TelegramId(id) => f.write_str(&format!("telegram:{}", id)),
             UserIdentifier::IrcName(name) => f.write_str(&format!("irc:{}", name)),
             UserIdentifier::IpAddr(addr) => f.write_str(&format!("local:{}", addr.to_string())),
         }
@@ -164,6 +167,7 @@ pub enum ChannelIdentifier {
     DiscordGuildID(String),
     IrcChannel(String),
     LocalAddress(String),
+    TelegramChatId(String),
     Anonymous, // Used for DMs and such
 }
 
@@ -174,6 +178,7 @@ impl ChannelIdentifier {
             "discord_guild" => Ok(Self::DiscordGuildID(id.parse()?)),
             "local" => Ok(Self::LocalAddress(id)),
             "irc" => Ok(Self::IrcChannel(id)),
+            "telegram" => Ok(Self::TelegramChatId(id)),
             _ => Err(anyhow::anyhow!("invalid platform")),
         }
     }
@@ -182,6 +187,7 @@ impl ChannelIdentifier {
         match self {
             ChannelIdentifier::TwitchChannelID(_) => Some("twitch"),
             ChannelIdentifier::DiscordGuildID(_) => Some("discord_guild"),
+            ChannelIdentifier::TelegramChatId(_) => Some("telegram"),
             ChannelIdentifier::IrcChannel(_) => Some("irc"),
             ChannelIdentifier::LocalAddress(_) => Some("local"),
             ChannelIdentifier::Anonymous => None,
@@ -192,6 +198,7 @@ impl ChannelIdentifier {
         match self {
             ChannelIdentifier::TwitchChannelID(id) => Some(id),
             ChannelIdentifier::DiscordGuildID(id) => Some(id),
+            ChannelIdentifier::TelegramChatId(id) => Some(id),
             ChannelIdentifier::IrcChannel(channel) => Some(channel),
             ChannelIdentifier::LocalAddress(addr) => Some(addr),
             ChannelIdentifier::Anonymous => None,
