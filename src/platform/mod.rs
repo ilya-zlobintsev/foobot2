@@ -1,8 +1,8 @@
 pub mod discord;
 pub mod irc;
 pub mod local;
-pub mod twitch;
 pub mod telegram;
+pub mod twitch;
 
 use crate::command_handler::CommandHandler;
 
@@ -161,33 +161,34 @@ pub enum UserIdentifierError {
     InvalidPlatform,
 }
 
+// The optional values are just used for visuals, not for functionality
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Hash)]
 pub enum ChannelIdentifier {
-    TwitchChannelID(String),
-    DiscordGuildID(String),
+    TwitchChannel((String, Option<String>)), // Channel id, channel name
+    DiscordChannel(String),
     IrcChannel(String),
     LocalAddress(String),
-    TelegramChatId(String),
-    Anonymous, // Used for DMs and such
+    TelegramChat((String, Option<String>)), // Chat id, chat title
+    Anonymous,                              // Used for DMs and such
 }
 
 impl ChannelIdentifier {
     pub fn new(platform: &str, id: String) -> anyhow::Result<Self> {
         match platform {
-            "twitch" => Ok(Self::TwitchChannelID(id)),
-            "discord_guild" => Ok(Self::DiscordGuildID(id.parse()?)),
+            "twitch" => Ok(Self::TwitchChannel((id, None))),
+            "discord_guild" => Ok(Self::DiscordChannel(id.parse()?)),
             "local" => Ok(Self::LocalAddress(id)),
             "irc" => Ok(Self::IrcChannel(id)),
-            "telegram" => Ok(Self::TelegramChatId(id)),
+            "telegram" => Ok(Self::TelegramChat((id, None))),
             _ => Err(anyhow::anyhow!("invalid platform")),
         }
     }
 
     pub fn get_platform_name(&self) -> Option<&str> {
         match self {
-            ChannelIdentifier::TwitchChannelID(_) => Some("twitch"),
-            ChannelIdentifier::DiscordGuildID(_) => Some("discord_guild"),
-            ChannelIdentifier::TelegramChatId(_) => Some("telegram"),
+            ChannelIdentifier::TwitchChannel(_) => Some("twitch"),
+            ChannelIdentifier::DiscordChannel(_) => Some("discord_guild"),
+            ChannelIdentifier::TelegramChat(_) => Some("telegram"),
             ChannelIdentifier::IrcChannel(_) => Some("irc"),
             ChannelIdentifier::LocalAddress(_) => Some("local"),
             ChannelIdentifier::Anonymous => None,
@@ -196,12 +197,20 @@ impl ChannelIdentifier {
 
     pub fn get_channel(&self) -> Option<&str> {
         match self {
-            ChannelIdentifier::TwitchChannelID(id) => Some(id),
-            ChannelIdentifier::DiscordGuildID(id) => Some(id),
-            ChannelIdentifier::TelegramChatId(id) => Some(id),
+            ChannelIdentifier::TwitchChannel((id, _)) => Some(id),
+            ChannelIdentifier::DiscordChannel(guild_id) => Some(guild_id),
+            ChannelIdentifier::TelegramChat((id, _)) => Some(id),
             ChannelIdentifier::IrcChannel(channel) => Some(channel),
             ChannelIdentifier::LocalAddress(addr) => Some(addr),
             ChannelIdentifier::Anonymous => None,
+        }
+    }
+
+    pub fn get_display_name(&self) -> Option<&str> {
+        match self {
+            ChannelIdentifier::TwitchChannel((_, title)) => title.as_deref(),
+            ChannelIdentifier::TelegramChat((_, title)) => title.as_deref(),
+            _ => None,
         }
     }
 }
@@ -212,7 +221,10 @@ impl Display for ChannelIdentifier {
             f,
             "{}-{}",
             self.get_platform_name().unwrap_or("generic"),
-            self.get_channel().unwrap_or("anonymous")
+            match self.get_display_name() {
+                Some(name) => name,
+                None => self.get_channel().unwrap_or("anonymous"),
+            }
         )
     }
 }

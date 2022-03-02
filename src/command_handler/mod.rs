@@ -636,7 +636,8 @@ impl CommandHandler {
             return Err(CommandError::NoPermissions.into());
         }
 
-        if let ChannelIdentifier::TwitchChannelID(broadcaster_id) = execution_context.get_channel()
+        if let ChannelIdentifier::TwitchChannel((broadcaster_id, _)) =
+            execution_context.get_channel()
         {
             let platform_handler = self.platform_handler.read().await;
 
@@ -884,7 +885,7 @@ impl CommandHandler {
         }
 
         match channel {
-            ChannelIdentifier::TwitchChannelID(channel_id) => {
+            ChannelIdentifier::TwitchChannel((channel_id, _)) => {
                 let twitch_id = user
                     .twitch_id
                     .ok_or_else(|| anyhow!("Not registered on this platform"))?;
@@ -916,7 +917,7 @@ impl CommandHandler {
                     false => Ok(Permissions::Default),
                 }
             }
-            ChannelIdentifier::DiscordGuildID(guild_id) => {
+            ChannelIdentifier::DiscordChannel(guild_id) => {
                 let user_id = user
                     .discord_id
                     .ok_or_else(|| anyhow!("Invalid user"))?
@@ -939,7 +940,7 @@ impl CommandHandler {
             ChannelIdentifier::IrcChannel(_) => Ok(Permissions::Default), // TODO
             ChannelIdentifier::Anonymous => Ok(Permissions::Default),
             ChannelIdentifier::LocalAddress(_) => Ok(Permissions::ChannelOwner), // on the local platform, each ip address is its own channel
-            ChannelIdentifier::TelegramChatId(_) => Ok(Permissions::Default),    // TODO
+            ChannelIdentifier::TelegramChat(_) => Ok(Permissions::Default),      // TODO
         }
     }
 
@@ -988,7 +989,7 @@ impl CommandHandler {
 
     pub async fn join_channel(&self, channel: &ChannelIdentifier) -> anyhow::Result<()> {
         match channel {
-            ChannelIdentifier::TwitchChannelID(id) => {
+            ChannelIdentifier::TwitchChannel((id, _)) => {
                 let platform_handler = self.platform_handler.read().await;
                 let twitch_api = platform_handler
                     .twitch_api
@@ -1014,8 +1015,8 @@ impl CommandHandler {
 
                 Ok(())
             }
-            ChannelIdentifier::DiscordGuildID(_) => Ok(()), // Discord guilds don't need to be joined client side and get added to the DB on demand
-            ChannelIdentifier::TelegramChatId(_) => todo!(),
+            ChannelIdentifier::DiscordChannel(_) => Ok(()), // Discord guilds don't need to be joined client side and get added to the DB on demand
+            ChannelIdentifier::TelegramChat(_) => todo!(),
             ChannelIdentifier::IrcChannel(_) => Err(anyhow!("Not implemented yet")),
             ChannelIdentifier::LocalAddress(_) => Err(anyhow!("This is not possible")),
             ChannelIdentifier::Anonymous => Err(anyhow!("Invalid channel specified")),

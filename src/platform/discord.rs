@@ -146,7 +146,7 @@ impl ExecutionContext for DiscordExecutionContext<'_> {
 
     fn get_channel(&self) -> ChannelIdentifier {
         match self.msg.guild_id {
-            Some(guild_id) => ChannelIdentifier::DiscordGuildID(guild_id.to_string()),
+            Some(guild_id) => ChannelIdentifier::DiscordChannel(guild_id.to_string()),
             None => ChannelIdentifier::Anonymous,
         }
     }

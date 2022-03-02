@@ -83,9 +83,10 @@ pub async fn eventsub_callback(
                                 .expect("Failed to get user");
 
                             let context = ServerExecutionContext {
-                                target_channel: ChannelIdentifier::TwitchChannelID(
+                                target_channel: ChannelIdentifier::TwitchChannel((
                                     broadcaster_id.to_string(),
-                                ),
+                                    None,
+                                )),
                                 executing_user: UserIdentifier::TwitchID(user_id),
                                 cmd: cmd.clone(),
                                 display_name: user.display_name,

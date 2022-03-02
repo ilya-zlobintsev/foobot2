@@ -16,9 +16,9 @@ use std::env;
 
 use platform::discord::Discord;
 use platform::irc::Irc;
+use platform::telegram::Telegram;
 use platform::twitch::Twitch;
 use platform::ChatPlatform;
-use platform::telegram::Telegram;
 
 #[tokio::main]
 async fn main() {

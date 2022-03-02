@@ -69,7 +69,7 @@ pub async fn commands_page(
                 .expect("Failed to get commands"),
             moderator,
             eventsub_triggers: match channel_identifier {
-                ChannelIdentifier::TwitchChannelID(broadcaster_id) => cmd
+                ChannelIdentifier::TwitchChannel((broadcaster_id, _)) => cmd
                     .db
                     .get_eventsub_triggers_for_broadcaster(&broadcaster_id)?,
                 _ => Vec::new(),

@@ -42,7 +42,10 @@ pub fn profile(
     let twitch_joined = match &user.twitch_id {
         Some(channel_id) => cmd
             .db
-            .get_channel(&ChannelIdentifier::TwitchChannelID(channel_id.clone()))
+            .get_channel(&ChannelIdentifier::TwitchChannel((
+                channel_id.clone(),
+                None,
+            )))
             .expect("DB error")
             .is_some(),
         None => false,
@@ -68,7 +71,7 @@ pub async fn join_twitch(
 ) -> Result<Redirect, status::BadRequest<&'static str>> {
     match user.twitch_id {
         Some(id) => {
-            cmd.join_channel(&ChannelIdentifier::TwitchChannelID(id))
+            cmd.join_channel(&ChannelIdentifier::TwitchChannel((id, None)))
                 .await
                 .map_err(|e| {
                     tracing::warn!("Failed to join channel! {}", e);

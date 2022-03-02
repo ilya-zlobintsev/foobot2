@@ -21,7 +21,7 @@ impl PlatformHandler {
         msg: String,
     ) -> anyhow::Result<()> {
         match channel {
-            ChannelIdentifier::TwitchChannelID(channel_id) => {
+            ChannelIdentifier::TwitchChannel((channel_id, _)) => {
                 let twitch_api = self.twitch_api.as_ref().context("Twitch not configured")?;
 
                 let broadcaster = twitch_api.helix_api.get_user_by_id(&channel_id).await?;

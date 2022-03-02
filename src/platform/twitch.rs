@@ -145,7 +145,7 @@ pub trait TwitchMessage {
 
     fn get_sender(&self) -> &TwitchUserBasics;
 
-    fn get_channel(&self) -> Option<&str>;
+    fn get_channel(&self) -> Option<(&str, &str)>;
 
     fn get_content(&self) -> &str;
 
@@ -161,8 +161,8 @@ impl TwitchMessage for PrivmsgMessage {
         &self.sender
     }
 
-    fn get_channel(&self) -> Option<&str> {
-        Some(&self.channel_id)
+    fn get_channel(&self) -> Option<(&str, &str)> {
+        Some((&self.channel_id, &self.channel_login))
     }
 
     fn get_content(&self) -> &str {
@@ -183,7 +183,7 @@ impl TwitchMessage for WhisperMessage {
         &self.sender
     }
 
-    fn get_channel(&self) -> Option<&str> {
+    fn get_channel(&self) -> Option<(&str, &str)> {
         None
     }
 
@@ -218,7 +218,9 @@ impl<T: TwitchMessage + std::marker::Sync + Clone> ExecutionContext for TwitchEx
 
     fn get_channel(&self) -> ChannelIdentifier {
         match self.msg.get_channel() {
-            Some(channel) => ChannelIdentifier::TwitchChannelID(channel.to_owned()),
+            Some((id, title)) => {
+                ChannelIdentifier::TwitchChannel((id.to_string(), Some(title.to_string())))
+            }
             None => ChannelIdentifier::Anonymous,
         }
     }
@@ -260,11 +262,13 @@ impl Twitch {
         task::spawn(async move {
             let prefixes = if let Some(custom_prefix) = command_handler
                 .db
-                .get_prefix_in_channel(&ChannelIdentifier::TwitchChannelID(
-                    msg.get_channel()
-                        .unwrap_or_else(|| &msg.get_sender().id)
-                        .to_string(),
-                ))
+                .get_prefix_in_channel(&ChannelIdentifier::TwitchChannel((
+                    match msg.get_channel() {
+                        Some((channel_id, _)) => channel_id.to_string(),
+                        None => msg.get_sender().id.clone(),
+                    },
+                    None,
+                )))
                 .expect("DB error")
             {
                 vec![custom_prefix]
@@ -296,7 +300,10 @@ impl Twitch {
                     return;
                 }
 
-                let channel = msg.get_channel().unwrap_or(&msg.get_sender().login);
+                let channel = match msg.get_channel() {
+                    Some((channel_id, _)) => channel_id,
+                    None => &msg.get_sender().id,
+                };
 
                 if let Some(last_msg) = last_messages.get(channel) {
                     if *last_msg == response {

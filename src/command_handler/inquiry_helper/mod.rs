@@ -915,7 +915,7 @@ impl HelperDef for CommercialHelper {
             .expect("Failed to get command context");
 
         let broadcaster_id = match context.channel {
-            ChannelIdentifier::TwitchChannelID(id) => id,
+            ChannelIdentifier::TwitchChannel((id, _)) => id,
             _ => {
                 return Err(RenderError::new(
                     "commercial cannot be used outside of Twitch!",

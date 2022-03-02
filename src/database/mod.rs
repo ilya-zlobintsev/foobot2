@@ -458,7 +458,7 @@ impl Database {
                     UserIdentifier::TelegramId(id) => NewUser {
                         telegram_id: Some(id.to_string()),
                         ..Default::default()
-                    }
+                    },
                 };
 
                 diesel::insert_into(users::table)

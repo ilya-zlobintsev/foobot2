@@ -145,7 +145,7 @@ impl ExecutionContext for TelegramExectuionContext<'_> {
     }
 
     fn get_channel(&self) -> ChannelIdentifier {
-        ChannelIdentifier::TelegramChatId(self.msg.chat.id.to_string())
+        ChannelIdentifier::TelegramChat((self.msg.chat.id.to_string(), self.msg.chat.title.clone()))
     }
 
     fn get_user_identifier(&self) -> UserIdentifier {

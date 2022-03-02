@@ -147,7 +147,7 @@ mod tests {
 
         assert_eq!(
             channel.get_identifier(),
-            ChannelIdentifier::TwitchChannelID(String::from("123"))
+            ChannelIdentifier::TwitchChannel((String::from("123"), None))
         )
     }
 }
