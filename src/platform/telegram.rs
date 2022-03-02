@@ -58,14 +58,20 @@ impl ChatPlatform for Telegram {
                                     let prefix = self.prefix.clone();
 
                                     let mut display_name = String::new();
-                                    {
-                                        let from = message.from.as_ref().unwrap();
-
+                                    if let Some(from) = &message.from {
                                         display_name.push_str(&from.first_name);
                                         if let Some(last_name) = &from.last_name {
                                             display_name.push_str(" ");
                                             display_name.push_str(&last_name);
                                         }
+                                    } else if let Some(forward_chat) = &message.forward_from_chat {
+                                        let name = match &forward_chat.title {
+                                            Some(title) => title,
+                                            None => "[unknown chat]",
+                                        };
+                                        display_name.push_str(name)
+                                    } else {
+                                        display_name.push_str("[unhandled source]")
                                     }
 
                                     let command_handler = self.command_handler.clone();
