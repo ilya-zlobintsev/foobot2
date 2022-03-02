@@ -42,7 +42,7 @@ pub struct Database {
     users_cache: Arc<DashMap<u64, User>>,
     user_identifiers_cache: Arc<DashMap<UserIdentifier, u64>>, // Caches the user IDs
     prefixes_cache: Arc<DashMap<u64, Option<String>>>,
-    channels_cache: Arc<DashMap<ChannelIdentifier, Channel>>,
+    channels_cache: Arc<DashMap<String, Channel>>,
 }
 
 impl Database {
@@ -179,7 +179,7 @@ impl Database {
         let mut conn = self.conn_pool.get().unwrap();
 
         if let Some(channel) = channel_identifier.get_channel() {
-            if let Some(channel) = self.channels_cache.get(channel_identifier) {
+            if let Some(channel) = self.channels_cache.get(&channel_identifier.to_string()) {
                 Ok(Some(channel.value().clone()))
             } else {
                 let channel = channels::table
@@ -192,7 +192,7 @@ impl Database {
 
                 if let Some(channel) = &channel {
                     self.channels_cache
-                        .insert(channel_identifier.clone(), channel.clone());
+                        .insert(channel_identifier.to_string(), channel.clone());
                 }
 
                 Ok(channel)

@@ -162,7 +162,7 @@ pub enum UserIdentifierError {
 }
 
 // The optional values are just used for visuals, not for functionality
-#[derive(Debug, Clone, Serialize, Deserialize, Hash)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum ChannelIdentifier {
     TwitchChannel((String, Option<String>)), // Channel id, channel name
     DiscordChannel(String),
@@ -304,5 +304,23 @@ impl PartialOrd for Permissions {
                 Permissions::Default => Some(Ordering::Equal),
             },
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::platform::ChannelIdentifier;
+
+    #[test]
+    fn channel_identifier_eq() {
+        assert_eq!(
+            ChannelIdentifier::TelegramChat((String::from("1234"), Some(String::from("hello")))),
+            ChannelIdentifier::TelegramChat((String::from("1234"), None))
+        );
+
+        assert_eq!(
+            ChannelIdentifier::TwitchChannel((String::from("1234"), Some(String::from("hello")))),
+            ChannelIdentifier::TwitchChannel((String::from("1234"), None))
+        );
     }
 }

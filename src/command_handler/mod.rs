@@ -77,7 +77,7 @@ pub struct CommandHandler {
     startup_time: Arc<Instant>,
     template_registry: Arc<Handlebars<'static>>,
     cooldowns: Arc<RwLock<Vec<(u64, String)>>>, // User id and command
-    mirror_connections: Arc<HashMap<ChannelIdentifier, ChannelIdentifier>>, // from and to channel
+    mirror_connections: Arc<HashMap<String, ChannelIdentifier>>, // from and to channel
 }
 
 impl CommandHandler {
@@ -240,7 +240,12 @@ impl CommandHandler {
                 .unwrap()
                 .expect("Invalid channel connection");
 
-            mirror_connections.insert(from_channel.get_identifier(), to_channel.get_identifier());
+            if let Some(from_channel_str) = from_channel.get_identifier().get_channel() {
+                mirror_connections.insert(
+                    format!("{}-{}", from_channel.platform, from_channel_str),
+                    to_channel.get_identifier(),
+                );
+            }
         }
         tracing::info!("Mirroring channels: {:?}", mirror_connections);
 
@@ -260,7 +265,15 @@ impl CommandHandler {
     where
         C: ExecutionContext + Sync,
     {
-        if let Some(mirror_channel) = self.mirror_connections.get(&context.get_channel()) {
+        tracing::trace!("Handling message in channel {}", context.get_channel());
+        if let Some(mirror_channel) = self.mirror_connections.get(&format!(
+            "{}-{}",
+            context
+                .get_channel()
+                .get_platform_name()
+                .unwrap_or_default(),
+            context.get_channel().get_channel().unwrap_or_default()
+        )) {
             let platform_handler = self.platform_handler.clone();
             let mirror_channel = mirror_channel.clone();
             let channel = context.get_channel();
