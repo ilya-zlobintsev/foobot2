@@ -31,6 +31,8 @@ impl PlatformHandler {
 
                 tracing::info!("Sending {} to {}", msg, broadcaster.login);
 
+                let msg = msg.split_whitespace().collect::<Vec<&str>>().join(" ");
+
                 chat_client.privmsg(broadcaster.login, msg).await?;
 
                 Ok(())
