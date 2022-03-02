@@ -33,7 +33,7 @@ impl PlatformHandler {
 
                 let msg = msg.split_whitespace().collect::<Vec<&str>>().join(" ");
 
-                chat_client.privmsg(broadcaster.login, msg).await?;
+                chat_client.privmsg(broadcaster.login, msg[..300].to_string()).await?;
 
                 Ok(())
             }
