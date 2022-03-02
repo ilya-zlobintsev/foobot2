@@ -51,7 +51,7 @@ impl PlatformHandler {
                         chat_client
                             .privmsg(broadcaster.login.clone(), chunk.to_string())
                             .await?;
-                        sleep(Duration::from_secs(0.5)).await; // scuffed rate limiting
+                        sleep(Duration::from_millis(500)).await; // scuffed rate limiting
                     }
                 } else {
                     chat_client.privmsg(broadcaster.login, msg).await?;
