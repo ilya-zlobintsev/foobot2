@@ -54,7 +54,15 @@ impl ChatPlatform for Telegram {
                             };
 
                             if let Some(message) = maybe_message {
-                                if let Some(message_text) = message.text.clone() {
+                                let maybe_text = if let Some(text) = &message.text {
+                                    Some(text.clone())
+                                } else if let Some(caption) = &message.caption {
+                                    Some(caption.clone())
+                                } else {
+                                    None
+                                };
+
+                                if let Some(message_text) = maybe_message {
                                     let prefix = self.prefix.clone();
 
                                     let mut display_name = String::new();
