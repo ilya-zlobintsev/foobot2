@@ -1,5 +1,10 @@
-use crate::{database::Database, platform::ChannelIdentifier};
+use crate::{
+    database::Database,
+    platform::{twitch, ChannelIdentifier},
+};
 use anyhow::{anyhow, Context};
+use std::time::Duration;
+use tokio::time::sleep;
 use twitch_irc::login::RefreshingLoginCredentials;
 
 use super::discord_api::DiscordApi;
@@ -31,12 +36,26 @@ impl PlatformHandler {
 
                 tracing::info!("Sending {} to {}", msg, broadcaster.login);
 
-                let mut msg = msg.split_whitespace().collect::<Vec<&str>>().join(" ");
-                if msg.len() > 300 {
-                    msg.truncate(300);
-                }
+                let msg = msg.split_whitespace().collect::<Vec<&str>>().join(" ");
 
-                chat_client.privmsg(broadcaster.login, msg).await?;
+                if msg.len() > twitch::MSG_LENGTH_LIMIT {
+                    let msg_bytes = msg.into_bytes();
+                    let chunks = msg_bytes
+                        .chunks(twitch::MSG_LENGTH_LIMIT)
+                        .map(std::str::from_utf8)
+                        .collect::<Result<Vec<&str>, _>>()
+                        .unwrap()
+                        .into_iter();
+
+                    for chunk in chunks {
+                        chat_client
+                            .privmsg(broadcaster.login.clone(), chunk.to_string())
+                            .await?;
+                        sleep(Duration::from_secs(0.5)).await; // scuffed rate limiting
+                    }
+                } else {
+                    chat_client.privmsg(broadcaster.login, msg).await?;
+                }
 
                 Ok(())
             }

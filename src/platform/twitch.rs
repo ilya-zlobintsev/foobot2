@@ -19,6 +19,8 @@ use super::{ChatPlatform, Permissions, UserIdentifier};
 pub type Credentials = RefreshingLoginCredentials<Database>;
 pub type TwitchClient = TwitchIRCClient<SecureTCPTransport, Credentials>;
 
+pub const MSG_LENGTH_LIMIT: usize = 420;
+
 #[derive(Clone)]
 pub struct Twitch {
     client: Arc<Mutex<Option<TwitchClient>>>,
@@ -327,8 +329,6 @@ impl Twitch {
                 let client = client_guard.as_ref().unwrap();
 
                 tracing::info!("Replying with {}", response);
-
-                const MSG_LENGTH_LIMIT: usize = 420;
 
                 if response.len() > MSG_LENGTH_LIMIT {
                     let response_bytes = response.into_bytes();
