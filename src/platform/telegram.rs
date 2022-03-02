@@ -33,7 +33,8 @@ impl ChatPlatform for Telegram {
 
     async fn run(self) {
         let mut update_params_builder = GetUpdatesParamsBuilder::default();
-        update_params_builder.allowed_updates(vec!["message".to_string(), "channel_post".to_string()]);
+        update_params_builder
+            .allowed_updates(vec!["message".to_string(), "channel_post".to_string()]);
 
         let mut update_params = update_params_builder.build().unwrap();
 
@@ -44,7 +45,15 @@ impl ChatPlatform for Telegram {
                     Ok(response) => {
                         for update in response.result {
                             tracing::trace!("Update: {:?}", update);
-                            if let Some(message) = update.message {
+                            let maybe_message = if let Some(message) = update.message {
+                                Some(message)
+                            } else if let Some(channel_post) = update.channel_post {
+                                Some(channel_post)
+                            } else {
+                                None
+                            };
+
+                            if let Some(message) = maybe_message {
                                 if let Some(message_text) = message.text.clone() {
                                     let prefix = self.prefix.clone();
 
