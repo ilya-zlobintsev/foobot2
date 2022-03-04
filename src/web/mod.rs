@@ -68,7 +68,7 @@ pub async fn run(command_handler: CommandHandler) {
                 channel::index,
                 channel::commands_page,
                 channel::update_command,
-                channel::delete_command
+                channel::delete_command,
             ],
         )
         .mount(

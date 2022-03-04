@@ -13,7 +13,13 @@ pub struct IndexContext {
 #[derive(Serialize)]
 pub struct ChannelsContext {
     pub parent_context: LayoutContext,
-    pub channels: Vec<Channel>,
+    pub channels: Vec<PublicChannel>,
+}
+
+#[derive(Serialize)]
+pub struct PublicChannel {
+    pub name: Option<String>,
+    pub channel: Channel,
 }
 
 #[derive(Serialize)]

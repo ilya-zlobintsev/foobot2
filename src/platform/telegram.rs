@@ -47,12 +47,16 @@ impl ChatPlatform for Telegram {
                             tracing::trace!("Update: {:?}", update);
                             let maybe_message = if let Some(message) = update.message {
                                 Some(message)
-                            } else { update.channel_post };
+                            } else {
+                                update.channel_post
+                            };
 
                             if let Some(message) = maybe_message {
                                 let maybe_text = if let Some(text) = &message.text {
                                     Some(text.clone())
-                                } else { message.caption.as_ref().cloned() };
+                                } else {
+                                    message.caption.as_ref().cloned()
+                                };
 
                                 if let Some(message_text) = maybe_text {
                                     let prefix = self.prefix.clone();

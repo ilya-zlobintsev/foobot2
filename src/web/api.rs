@@ -1,4 +1,6 @@
-use rocket::http::{ContentType, Status};
+use std::io::Cursor;
+
+use rocket::http::Status;
 use rocket::response::Responder;
 use rocket::response::{self};
 use rocket::{Response, State};
@@ -23,6 +25,7 @@ pub async fn set_lastfm_name(
 #[derive(Debug)]
 pub enum ApiError {
     NotFound,
+    BadRequest(String),
     InvalidUser,
     DatabaseError(DatabaseError),
     RequestError(reqwest::Error),
@@ -55,9 +58,17 @@ impl From<anyhow::Error> for ApiError {
 
 impl<'a> Responder<'a, 'a> for ApiError {
     fn respond_to(self, _: &'a rocket::Request<'_>) -> response::Result<'static> {
-        Response::build()
-            .status(Status::NotFound)
-            .header(ContentType::JSON)
-            .ok()
+        let mut response = Response::build();
+
+        match self {
+            Self::BadRequest(msg) => response
+                .status(Status::BadRequest)
+                .sized_body(msg.len(), Cursor::new(msg)),
+            ApiError::NotFound => response.status(Status::NotFound),
+            ApiError::InvalidUser => response.status(Status::NotFound),
+            _ => response.status(Status::InternalServerError),
+        };
+
+        response.ok()
     }
 }

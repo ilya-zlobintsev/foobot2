@@ -3,7 +3,7 @@ use std::sync::Arc;
 use std::time::Duration;
 use tokio::sync::RwLock;
 use twilight_http::Client;
-use twilight_model::guild::Permissions;
+use twilight_model::guild::{Guild, Permissions};
 use twilight_model::id::Id;
 use twilight_model::user::CurrentUser;
 use twilight_util::permission_calculator::PermissionCalculator;
@@ -41,6 +41,16 @@ impl DiscordApi {
 
     pub async fn get_self_user(&self) -> anyhow::Result<CurrentUser> {
         Ok(self.http.current_user().exec().await?.model().await?)
+    }
+
+    pub async fn get_guild(&self, guild_id: u64) -> anyhow::Result<Guild> {
+        Ok(self
+            .http
+            .guild(Id::new(guild_id))
+            .exec()
+            .await?
+            .model()
+            .await?)
     }
 
     pub async fn get_permissions_in_guild(

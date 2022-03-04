@@ -812,9 +812,9 @@ impl CommandHandler {
                 CommandError::MissingArgument("must be either add or delete".to_string())
             })? {
                 "add" | "create" => {
-                    let mut command_name = arguments.next().ok_or_else(|| {
-                        CommandError::MissingArgument("command name".to_string())
-                    })?;
+                    let mut command_name = arguments
+                        .next()
+                        .ok_or_else(|| CommandError::MissingArgument("command name".to_string()))?;
 
                     if let Some(stripped_name) = command_name.strip_prefix('!') {
                         command_name = stripped_name;
@@ -823,9 +823,7 @@ impl CommandHandler {
                     let command_action = arguments.collect::<Vec<&str>>().join(" ");
 
                     if command_action.is_empty() {
-                        return Err(CommandError::MissingArgument(
-                            "command action".to_string(),
-                        ));
+                        return Err(CommandError::MissingArgument("command action".to_string()));
                     }
 
                     match self.db.add_command_to_channel(
@@ -834,36 +832,34 @@ impl CommandHandler {
                         &command_action,
                     ) {
                         Ok(()) => Ok(Some("Command successfully added".to_string())),
-                        Err(DatabaseError::DieselError(
-                            diesel::result::Error::DatabaseError(
-                                diesel::result::DatabaseErrorKind::UniqueViolation,
-                                _,
-                            ),
-                        )) => Ok(Some("Command already exists".to_string())),
+                        Err(DatabaseError::DieselError(diesel::result::Error::DatabaseError(
+                            diesel::result::DatabaseErrorKind::UniqueViolation,
+                            _,
+                        ))) => Ok(Some("Command already exists".to_string())),
                         Err(e) => Err(CommandError::DatabaseError(e)),
                     }
                 }
                 "del" | "delete" | "remove" => {
-                    let mut command_name = arguments.next().ok_or_else(|| {
-                        CommandError::MissingArgument("command name".to_string())
-                    })?;
+                    let mut command_name = arguments
+                        .next()
+                        .ok_or_else(|| CommandError::MissingArgument("command name".to_string()))?;
 
                     if let Some(stripped_name) = command_name.strip_prefix('!') {
                         command_name = stripped_name;
                     }
 
-                    match self.db.delete_command_from_channel(
-                        &execution_context.get_channel(),
-                        command_name,
-                    ) {
+                    match self
+                        .db
+                        .delete_command_from_channel(&execution_context.get_channel(), command_name)
+                    {
                         Ok(()) => Ok(Some("Command succesfully removed".to_string())),
                         Err(e) => Err(CommandError::DatabaseError(e)),
                     }
                 }
                 "show" | "check" => {
-                    let mut command_name = arguments.next().ok_or_else(|| {
-                        CommandError::MissingArgument("command name".to_string())
-                    })?;
+                    let mut command_name = arguments
+                        .next()
+                        .ok_or_else(|| CommandError::MissingArgument("command name".to_string()))?;
 
                     if let Some(stripped_name) = command_name.strip_prefix('!') {
                         command_name = stripped_name;

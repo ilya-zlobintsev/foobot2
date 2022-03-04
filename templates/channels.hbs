@@ -50,10 +50,10 @@
     <div class="channels">
         {{#each channels}}
         <div class="channel">
-            <h1>Platform: {{ this.platform }}</h1>
-            <p>Name/Channel ID: {{ this.channel }}</p>
-            <p>ID: {{ this.id }}</p>
-            <a href="/channels/{{this.id}}/commands">
+            <h1>Platform: {{ channel.platform }}</h1>
+            <p>Channel: {{ channel.channel }}{{ #if name }} ({{ name }}){{ /if }}</p>
+            <p>ID: {{ channel.id }}</p>
+            <a href="/channels/{{channel.id}}/commands">
                 <img src="/static/list-solid.svg" height="24" width="24" /><b>Command list</b>
             </a>
         </div>
