@@ -128,7 +128,7 @@ impl fmt::Display for UserIdentifier {
             UserIdentifier::DiscordID(id) => f.write_str(&format!("discord:{}", id)),
             UserIdentifier::TelegramId(id) => f.write_str(&format!("telegram:{}", id)),
             UserIdentifier::IrcName(name) => f.write_str(&format!("irc:{}", name)),
-            UserIdentifier::IpAddr(addr) => f.write_str(&format!("local:{}", addr.to_string())),
+            UserIdentifier::IpAddr(addr) => f.write_str(&format!("local:{}", addr)),
         }
     }
 }

@@ -243,7 +243,7 @@ impl<C: LoginCredentials> HelixApi<C> {
     }
 
     pub async fn start_commercial(&self, length: i32) -> anyhow::Result<StartCommercialInfo> {
-        if (length < 30) || (length > 180) || (length % 30 != 0) {
+        if !(30..=180).contains(&length) || (length % 30 != 0) {
             return Err(anyhow!(
                 "invalid commercial length! Valid options are 30, 60, 90, 120, 150, 180."
             ));

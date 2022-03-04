@@ -106,7 +106,7 @@ impl CommandHandler {
                             Ok(response) => {
                                 let new_id = &response.data.first().unwrap().id;
 
-                                db.update_eventsub_trigger_id(&trigger.id, &new_id)
+                                db.update_eventsub_trigger_id(&trigger.id, new_id)
                                     .expect("DB error");
                             }
                             Err(e) => tracing::error!("Failed to add EventSub subscription! {}", e),
@@ -807,82 +807,80 @@ impl CommandHandler {
                     ))?
                     .id
             )))
-        } else {
-            if execution_context.get_permissions().await >= Permissions::ChannelMod {
-                match arguments.next().ok_or_else(|| {
-                    CommandError::MissingArgument("must be either add or delete".to_string())
-                })? {
-                    "add" | "create" => {
-                        let mut command_name = arguments.next().ok_or_else(|| {
-                            CommandError::MissingArgument("command name".to_string())
-                        })?;
+        } else if execution_context.get_permissions().await >= Permissions::ChannelMod {
+            match arguments.next().ok_or_else(|| {
+                CommandError::MissingArgument("must be either add or delete".to_string())
+            })? {
+                "add" | "create" => {
+                    let mut command_name = arguments.next().ok_or_else(|| {
+                        CommandError::MissingArgument("command name".to_string())
+                    })?;
 
-                        if let Some(stripped_name) = command_name.strip_prefix('!') {
-                            command_name = stripped_name;
-                        }
-
-                        let command_action = arguments.collect::<Vec<&str>>().join(" ");
-
-                        if command_action.is_empty() {
-                            return Err(CommandError::MissingArgument(
-                                "command action".to_string(),
-                            ));
-                        }
-
-                        match self.db.add_command_to_channel(
-                            &execution_context.get_channel(),
-                            command_name,
-                            &command_action,
-                        ) {
-                            Ok(()) => Ok(Some("Command successfully added".to_string())),
-                            Err(DatabaseError::DieselError(
-                                diesel::result::Error::DatabaseError(
-                                    diesel::result::DatabaseErrorKind::UniqueViolation,
-                                    _,
-                                ),
-                            )) => Ok(Some("Command already exists".to_string())),
-                            Err(e) => Err(CommandError::DatabaseError(e)),
-                        }
+                    if let Some(stripped_name) = command_name.strip_prefix('!') {
+                        command_name = stripped_name;
                     }
-                    "del" | "delete" | "remove" => {
-                        let mut command_name = arguments.next().ok_or_else(|| {
-                            CommandError::MissingArgument("command name".to_string())
-                        })?;
 
-                        if let Some(stripped_name) = command_name.strip_prefix('!') {
-                            command_name = stripped_name;
-                        }
+                    let command_action = arguments.collect::<Vec<&str>>().join(" ");
 
-                        match self.db.delete_command_from_channel(
-                            &execution_context.get_channel(),
-                            command_name,
-                        ) {
-                            Ok(()) => Ok(Some("Command succesfully removed".to_string())),
-                            Err(e) => Err(CommandError::DatabaseError(e)),
-                        }
+                    if command_action.is_empty() {
+                        return Err(CommandError::MissingArgument(
+                            "command action".to_string(),
+                        ));
                     }
-                    "show" | "check" => {
-                        let mut command_name = arguments.next().ok_or_else(|| {
-                            CommandError::MissingArgument("command name".to_string())
-                        })?;
 
-                        if let Some(stripped_name) = command_name.strip_prefix('!') {
-                            command_name = stripped_name;
-                        }
-
-                        match self
-                            .db
-                            .get_command(&execution_context.get_channel(), command_name)?
-                        {
-                            Some(command) => Ok(Some(command.action)),
-                            None => Ok(Some(format!("command {} doesn't exist", command_name))),
-                        }
+                    match self.db.add_command_to_channel(
+                        &execution_context.get_channel(),
+                        command_name,
+                        &command_action,
+                    ) {
+                        Ok(()) => Ok(Some("Command successfully added".to_string())),
+                        Err(DatabaseError::DieselError(
+                            diesel::result::Error::DatabaseError(
+                                diesel::result::DatabaseErrorKind::UniqueViolation,
+                                _,
+                            ),
+                        )) => Ok(Some("Command already exists".to_string())),
+                        Err(e) => Err(CommandError::DatabaseError(e)),
                     }
-                    _ => Err(CommandError::InvalidArgument(command.to_string())),
                 }
-            } else {
-                Err(CommandError::NoPermissions)
+                "del" | "delete" | "remove" => {
+                    let mut command_name = arguments.next().ok_or_else(|| {
+                        CommandError::MissingArgument("command name".to_string())
+                    })?;
+
+                    if let Some(stripped_name) = command_name.strip_prefix('!') {
+                        command_name = stripped_name;
+                    }
+
+                    match self.db.delete_command_from_channel(
+                        &execution_context.get_channel(),
+                        command_name,
+                    ) {
+                        Ok(()) => Ok(Some("Command succesfully removed".to_string())),
+                        Err(e) => Err(CommandError::DatabaseError(e)),
+                    }
+                }
+                "show" | "check" => {
+                    let mut command_name = arguments.next().ok_or_else(|| {
+                        CommandError::MissingArgument("command name".to_string())
+                    })?;
+
+                    if let Some(stripped_name) = command_name.strip_prefix('!') {
+                        command_name = stripped_name;
+                    }
+
+                    match self
+                        .db
+                        .get_command(&execution_context.get_channel(), command_name)?
+                    {
+                        Some(command) => Ok(Some(command.action)),
+                        None => Ok(Some(format!("command {} doesn't exist", command_name))),
+                    }
+                }
+                _ => Err(CommandError::InvalidArgument(command.to_string())),
             }
+        } else {
+            Err(CommandError::NoPermissions)
         }
     }
 

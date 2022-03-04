@@ -698,11 +698,11 @@ pub fn trim_matches_helper(
     let v = h
         .param(0)
         .map(|v| v.value().render())
-        .ok_or(RenderError::new("param not found"))?;
+        .ok_or_else(|| RenderError::new("param not found"))?;
 
     tracing::info!("Before trimming: {}", v);
 
-    let x: &[_] = &vec!['@', ','];
+    let x: &[_] = &['@', ','];
 
     let v = v.trim_matches(x);
 
@@ -736,7 +736,7 @@ impl HelperDef for SetTempData {
         let context = serde_json::from_value::<InquiryContext>(ctx.data().clone())
             .expect("Failed to get command context");
 
-        let mut params = raw_params.split_whitespace().into_iter();
+        let mut params = raw_params.split_whitespace();
 
         let key = format!(
             "{}-{}-{}",
@@ -785,7 +785,7 @@ impl HelperDef for GetTempData {
             .collect::<Vec<String>>()
             .join(" ");
 
-        let mut params = raw_params.split_whitespace().into_iter();
+        let mut params = raw_params.split_whitespace();
 
         let response = match params.next() {
             Some(key) => {
@@ -905,7 +905,7 @@ impl HelperDef for CommercialHelper {
         let duration = h
             .param(0)
             .map(|v| v.value().render())
-            .ok_or(RenderError::new("commercial duration not specified"))?;
+            .ok_or_else(|| RenderError::new("commercial duration not specified"))?;
 
         let length: i32 = duration
             .parse()

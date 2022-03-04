@@ -30,9 +30,7 @@ impl EventSubSubscriptionType {
     }
 
     fn get_version(&self) -> &str {
-        match self {
-            _ => "1",
-        }
+        "1"
     }
 
     pub fn get_condition(&self) -> Value {

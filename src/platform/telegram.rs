@@ -47,20 +47,12 @@ impl ChatPlatform for Telegram {
                             tracing::trace!("Update: {:?}", update);
                             let maybe_message = if let Some(message) = update.message {
                                 Some(message)
-                            } else if let Some(channel_post) = update.channel_post {
-                                Some(channel_post)
-                            } else {
-                                None
-                            };
+                            } else { update.channel_post };
 
                             if let Some(message) = maybe_message {
                                 let maybe_text = if let Some(text) = &message.text {
                                     Some(text.clone())
-                                } else if let Some(caption) = &message.caption {
-                                    Some(caption.clone())
-                                } else {
-                                    None
-                                };
+                                } else { message.caption.as_ref().cloned() };
 
                                 if let Some(message_text) = maybe_text {
                                     let prefix = self.prefix.clone();
@@ -69,8 +61,8 @@ impl ChatPlatform for Telegram {
                                     if let Some(from) = &message.from {
                                         display_name.push_str(&from.first_name);
                                         if let Some(last_name) = &from.last_name {
-                                            display_name.push_str(" ");
-                                            display_name.push_str(&last_name);
+                                            display_name.push(' ');
+                                            display_name.push_str(last_name);
                                         }
                                     } else if let Some(forward_chat) = &message.forward_from_chat {
                                         let name = match &forward_chat.title {
