@@ -180,7 +180,7 @@ async fn get_friendly_names(
 
     let mut handles = Vec::new();
 
-    {
+    if !twitch_channels.is_empty() {
         let results = results.clone();
         handles.push(tokio::spawn(async move {
             match helix
@@ -205,17 +205,19 @@ async fn get_friendly_names(
         }));
     }
 
-    for (guild_id, id) in discord_channels {
-        let discord_api = discord_api.clone();
-        let results = results.clone();
-        handles.push(tokio::spawn(async move {
-            match discord_api.get_guild(guild_id.parse().unwrap()).await {
-                Ok(guild) => {
-                    results.lock().await.insert(id, guild.name);
+    if !discord_channels.is_empty() {
+        for (guild_id, id) in discord_channels {
+            let discord_api = discord_api.clone();
+            let results = results.clone();
+            handles.push(tokio::spawn(async move {
+                match discord_api.get_guild(guild_id.parse().unwrap()).await {
+                    Ok(guild) => {
+                        results.lock().await.insert(id, guild.name);
+                    }
+                    Err(e) => tracing::error!("Error getting guild: {}", e),
                 }
-                Err(e) => tracing::error!("Error getting guild: {}", e),
-            }
-        }));
+            }));
+        }
     }
     join_all(handles).await;
 
