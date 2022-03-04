@@ -167,20 +167,16 @@ async fn get_friendly_names(
     let results = Arc::new(Mutex::new(HashMap::new()));
 
     let platform_handler = cmd.platform_handler.read().await;
-    let helix = platform_handler
-        .twitch_api
-        .as_ref()
-        .expect("Twitch API not initialized even though there are Twitch channels registered")
-        .helix_api
-        .clone();
-    let discord_api = platform_handler
-        .discord_api
-        .clone()
-        .expect("Discord API not initialized even though there are Discord channels registered");
-
     let mut handles = Vec::new();
 
     if !twitch_channels.is_empty() {
+        let helix = platform_handler
+            .twitch_api
+            .as_ref()
+            .expect("Twitch API not initialized even though there are Twitch channels registered")
+            .helix_api
+            .clone();
+
         let results = results.clone();
         handles.push(tokio::spawn(async move {
             match helix
@@ -206,6 +202,10 @@ async fn get_friendly_names(
     }
 
     if !discord_channels.is_empty() {
+        let discord_api = platform_handler.discord_api.clone().expect(
+            "Discord API not initialized even though there are Discord channels registered",
+        );
+
         for (guild_id, id) in discord_channels {
             let discord_api = discord_api.clone();
             let results = results.clone();
