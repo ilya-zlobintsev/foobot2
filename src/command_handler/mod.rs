@@ -4,7 +4,7 @@ pub mod inquiry_helper;
 pub mod lastfm_api;
 pub mod lingva_api;
 pub mod owm_api;
-mod platform_handler;
+pub mod platform_handler;
 pub mod spotify_api;
 pub mod twitch_api;
 
@@ -987,11 +987,12 @@ impl CommandHandler {
             .await?
             .unwrap_or_else(|| "Event triggered with no action".to_string());
 
-        self.platform_handler
+        Ok(self
+            .platform_handler
             .read()
             .await
             .send_to_channel(context.get_channel(), response)
-            .await
+            .await?)
     }
 
     pub async fn join_channel(&self, channel: &ChannelIdentifier) -> anyhow::Result<()> {

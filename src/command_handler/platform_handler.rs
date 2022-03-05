@@ -2,8 +2,8 @@ use crate::{
     database::Database,
     platform::{twitch, ChannelIdentifier},
 };
-use anyhow::{anyhow, Context};
-use std::time::Duration;
+use anyhow::Error;
+use std::{fmt::Display, time::Duration};
 use tokio::time::sleep;
 use twitch_irc::login::RefreshingLoginCredentials;
 
@@ -24,10 +24,13 @@ impl PlatformHandler {
         &self,
         channel: ChannelIdentifier,
         msg: String,
-    ) -> anyhow::Result<()> {
+    ) -> Result<(), PlatformHandlerError> {
         match channel {
             ChannelIdentifier::TwitchChannel((channel_id, _)) => {
-                let twitch_api = self.twitch_api.as_ref().context("Twitch not configured")?;
+                let twitch_api = self
+                    .twitch_api
+                    .as_ref()
+                    .ok_or(PlatformHandlerError::Unconfigured)?;
 
                 let broadcaster = twitch_api.helix_api.get_user_by_id(&channel_id).await?;
 
@@ -46,30 +49,74 @@ impl PlatformHandler {
                         if section.len() == twitch::MSG_LENGTH_LIMIT {
                             chat_client
                                 .privmsg(broadcaster.login.clone(), section.clone())
-                                .await?;
+                                .await
+                                .map_err(|e| Error::new(e))?;
                             section.clear();
                             sleep(Duration::from_millis(500)).await; // scuffed rate limiting
                         }
                     }
                     if !section.is_empty() {
-                        chat_client.privmsg(broadcaster.login, section).await?;
+                        chat_client
+                            .privmsg(broadcaster.login, section)
+                            .await
+                            .map_err(|e| Error::new(e))?;
                     }
                 } else {
-                    chat_client.privmsg(broadcaster.login, msg).await?;
+                    chat_client
+                        .privmsg(broadcaster.login, msg)
+                        .await
+                        .map_err(|e| Error::new(e))?;
                 }
 
                 Ok(())
             }
             ChannelIdentifier::IrcChannel(channel) => {
-                let sender = self.irc_sender.as_ref().context("IRC not configured")?;
+                let sender = self
+                    .irc_sender
+                    .as_ref()
+                    .ok_or(PlatformHandlerError::Unconfigured)?;
 
-                sender.send_privmsg(channel, &msg)?;
+                sender
+                    .send_privmsg(channel, &msg)
+                    .map_err(|e| Error::new(e))?;
 
                 Ok(())
             }
-            _ => Err(anyhow!(
-                "Remotely triggered commands not supported for this platform"
-            )),
+            _ => Err(PlatformHandlerError::Unsupported),
         }
+    }
+}
+
+#[derive(Debug)]
+pub enum PlatformHandlerError {
+    Unsupported,
+    Unconfigured,
+    PlatformError(anyhow::Error),
+}
+
+impl From<anyhow::Error> for PlatformHandlerError {
+    fn from(e: anyhow::Error) -> Self {
+        PlatformHandlerError::PlatformError(e)
+    }
+}
+
+impl std::error::Error for PlatformHandlerError {
+    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
+        None
+    }
+}
+
+impl Display for PlatformHandlerError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "{}",
+            match self {
+                PlatformHandlerError::Unconfigured => String::from("Platform is not configured"),
+                PlatformHandlerError::Unsupported =>
+                    String::from("Remote message sending is not supported for this platform"),
+                PlatformHandlerError::PlatformError(e) => format!("Platform error: {}", e),
+            }
+        )
     }
 }

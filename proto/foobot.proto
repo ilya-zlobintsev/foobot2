@@ -1,0 +1,13 @@
+syntax = "proto3";
+package foobot;
+
+message EchoRequest {
+    uint64 channel_id = 1;
+    string message = 2;
+}
+
+message EchoResponse {}
+
+service Foobot {
+    rpc SendMessage(EchoRequest) returns (EchoResponse);
+}

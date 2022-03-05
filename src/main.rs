@@ -6,6 +6,7 @@ extern crate rocket;
 mod command_handler;
 mod database;
 mod platform;
+mod rpc;
 mod web;
 
 use command_handler::{get_admin_channel, CommandHandler};
@@ -80,7 +81,9 @@ async fn main() {
         }
     }
 
-    web::run(command_handler.clone()).await;
+    rpc::start_server(command_handler.clone());
+
+    web::run(command_handler).await;
 }
 
 pub fn get_version() -> String {
