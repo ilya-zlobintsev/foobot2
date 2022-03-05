@@ -13,7 +13,7 @@ pub mod foobot {
 pub fn start_server(command_handler: CommandHandler) {
     tokio::spawn(async move {
         let port = env::var("GRPC_PORT").unwrap_or_else(|_| String::from("50051"));
-        let addr = format!("[::1]:{}", port).parse().unwrap();
+        let addr = format!("0.0.0.0:{}", port).parse().unwrap();
         tracing::info!("GRPC server is listening on {}", addr);
 
         if let Err(e) = Server::builder()
