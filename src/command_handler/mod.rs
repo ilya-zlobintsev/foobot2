@@ -1129,7 +1129,8 @@ async fn start_supinic_heartbeat() {
             {
                 Ok(response) => {
                     if !response.status().is_success() {
-                        tracing::info!("Supinic API error: {:?}", response.text().await);
+                        let text = response.text().await;
+                        tracing::info!("Supinic API error: {:?}", text);
                     }
                 }
                 Err(e) => tracing::warn!("Failed to ping Supinic API! {}", e),

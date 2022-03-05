@@ -202,7 +202,8 @@ impl<C: LoginCredentials> HelixApi<C> {
             .await?;
 
         if let Err(e) = response_ok(&response) {
-            tracing::info!("{}", response.text().await?);
+            let text = response.text().await?;
+            tracing::info!("{}", text);
 
             return Err(e);
         }
