@@ -17,6 +17,8 @@ RUN mkdir src
 RUN echo "fn main() {}" > src/main.rs
 RUN cargo build --release
 
+RUN rustup component add rustfmt
+
 # We need to touch our real main.rs file or else docker will use
 # the cached one.
 COPY . .
