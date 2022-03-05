@@ -99,9 +99,9 @@ dependencies = [
 
 [[package]]
 name = "anyhow"
-version = "1.0.54"
+version = "1.0.55"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7a99269dff3bc004caa411f38845c20303f1e393ca2bd6581576fa3a7f59577d"
+checksum = "159bb86af3a200e19a068f4224eae4c8bb2d0fa054c7e5d1cacd5cef95e684cd"
 
 [[package]]
 name = "async-stream"
@@ -515,7 +515,7 @@ dependencies = [
 [[package]]
 name = "diesel"
 version = "2.0.0"
-source = "git+https://github.com/diesel-rs/diesel.git#95d1eabf10a5f4318bf7e2490bc626e02facefd1"
+source = "git+https://github.com/diesel-rs/diesel.git#c794c3e621d89df8d5f7a5ae5164640c3d9f43ed"
 dependencies = [
  "bitflags",
  "byteorder",
@@ -531,7 +531,7 @@ dependencies = [
 [[package]]
 name = "diesel_derives"
 version = "2.0.0"
-source = "git+https://github.com/diesel-rs/diesel.git#95d1eabf10a5f4318bf7e2490bc626e02facefd1"
+source = "git+https://github.com/diesel-rs/diesel.git#c794c3e621d89df8d5f7a5ae5164640c3d9f43ed"
 dependencies = [
  "proc-macro-error",
  "proc-macro2",
@@ -542,7 +542,7 @@ dependencies = [
 [[package]]
 name = "diesel_migrations"
 version = "2.0.0"
-source = "git+https://github.com/diesel-rs/diesel.git#95d1eabf10a5f4318bf7e2490bc626e02facefd1"
+source = "git+https://github.com/diesel-rs/diesel.git#c794c3e621d89df8d5f7a5ae5164640c3d9f43ed"
 dependencies = [
  "diesel",
  "migrations_internals",
@@ -980,9 +980,9 @@ dependencies = [
 
 [[package]]
 name = "getrandom"
-version = "0.2.4"
+version = "0.2.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "418d37c8b1d42553c93648be529cb70f920d3baf8ef469b74b9638df426e0b4c"
+checksum = "d39cd93900197114fa1fcb7ae84ca742095eed9442088988ae74fa744e930e77"
 dependencies = [
  "cfg-if 1.0.0",
  "libc",
@@ -1443,7 +1443,7 @@ checksum = "308cc39be01b73d0d18f82a0e7b2a3df85245f84af96fdddc5d202d27e47b86a"
 [[package]]
 name = "migrations_internals"
 version = "2.0.0"
-source = "git+https://github.com/diesel-rs/diesel.git#95d1eabf10a5f4318bf7e2490bc626e02facefd1"
+source = "git+https://github.com/diesel-rs/diesel.git#c794c3e621d89df8d5f7a5ae5164640c3d9f43ed"
 dependencies = [
  "serde",
  "toml",
@@ -1452,7 +1452,7 @@ dependencies = [
 [[package]]
 name = "migrations_macros"
 version = "2.0.0"
-source = "git+https://github.com/diesel-rs/diesel.git#95d1eabf10a5f4318bf7e2490bc626e02facefd1"
+source = "git+https://github.com/diesel-rs/diesel.git#c794c3e621d89df8d5f7a5ae5164640c3d9f43ed"
 dependencies = [
  "migrations_internals",
  "proc-macro2",
@@ -1685,9 +1685,9 @@ dependencies = [
 
 [[package]]
 name = "once_cell"
-version = "1.9.0"
+version = "1.10.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "da32515d9f6e6e489d7bc9d84c71b060db7247dc035bbe44eac88cf87486d8d5"
+checksum = "87f3e037eac156d1775da914196f0f37741a274155e34a0b7e427c35d2a2ecb9"
 
 [[package]]
 name = "opaque-debug"
@@ -2105,9 +2105,9 @@ dependencies = [
 
 [[package]]
 name = "redox_syscall"
-version = "0.2.10"
+version = "0.2.11"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8383f39639269cde97d255a32bdb68c047337295414940c68bdd30c2e13203ff"
+checksum = "8380fe0152551244f0747b1bf41737e0f8a74f97a14ccefd1148187271634f3c"
 dependencies = [
  "bitflags",
 ]
@@ -3183,9 +3183,9 @@ dependencies = [
 
 [[package]]
 name = "twilight-model"
-version = "0.9.1"
+version = "0.9.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ddc1ea478c0e6111415cdb0c5b566a769987ccb886815328c077e86b30c904f4"
+checksum = "c50283cfe1a01c268899a29e3318de4f60b9877be6cc8e434e65c5d3ec95d49e"
 dependencies = [
  "bitflags",
  "serde",
@@ -3197,18 +3197,18 @@ dependencies = [
 
 [[package]]
 name = "twilight-util"
-version = "0.9.0"
+version = "0.9.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "60289e602d8d4008ab0f9b512109e03358ee9a3f44c59a711e35c03120b808e7"
+checksum = "ead1424b924c93a48e706d076af2b08f8c0c927c6e41e5128adc5ca408c6709f"
 dependencies = [
  "twilight-model",
 ]
 
 [[package]]
 name = "twilight-validate"
-version = "0.9.1"
+version = "0.9.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8ef2c0f1b680b4fb1a11261cdff527c8e6c30d442b22f9655f69bb338c9abee5"
+checksum = "b499f9fec4ceff08abe8374acc162c021f593659759653ffe6c86c54fd818390"
 dependencies = [
  "twilight-model",
 ]
