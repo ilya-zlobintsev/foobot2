@@ -64,6 +64,7 @@ pub struct Command {
     pub permissions: Option<String>,
     pub channel_id: u64,
     pub cooldown: Option<u64>,
+    pub triggers: Option<String>
 }
 
 #[derive(Insertable, Debug, PartialEq, Eq)]

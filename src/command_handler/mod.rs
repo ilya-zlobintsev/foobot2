@@ -77,7 +77,8 @@ pub struct CommandHandler {
     startup_time: Arc<Instant>,
     template_registry: Arc<Handlebars<'static>>,
     cooldowns: Arc<RwLock<Vec<(u64, String)>>>, // User id and command
-    mirror_connections: Arc<HashMap<String, ChannelIdentifier>>, // from and to channel
+    command_triggers: Arc<DashMap<u64, Arc<DashMap<String, String>>>>, // Channel id, trigger phrase and command name
+    mirror_connections: Arc<HashMap<String, ChannelIdentifier>>,       // from and to channel
 }
 
 impl CommandHandler {
@@ -258,6 +259,7 @@ impl CommandHandler {
             template_registry: Arc::new(template_registry),
             cooldowns,
             mirror_connections: Arc::new(mirror_connections),
+            command_triggers: Arc::new(DashMap::new()),
         }
     }
 
@@ -294,6 +296,25 @@ impl CommandHandler {
                         tracing::warn!("Failed to mirror message: {}", e);
                     }
                 });
+            }
+        }
+
+        if let Some(channel) = self
+            .db
+            .get_or_create_channel(&context.get_channel())
+            .expect("DB error")
+        {
+            let triggers = self.get_command_triggers(channel.id).expect("DB error");
+
+            for trigger in triggers.iter() {
+                if let Some(command_args) = message_text.strip_prefix(trigger.key()) {
+                    return self
+                        .handle_command_message(
+                            &format!("{} {}", trigger.key(), command_args),
+                            context,
+                        )
+                        .await;
+                }
             }
         }
 
@@ -796,7 +817,7 @@ impl CommandHandler {
     ) -> Result<Option<String>, CommandError> {
         let mut arguments = arguments.into_iter();
 
-        if arguments.len() == 0 {
+        let response = if arguments.len() == 0 {
             Ok(Some(format!(
                 "{}/channels/{}/commands",
                 web::get_base_url(),
@@ -816,8 +837,10 @@ impl CommandHandler {
                         .next()
                         .ok_or_else(|| CommandError::MissingArgument("command name".to_string()))?;
 
-                    if let Some(stripped_name) = command_name.strip_prefix('!') {
-                        command_name = stripped_name;
+                    for prefix in execution_context.get_prefixes() {
+                        if let Some(stripped_name) = command_name.strip_prefix(prefix) {
+                            command_name = stripped_name;
+                        }
                     }
 
                     let command_action = arguments.collect::<Vec<&str>>().join(" ");
@@ -877,7 +900,16 @@ impl CommandHandler {
             }
         } else {
             Err(CommandError::NoPermissions)
-        }
+        }?;
+
+        let channel = self
+            .db
+            .get_or_create_channel(&execution_context.get_channel())?
+            .ok_or_else(|| CommandError::NoPermissions)?; // Shouldn't happen anyway
+
+        self.refresh_command_triggers(channel.id)?;
+
+        Ok(response)
     }
 
     pub async fn get_permissions_in_channel(
@@ -1029,6 +1061,39 @@ impl CommandHandler {
             ChannelIdentifier::LocalAddress(_) => Err(anyhow!("This is not possible")),
             ChannelIdentifier::Anonymous => Err(anyhow!("Invalid channel specified")),
         }
+    }
+
+    fn get_command_triggers(
+        &self,
+        channel_id: u64,
+    ) -> Result<Arc<DashMap<String, String>>, CommandError> {
+        match self.command_triggers.get(&channel_id) {
+            Some(triggers) => Ok(triggers.clone()),
+            None => {
+                self.refresh_command_triggers(channel_id)?;
+                self.get_command_triggers(channel_id)
+            }
+        }
+    }
+
+    fn refresh_command_triggers(&self, channel_id: u64) -> Result<(), CommandError> {
+        let commands = self.db.get_commands(channel_id)?;
+
+        let triggers = DashMap::new();
+
+        for command in commands {
+            if let Some(command_triggers) = command.triggers {
+                for trigger in command_triggers.split(";") {
+                    triggers.insert(trigger.to_string(), command.name.clone());
+                }
+            }
+        }
+
+        if let Some(_) = self.command_triggers.insert(channel_id, Arc::new(triggers)) {
+            tracing::info!("Reloaded command triggers in channel {}", channel_id);
+        }
+
+        Ok(())
     }
 }
 

@@ -20,6 +20,7 @@ table! {
         permissions -> Nullable<Text>,
         channel_id -> Unsigned<Bigint>,
         cooldown -> Nullable<Unsigned<Bigint>>,
+        triggers -> Nullable<Text>,
     }
 }
 
