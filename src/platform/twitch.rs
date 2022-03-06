@@ -242,17 +242,6 @@ impl<T: TwitchMessage + std::marker::Sync + Clone> ExecutionContext for TwitchEx
 
 impl Twitch {
     async fn handle_message<T: 'static + TwitchMessage + Send + Sync + Clone>(&self, msg: T) {
-        if msg.get_sender().id == "82008718" && msg.get_content() == "pajaS 🚨 ALERT" {
-            let client = self.client.lock().await;
-
-            let client = client.as_ref().unwrap();
-
-            client
-                .privmsg("pajlada".to_owned(), "FeelsWeirdMan 👉 🚨".to_owned())
-                .await
-                .unwrap();
-        }
-
         let Self {
             command_handler,
             last_messages,
