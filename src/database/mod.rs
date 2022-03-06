@@ -771,6 +771,27 @@ impl Database {
             .execute(&mut conn)?;
         Ok(())
     }
+
+    pub fn set_command_triggers(
+        &self,
+        channel_id: u64,
+        command_name: &str,
+        triggers: &str,
+    ) -> Result<(), DatabaseError> {
+        let mut conn = self.conn_pool.get().unwrap();
+
+        if diesel::update(commands::table)
+            .filter(commands::channel_id.eq(channel_id))
+            .filter(commands::name.eq(command_name))
+            .set(commands::triggers.eq(triggers))
+            .execute(&mut conn)?
+            > 0
+        {
+            Ok(())
+        } else {
+            Err(DatabaseError::InvalidValue)
+        }
+    }
 }
 
 #[derive(Debug)]

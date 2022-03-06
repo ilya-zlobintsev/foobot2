@@ -308,12 +308,10 @@ impl CommandHandler {
 
             for trigger in triggers.iter() {
                 if let Some(command_args) = message_text.strip_prefix(trigger.key()) {
-                    return self
-                        .handle_command_message(
-                            &format!("{} {}", trigger.key(), command_args),
-                            context,
-                        )
-                        .await;
+                    let command_msg = format!("{} {}", trigger.value(), command_args);
+                    tracing::info!("Executing indirect command {}", command_msg);
+
+                    return self.handle_command_message(&command_msg, context).await;
                 }
             }
         }
@@ -815,6 +813,11 @@ impl CommandHandler {
         arguments: Vec<&str>,
         execution_context: C,
     ) -> Result<Option<String>, CommandError> {
+        let channel = self
+            .db
+            .get_or_create_channel(&execution_context.get_channel())?
+            .ok_or_else(|| CommandError::NoPermissions)?; // Shouldn't happen anyway
+
         let mut arguments = arguments.into_iter();
 
         let response = if arguments.len() == 0 {
@@ -896,16 +899,52 @@ impl CommandHandler {
                         None => Ok(Some(format!("command {} doesn't exist", command_name))),
                     }
                 }
+                "set_triggers" => {
+                    let mut command_name = arguments
+                        .next()
+                        .ok_or_else(|| CommandError::MissingArgument("command name".to_string()))?;
+
+                    if let Some(stripped_name) = command_name.strip_prefix('!') {
+                        command_name = stripped_name;
+                    }
+
+                    let triggers = arguments.collect::<Vec<&str>>().join(" ");
+
+                    if triggers.is_empty() {
+                        return Err(CommandError::MissingArgument("triggers".to_string()));
+                    }
+
+                    self.db
+                        .set_command_triggers(channel.id, &command_name, &triggers)?;
+
+                    Ok(Some(String::from("Succesfully updated command triggers")))
+                }
+                "get_triggers" => {
+                    let mut command_name = arguments
+                        .next()
+                        .ok_or_else(|| CommandError::MissingArgument("command name".to_string()))?;
+
+                    if let Some(stripped_name) = command_name.strip_prefix('!') {
+                        command_name = stripped_name;
+                    }
+
+                    let commands = self.db.get_commands(channel.id)?;
+
+                    for command in commands {
+                        if command.name == command_name {
+                            return Ok(match command.triggers {
+                                Some(triggers) => Some(format!("Command triggers: {}", triggers)),
+                                None => Some(String::from("Command has no triggers")),
+                            });
+                        }
+                    }
+                    Ok(Some(String::from("Command not found")))
+                }
                 _ => Err(CommandError::InvalidArgument(command.to_string())),
             }
         } else {
             Err(CommandError::NoPermissions)
         }?;
-
-        let channel = self
-            .db
-            .get_or_create_channel(&execution_context.get_channel())?
-            .ok_or_else(|| CommandError::NoPermissions)?; // Shouldn't happen anyway
 
         self.refresh_command_triggers(channel.id)?;
 
