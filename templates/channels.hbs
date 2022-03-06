@@ -44,6 +44,16 @@
         margin-top: auto;
         margin-bottom: auto;
     }
+
+    .channel_id {
+        margin-top: 5pt;
+        margin-bottom: 2pt;
+    }
+
+    .channel_name {
+        margin-top: 3pt;
+        font-weight: 800;
+    }
 </style>
 
 <section>
@@ -51,7 +61,8 @@
         {{#each channels}}
         <div class="channel">
             <h1>Platform: {{ channel.platform }}</h1>
-            <p>Channel: {{ channel.channel }}{{ #if name }} ({{ name }}){{ /if }}</p>
+            <p class=channel_id>Channel: {{ channel.channel }}</p>
+            <p class=channel_name> {{ #if name }} ({{ name }}){{ /if }}</p>
             <p>ID: {{ channel.id }}</p>
             <a href="/channels/{{channel.id}}/commands">
                 <img src="/static/list-solid.svg" height="24" width="24" /><b>Command list</b>
