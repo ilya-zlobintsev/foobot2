@@ -54,7 +54,7 @@ impl<C: LoginCredentials> HelixApi<C> {
 
         task::spawn(async move {
             loop {
-                tokio::time::sleep(Duration::from_secs(3600)).await;
+                tokio::time::sleep(Duration::from_secs(36000)).await;
 
                 tracing::info!("Clearing users cache");
 
