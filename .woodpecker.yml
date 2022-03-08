@@ -1,14 +1,25 @@
 pipeline:
-  pull-repo:
+  build-push:
+    image: docker
+    commands:
+      - echo $DOCKER_PASSWORD | docker login -u $DOCKER_USERNAME --password-stdin
+      - docker build --build-arg=SCCACHE_MEMCACHED="$SCCACHE_MEMCACHED" -t docker.io/ilyazzz/foobot2 .
+      - docker push docker.io/ilyazzz/foobot2
+    secrets: [ DOCKER_USERNAME, DOCKER_PASSWORD, SCCACHE_MEMCACHED ]
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+        
+  deploy:
     image: appleboy/drone-ssh
     host: ${SSH_HOST}
     port: 22
     key_path: /root/.ssh/id_rsa
-    secrets: [ ssh_host, ssh_username, repo_dir ]
+    secrets: [ ssh_host, ssh_username ]
     volumes:
       - /root/.ssh/id_rsa:/root/.ssh/id_rsa
     script:
-      - cd /media/big/volumes/foobot/src
-      - git pull --no-rebase
+      - cd ~/docker/foobot/
+      - docker compose pull
+      - docker compose up -d
 
 branches: master
