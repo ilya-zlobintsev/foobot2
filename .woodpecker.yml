@@ -8,7 +8,7 @@ pipeline:
     volumes:
       - /root/.ssh/id_rsa:/root/.ssh/id_rsa
     script:
-      - cd ${REPO_DIR}
+      - cd /media/big/volumes/foobot/src
       - git pull --no-rebase
 
 branches: master
