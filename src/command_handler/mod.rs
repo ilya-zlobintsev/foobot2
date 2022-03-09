@@ -487,9 +487,14 @@ impl CommandHandler {
                                 let output = cmd
                                     .output()
                                     .await
-                                    .map(|o| String::from_utf8_lossy(&o.stdout).into_owned())
+                                    .map(|o| {
+                                        let stdout =
+                                            String::from_utf8_lossy(&o.stdout).into_owned();
+                                        let stderr =
+                                            String::from_utf8_lossy(&o.stderr).into_owned();
+                                        format!("{}{}", stdout, stderr)
+                                    })
                                     .unwrap_or_else(|e| e.to_string())
-                                    .replace("\n", " ")
                                     .trim()
                                     .to_owned();
 

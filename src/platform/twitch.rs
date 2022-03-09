@@ -278,7 +278,7 @@ impl Twitch {
 
             let response = command_handler
                 .handle_message(msg.get_content(), context)
-                .await;
+                .await.map(|s| s.replace('\n', " "));
 
             tracing::debug!(
                 "Command took {}ms to process",
