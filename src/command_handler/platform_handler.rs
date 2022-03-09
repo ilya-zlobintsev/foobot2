@@ -3,8 +3,7 @@ use crate::{
     platform::{twitch, ChannelIdentifier},
 };
 use anyhow::Error;
-use std::{fmt::Display, time::Duration};
-use tokio::time::sleep;
+use std::fmt::Display;
 use twitch_irc::login::RefreshingLoginCredentials;
 
 use super::discord_api::DiscordApi;
@@ -34,39 +33,20 @@ impl PlatformHandler {
 
                 let broadcaster = twitch_api.helix_api.get_user_by_id(&channel_id).await?;
 
-                let chat_client_guard = twitch_api.chat_client.lock().await;
-                let chat_client = chat_client_guard.as_ref().expect("Chat client missing");
+                let chat_sender_guard = twitch_api.chat_sender.lock().await;
+                let chat_sender = chat_sender_guard.as_ref().expect("Chat client missing");
 
                 tracing::info!("Sending {} to {}", msg, broadcaster.login);
 
-                let msg = msg.split_whitespace().collect::<Vec<&str>>().join(" ");
+                let message = msg.split_whitespace().collect::<Vec<&str>>().join(" ");
 
-                if msg.len() > twitch::MSG_LENGTH_LIMIT {
-                    let mut section = String::new();
-
-                    for ch in msg.chars() {
-                        section.push(ch);
-                        if section.len() == twitch::MSG_LENGTH_LIMIT {
-                            chat_client
-                                .privmsg(broadcaster.login.clone(), section.clone())
-                                .await
-                                .map_err(|e| Error::new(e))?;
-                            section.clear();
-                            sleep(Duration::from_millis(500)).await; // scuffed rate limiting
-                        }
-                    }
-                    if !section.is_empty() {
-                        chat_client
-                            .privmsg(broadcaster.login, section)
-                            .await
-                            .map_err(|e| Error::new(e))?;
-                    }
-                } else {
-                    chat_client
-                        .privmsg(broadcaster.login, msg)
-                        .await
-                        .map_err(|e| Error::new(e))?;
-                }
+                chat_sender
+                    .send(twitch::SenderMessage::Privmsg(twitch::Privmsg {
+                        channel_login: broadcaster.login,
+                        message,
+                        reply_to_id: None,
+                    }))
+                    .unwrap();
 
                 Ok(())
             }

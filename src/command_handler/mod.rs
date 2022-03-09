@@ -12,7 +12,8 @@ use crate::database::models::NewEventSubTrigger;
 use crate::database::DatabaseError;
 use crate::database::{models::User, Database};
 use crate::platform::{
-    ChannelIdentifier, ExecutionContext, Permissions, ServerExecutionContext, UserIdentifierError,
+    twitch, ChannelIdentifier, ExecutionContext, Permissions, ServerExecutionContext,
+    UserIdentifierError,
 };
 use crate::{get_version, web};
 
@@ -1082,16 +1083,21 @@ impl CommandHandler {
 
                 let user = twitch_api.helix_api.get_user_by_id(id).await?;
 
-                let chat_client_guard = twitch_api.chat_client.lock().await;
-
-                let chat_client = chat_client_guard
+                let chat_sender_guard = twitch_api.chat_sender.lock().await;
+                let chat_sender = chat_sender_guard
                     .as_ref()
                     .context("Twitch chat not initialized")?;
 
-                chat_client.join(user.login.clone());
-                chat_client
-                    .say(user.login, "MrDestructoid 👍 Foobot2 joined".to_string())
-                    .await?;
+                chat_sender
+                    .send(twitch::SenderMessage::JoinChannel(user.login.clone()))
+                    .unwrap();
+                chat_sender
+                    .send(twitch::SenderMessage::Privmsg(twitch::Privmsg {
+                        channel_login: user.login,
+                        message: String::from("MrDestructoid 👍 Foobot2 joined"),
+                        reply_to_id: None,
+                    }))
+                    .unwrap();
 
                 self.db
                     .get_or_create_channel(channel)?

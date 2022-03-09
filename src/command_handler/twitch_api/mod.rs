@@ -9,6 +9,7 @@ use std::time::Duration;
 use tokio::sync::Mutex;
 
 use reqwest::Client;
+use tokio::sync::mpsc::UnboundedSender;
 use tokio::task;
 
 use model::*;
@@ -25,7 +26,7 @@ const APP_SCOPES: &[&str] = &["moderation:read", "channel:moderate", "chat:edit"
 pub struct TwitchApi<C: LoginCredentials + Clone> {
     pub helix_api: HelixApi<C>,
     pub helix_api_app: HelixApi<StaticLoginCredentials>,
-    pub chat_client: Arc<Mutex<Option<twitch::TwitchClient>>>,
+    pub chat_sender: Arc<Mutex<Option<UnboundedSender<twitch::SenderMessage>>>>,
     moderators_cache: Arc<RwLock<HashMap<String, Vec<String>>>>,
     client: Client,
 }
@@ -59,7 +60,7 @@ impl<C: LoginCredentials + Clone> TwitchApi<C> {
             ))
             .await,
             client: Client::new(),
-            chat_client: Arc::new(Mutex::new(None)),
+            chat_sender: Arc::new(Mutex::new(None)),
             moderators_cache: Arc::new(RwLock::new(HashMap::new())),
         };
 

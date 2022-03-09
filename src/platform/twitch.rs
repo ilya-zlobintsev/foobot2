@@ -3,7 +3,7 @@ use std::sync::Arc;
 use async_trait::async_trait;
 use dashmap::DashMap;
 use std::time::{Duration, Instant};
-use tokio::sync::Mutex;
+use tokio::sync::mpsc::{self, UnboundedSender};
 use tokio::task;
 use tokio::time::sleep;
 use twitch_irc::login::{LoginCredentials, RefreshingLoginCredentials};
@@ -23,7 +23,6 @@ pub const MSG_LENGTH_LIMIT: usize = 420;
 
 #[derive(Clone)]
 pub struct Twitch {
-    client: Arc<Mutex<Option<TwitchClient>>>,
     command_handler: CommandHandler,
     possible_prefixes: Arc<[String; 5]>,
     last_messages: Arc<DashMap<String, String>>,
@@ -57,7 +56,6 @@ impl ChatPlatform for Twitch {
         ]);
 
         Ok(Box::new(Self {
-            client: Arc::new(Mutex::new(None)),
             command_handler,
             possible_prefixes,
             last_messages: Arc::new(DashMap::new()),
@@ -65,6 +63,8 @@ impl ChatPlatform for Twitch {
     }
 
     async fn run(self) {
+        let (tx, mut rx) = mpsc::unbounded_channel::<SenderMessage>();
+
         let platform_handler = self.command_handler.platform_handler.read().await;
         let twitch_api = platform_handler
             .twitch_api
@@ -73,13 +73,11 @@ impl ChatPlatform for Twitch {
 
         let config = ClientConfig::new_simple(twitch_api.helix_api.credentials.clone());
 
-        let (mut incoming_messages, client) = TwitchIRCClient::new(config);
+        let (mut incoming_messages, client): (_, TwitchClient) = TwitchIRCClient::new(config);
 
         tracing::info!("Connected to Twitch");
 
-        *self.client.lock().await = Some(client.clone());
-
-        *twitch_api.chat_client.lock().await = Some(client.clone());
+        *twitch_api.chat_sender.lock().await = Some(tx.clone());
 
         let channels = self.command_handler.db.get_channels().unwrap();
 
@@ -112,34 +110,70 @@ impl ChatPlatform for Twitch {
         drop(platform_handler);
 
         tokio::spawn(async move {
+            while let Some(msg) = rx.recv().await {
+                tracing::trace!("Received Twitch sender message: {:?}", msg);
+                match msg {
+                    SenderMessage::Privmsg(pm) => {
+                        if pm.message.len() > MSG_LENGTH_LIMIT {
+                            let response_bytes = pm.message.into_bytes();
+
+                            let mut chunks = response_bytes
+                                .chunks(MSG_LENGTH_LIMIT)
+                                .map(std::str::from_utf8)
+                                .collect::<Result<Vec<&str>, _>>()
+                                .unwrap()
+                                .into_iter();
+
+                            if let Some(reply_to_id) = pm.reply_to_id {
+                                client
+                                    .say_in_response(
+                                        pm.channel_login.clone(),
+                                        chunks.next().unwrap().to_string(),
+                                        Some(reply_to_id),
+                                    )
+                                    .await
+                                    .expect("Failed to send message");
+                                sleep(Duration::from_secs(1)).await;
+
+                                for chunk in chunks {
+                                    client
+                                        .say(pm.channel_login.clone(), chunk.to_owned())
+                                        .await
+                                        .expect("Failed to send message");
+                                    sleep(Duration::from_secs(1)).await;
+                                }
+                            } else {
+                                unimplemented!() // i don't bother with the whispers functionality because it doesn't properly work on twitch
+                            }
+                        } else {
+                            if let Err(e) = client
+                                .say_in_response(pm.channel_login, pm.message, pm.reply_to_id)
+                                .await
+                            {
+                                tracing::error!("Error sending twitch message: {}", e);
+                            }
+                            sleep(Duration::from_secs(1)).await;
+                        }
+                    }
+                    SenderMessage::JoinChannel(channel_login) => {
+                        client.join(channel_login);
+                    }
+                }
+            }
+        });
+
+        tokio::spawn(async move {
             while let Some(message) = incoming_messages.recv().await {
                 match message {
-                    ServerMessage::Privmsg(pm) => self.handle_message(pm).await,
-                    ServerMessage::Whisper(whisper) => self.handle_message(whisper).await,
+                    ServerMessage::Privmsg(pm) => self.handle_message(pm, tx.clone()).await,
+                    ServerMessage::Whisper(whisper) => {
+                        self.handle_message(whisper, tx.clone()).await
+                    }
                     _ => (),
                 }
             }
         });
     }
-
-    /*async fn create_listener(&self) -> std::sync::mpsc::Sender<super::PlatformMessage> {
-        let (sender, receiver): (Sender<PlatformMessage>, Receiver<PlatformMessage>) = channel();
-
-        let client = self.client.read().unwrap().as_ref().unwrap().clone();
-
-        task::spawn(async move {
-            loop {
-                let msg = receiver.recv().unwrap();
-
-                client
-                    .privmsg(msg.channel_id, msg.message)
-                    .await
-                    .expect("Twitch error");
-            }
-        });
-
-        sender
-    }*/
 }
 
 pub trait TwitchMessage {
@@ -241,12 +275,15 @@ impl<T: TwitchMessage + std::marker::Sync + Clone> ExecutionContext for TwitchEx
 }
 
 impl Twitch {
-    async fn handle_message<T: 'static + TwitchMessage + Send + Sync + Clone>(&self, msg: T) {
+    async fn handle_message<T: 'static + TwitchMessage + Send + Sync + Clone>(
+        &self,
+        msg: T,
+        tx: UnboundedSender<SenderMessage>,
+    ) {
         let Self {
             command_handler,
             last_messages,
             possible_prefixes,
-            client,
             ..
         } = self.clone();
 
@@ -278,7 +315,8 @@ impl Twitch {
 
             let response = command_handler
                 .handle_message(msg.get_content(), context)
-                .await.map(|s| s.replace('\n', " "));
+                .await
+                .map(|s| s.replace('\n', " "));
 
             tracing::debug!(
                 "Command took {}ms to process",
@@ -313,56 +351,39 @@ impl Twitch {
 
                 last_messages.insert(channel.to_string(), response.clone());
 
-                let client_guard = client.lock().await;
-
-                let client = client_guard.as_ref().unwrap();
-
                 tracing::info!("Replying with {}", response);
 
-                if response.len() > MSG_LENGTH_LIMIT {
-                    let response_bytes = response.into_bytes();
-
-                    let mut chunks = response_bytes
-                        .chunks(MSG_LENGTH_LIMIT)
-                        .map(std::str::from_utf8)
-                        .collect::<Result<Vec<&str>, _>>()
-                        .unwrap()
-                        .into_iter();
-
-                    if let Some(pm) = msg.get_privmsg() {
-                        client
-                            .reply_to_privmsg(chunks.next().unwrap().to_owned(), pm)
-                            .await
-                            .expect("Failed to reply");
-
-                        for chunk in chunks {
-                            client
-                                .say(pm.channel_login.clone(), chunk.to_owned())
-                                .await
-                                .expect("Failed to say");
-
-                            sleep(Duration::from_secs(1)).await; // rate limiting
-                        }
-                    } else {
-                        unimplemented!() // i don't bother with the whispers functionality because it doesn't properly work on twitch
-                    }
-                } else if let Some(pm) = msg.get_privmsg() {
-                    client
-                        .reply_to_privmsg(response, pm)
-                        .await
-                        .expect("Failed to reply");
+                if let Some(pm) = msg.get_privmsg() {
+                    tx.send(SenderMessage::Privmsg(Privmsg {
+                        channel_login: pm.channel_login.clone(),
+                        message: response,
+                        reply_to_id: Some(pm.message_id.clone()),
+                    }))
+                    .unwrap();
                 } else {
-                    client
-                        .privmsg(
-                            channel.to_string(),
-                            format!("/w {} {}", msg.get_sender().login, response),
-                        )
-                        .await
-                        .expect("Failed to say");
+                    tx.send(SenderMessage::Privmsg(Privmsg {
+                        channel_login: msg.get_sender().login.clone(),
+                        message: format!("/w {} {}", msg.get_sender().login, response),
+                        reply_to_id: None,
+                    }))
+                    .unwrap();
                 }
 
                 sleep(Duration::from_secs(1)).await; // This is needed to adhere to the twitch rate limits
             }
         });
     }
+}
+
+#[derive(Clone, Debug)]
+pub enum SenderMessage {
+    Privmsg(Privmsg),
+    JoinChannel(String),
+}
+
+#[derive(Clone, Debug)]
+pub struct Privmsg {
+    pub channel_login: String,
+    pub message: String,
+    pub reply_to_id: Option<String>,
 }
