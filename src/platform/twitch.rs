@@ -130,26 +130,22 @@ impl ChatPlatform for Twitch {
                                 .unwrap()
                                 .into_iter();
 
-                            if let Some(reply_to_id) = pm.reply_to_id {
+                            client
+                                .say_in_response(
+                                    pm.channel_login.clone(),
+                                    chunks.next().unwrap().to_string(),
+                                    pm.reply_to_id,
+                                )
+                                .await
+                                .expect("Failed to send message");
+                            sleep(Duration::from_secs(1)).await;
+
+                            for chunk in chunks {
                                 client
-                                    .say_in_response(
-                                        pm.channel_login.clone(),
-                                        chunks.next().unwrap().to_string(),
-                                        Some(reply_to_id),
-                                    )
+                                    .say(pm.channel_login.clone(), chunk.to_owned())
                                     .await
                                     .expect("Failed to send message");
                                 sleep(Duration::from_secs(1)).await;
-
-                                for chunk in chunks {
-                                    client
-                                        .say(pm.channel_login.clone(), chunk.to_owned())
-                                        .await
-                                        .expect("Failed to send message");
-                                    sleep(Duration::from_secs(1)).await;
-                                }
-                            } else {
-                                unimplemented!() // i don't bother with the whispers functionality because it doesn't properly work on twitch
                             }
                         } else {
                             if let Err(e) = client
