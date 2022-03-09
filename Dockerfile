@@ -1,7 +1,7 @@
 FROM docker.io/rust:slim-bullseye as builder
 
 RUN apt-get update
-RUN apt-get install --assume-yes libmariadb-dev-compat ca-certificates libssl-dev pkg-config git
+RUN apt-get install --assume-yes libmariadb-dev-compat pkg-config git
 
 RUN cargo install sccache
 

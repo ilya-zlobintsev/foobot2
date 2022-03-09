@@ -1,3 +1,4 @@
+use std::collections::HashSet;
 use std::sync::Arc;
 
 use async_trait::async_trait;
@@ -98,10 +99,15 @@ impl ChatPlatform for Twitch {
             .await
         {
             Ok(twitch_channels) => {
+                let mut channels = HashSet::new();
+
                 for channel in twitch_channels {
-                    tracing::info!("Joining channel {}", channel.login);
-                    client.join(channel.login);
+                    channels.insert(channel.login);
                 }
+
+                client
+                    .set_wanted_channels(channels)
+                    .expect("Invalid channels");
             }
             Err(e) => {
                 tracing::warn!("Failed to fetch channels {:?}", e);
@@ -156,7 +162,9 @@ impl ChatPlatform for Twitch {
                         }
                     }
                     SenderMessage::JoinChannel(channel_login) => {
-                        client.join(channel_login);
+                        if let Err(e) = client.join(channel_login) {
+                            tracing::error!("Failed to join channel: {}", e);
+                        }
                     }
                 }
             }
