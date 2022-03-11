@@ -42,6 +42,7 @@ pub struct Database {
     users_cache: Arc<DashMap<u64, User>>,
     user_identifiers_cache: Arc<DashMap<UserIdentifier, u64>>, // Caches the user IDs
     prefixes_cache: Arc<DashMap<u64, Option<String>>>,
+    // TODO: look into only caching channel IDs, not entire channels
     channels_cache: Arc<DashMap<String, Channel>>,
 }
 
@@ -791,6 +792,30 @@ impl Database {
         } else {
             Err(DatabaseError::InvalidValue)
         }
+    }
+
+    pub fn get_all_filters(&self) -> Result<Vec<Filter>, DatabaseError> {
+        let mut conn = self.conn_pool.get().unwrap();
+
+        Ok(filters::table.load(&mut conn)?)
+    }
+
+    pub fn get_filters_in_channel_id(&self, channel_id: u64) -> Result<Vec<Filter>, DatabaseError> {
+        let mut conn = self.conn_pool.get().unwrap();
+
+        Ok(filters::table
+            .filter(filters::channel_id.eq(channel_id))
+            .load(&mut conn)?)
+    }
+
+    pub fn get_filters_in_channel(
+        &self,
+        channel_identifier: &ChannelIdentifier,
+    ) -> Result<Vec<Filter>, DatabaseError> {
+        let channel = self
+            .get_channel(channel_identifier)?
+            .ok_or(DatabaseError::InvalidValue)?;
+        self.get_filters_in_channel_id(channel.id)
     }
 }
 

@@ -132,6 +132,15 @@ pub struct MirrorConnection {
     pub to_channel_id: u64,
 }
 
+#[derive(Queryable, Insertable, Debug)]
+#[diesel(table_name = filters)]
+pub struct Filter {
+    pub channel_id: u64,
+    pub regex: String,
+    pub block_message: bool,
+    pub replacement: Option<String>,
+}
+
 #[cfg(test)]
 mod tests {
     use crate::platform::ChannelIdentifier;

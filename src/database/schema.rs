@@ -35,6 +35,15 @@ table! {
 }
 
 table! {
+    filters (channel_id, regex) {
+        channel_id -> Unsigned<Bigint>,
+        regex -> Varchar,
+        block_message -> Bool,
+        replacement -> Nullable<Varchar>,
+    }
+}
+
+table! {
     mirror_connections (from_channel_id, to_channel_id) {
         from_channel_id -> Unsigned<Bigint>,
         to_channel_id -> Unsigned<Bigint>,
@@ -45,14 +54,6 @@ table! {
     prefixes (channel_id) {
         channel_id -> Unsigned<Bigint>,
         prefix -> Tinytext,
-    }
-}
-
-table! {
-    scripts (channel_id, name) {
-        name -> Varchar,
-        content -> Longtext,
-        channel_id -> Unsigned<Bigint>,
     }
 }
 
@@ -85,8 +86,8 @@ table! {
 }
 
 joinable!(commands -> channels (channel_id));
+joinable!(filters -> channels (channel_id));
 joinable!(prefixes -> channels (channel_id));
-joinable!(scripts -> channels (channel_id));
 joinable!(user_data -> users (user_id));
 joinable!(web_sessions -> users (user_id));
 
@@ -95,9 +96,9 @@ allow_tables_to_appear_in_same_query!(
     channels,
     commands,
     eventsub_triggers,
+    filters,
     mirror_connections,
     prefixes,
-    scripts,
     users,
     user_data,
     web_sessions,

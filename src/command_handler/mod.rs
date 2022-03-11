@@ -8,7 +8,7 @@ pub mod platform_handler;
 pub mod spotify_api;
 pub mod twitch_api;
 
-use crate::database::models::NewEventSubTrigger;
+use crate::database::models::{Filter, NewEventSubTrigger};
 use crate::database::DatabaseError;
 use crate::database::{models::User, Database};
 use crate::platform::{
@@ -129,15 +129,34 @@ impl CommandHandler {
             Err(_) => None,
         };
 
+        let lingva_url = match env::var("LINGVA_INSTANCE_URL") {
+            Ok(url) => url,
+            Err(_) => "https://lingva.ml".to_owned(),
+        };
+
+        let mut filters: HashMap<ChannelIdentifier, Vec<Filter>> = HashMap::new();
+
+        for filter in db.get_all_filters().expect("DB Error") {
+            let channel = db
+                .get_channel_by_id(filter.channel_id)
+                .expect("DB error")
+                .unwrap(); // None is mpossible because channel_id is a foreign key
+            let channel_identifier = channel.get_identifier();
+
+            if let Some(channel_filters) = filters.get_mut(&channel_identifier) {
+                channel_filters.push(filter);
+            } else {
+                filters.insert(channel_identifier, vec![filter]);
+            }
+        }
+
+        tracing::trace!("Loaded filters: {:?}", filters);
+
         let platform_handler = PlatformHandler {
             twitch_api,
             discord_api,
             irc_sender: None,
-        };
-
-        let lingva_url = match env::var("LINGVA_INSTANCE_URL") {
-            Ok(url) => url,
-            Err(_) => "https://lingva.ml".to_owned(),
+            filters: Arc::new(std::sync::RwLock::new(filters)),
         };
 
         let lingva_api = LingvaApi::init(lingva_url);
@@ -265,6 +284,26 @@ impl CommandHandler {
     }
 
     pub async fn handle_message<C>(&self, message_text: &str, context: C) -> Option<String>
+    where
+        C: ExecutionContext + Sync,
+    {
+        let channel = context.get_channel();
+        let platform_handler = self.platform_handler.read().await;
+
+        self.handle_message_internal(message_text, context)
+            .await
+            .and_then(|mut response| {
+                platform_handler.filter_message(&mut response, &channel);
+
+                if !response.is_empty() {
+                    Some(response)
+                } else {
+                    None
+                }
+            })
+    }
+
+    pub async fn handle_message_internal<C>(&self, message_text: &str, context: C) -> Option<String>
     where
         C: ExecutionContext + Sync,
     {

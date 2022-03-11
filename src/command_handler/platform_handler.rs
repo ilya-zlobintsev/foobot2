@@ -1,9 +1,11 @@
 use crate::{
-    database::Database,
+    database::{models::Filter, Database},
     platform::{twitch, ChannelIdentifier},
 };
 use anyhow::Error;
-use std::fmt::Display;
+use regex::Regex;
+use std::sync::{Arc, RwLock};
+use std::{collections::HashMap, fmt::Display};
 use twitch_irc::login::RefreshingLoginCredentials;
 
 use super::discord_api::DiscordApi;
@@ -16,14 +18,17 @@ pub struct PlatformHandler {
     pub twitch_api: Option<TwitchApi>,
     pub discord_api: Option<DiscordApi>,
     pub irc_sender: Option<IrcSender>,
+    pub filters: Arc<RwLock<HashMap<ChannelIdentifier, Vec<Filter>>>>,
 }
 
 impl PlatformHandler {
     pub async fn send_to_channel(
         &self,
         channel: ChannelIdentifier,
-        msg: String,
+        mut msg: String,
     ) -> Result<(), PlatformHandlerError> {
+        self.filter_message(&mut msg, &channel);
+
         match channel {
             ChannelIdentifier::TwitchChannel((channel_id, _)) => {
                 let twitch_api = self
@@ -63,6 +68,37 @@ impl PlatformHandler {
                 Ok(())
             }
             _ => Err(PlatformHandlerError::Unsupported),
+        }
+    }
+
+    pub fn filter_message(&self, message: &mut String, channel: &ChannelIdentifier) {
+        let filters = self.filters.read().expect("Failed to lock");
+
+        tracing::trace!("Checking filters for {}", message);
+        if let Some(filters) = filters.get(channel) {
+            for filter in filters {
+                tracing::trace!("Matching {}", filter.regex);
+                match Regex::new(&filter.regex) {
+                    Ok(re) => {
+                        if filter.block_message {
+                            if re.is_match(message) {
+                                message.clear();
+                                break;
+                            }
+                        } else {
+                            let replacement = match &filter.replacement {
+                                Some(replacement) => replacement,
+                                None => "[Blocked]",
+                            };
+
+                            *message = re.replace_all(message, replacement).to_string();
+                        }
+                    }
+                    Err(e) => {
+                        *message = format!("failed to compile message filter regex: {}", e);
+                    }
+                }
+            }
         }
     }
 }

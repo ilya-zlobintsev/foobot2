@@ -14,6 +14,7 @@ use anyhow::anyhow;
 use std::cmp::Ordering;
 use std::env::{self, VarError};
 use std::fmt::{self, Display};
+use std::hash::{Hash, Hasher};
 use std::net::IpAddr;
 use std::str::FromStr;
 
@@ -254,6 +255,19 @@ impl PartialEq for ChannelIdentifier {
     }
 }
 impl Eq for ChannelIdentifier {}
+
+impl Hash for ChannelIdentifier {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        match self {
+            ChannelIdentifier::TwitchChannel((id, _))
+            | ChannelIdentifier::TelegramChat((id, _))
+            | ChannelIdentifier::DiscordChannel(id) => id.hash(state),
+            ChannelIdentifier::IrcChannel(channel) => channel.hash(state),
+            ChannelIdentifier::LocalAddress(addr) => addr.hash(state),
+            ChannelIdentifier::Anonymous => (),
+        }
+    }
+}
 
 #[derive(Debug, PartialEq, Eq, Serialize, Deserialize, Clone)]
 pub enum Permissions {

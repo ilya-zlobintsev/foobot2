@@ -779,6 +779,7 @@ dependencies = [
  "prometheus",
  "prost",
  "rand",
+ "regex",
  "reqwest",
  "rhai",
  "rocket",
