@@ -774,6 +774,7 @@ dependencies = [
  "hmac 0.12.1",
  "http",
  "irc",
+ "minecraft-client-rs",
  "once_cell",
  "passwords",
  "prometheus",
@@ -1486,6 +1487,12 @@ dependencies = [
  "mime",
  "unicase",
 ]
+
+[[package]]
+name = "minecraft-client-rs"
+version = "0.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "9f2fd9077229b5f03f3ee911866e75126ecf102ee9163993a120dcf5433af2b5"
 
 [[package]]
 name = "miniz_oxide"

@@ -1,6 +1,7 @@
 pub mod discord;
 pub mod irc;
 pub mod local;
+pub mod minecraft;
 pub mod telegram;
 pub mod twitch;
 
@@ -170,6 +171,7 @@ pub enum ChannelIdentifier {
     IrcChannel(String),
     LocalAddress(String),
     TelegramChat((String, Option<String>)), // Chat id, chat title
+    Minecraft,                              // There is a single minecraft connection
     Anonymous,                              // Used for DMs and such
 }
 
@@ -181,6 +183,7 @@ impl ChannelIdentifier {
             "local" => Ok(Self::LocalAddress(id)),
             "irc" => Ok(Self::IrcChannel(id)),
             "telegram" => Ok(Self::TelegramChat((id, None))),
+            "minecraft" => Ok(Self::Minecraft),
             _ => Err(anyhow::anyhow!("invalid platform")),
         }
     }
@@ -192,6 +195,7 @@ impl ChannelIdentifier {
             ChannelIdentifier::TelegramChat(_) => Some("telegram"),
             ChannelIdentifier::IrcChannel(_) => Some("irc"),
             ChannelIdentifier::LocalAddress(_) => Some("local"),
+            ChannelIdentifier::Minecraft => Some("minecraft"),
             ChannelIdentifier::Anonymous => None,
         }
     }
@@ -203,6 +207,7 @@ impl ChannelIdentifier {
             ChannelIdentifier::TelegramChat((id, _)) => Some(id),
             ChannelIdentifier::IrcChannel(channel) => Some(channel),
             ChannelIdentifier::LocalAddress(addr) => Some(addr),
+            ChannelIdentifier::Minecraft => None,
             ChannelIdentifier::Anonymous => None,
         }
     }
@@ -234,11 +239,13 @@ impl FromStr for ChannelIdentifier {
     type Err = anyhow::Error;
 
     fn from_str(s: &str) -> anyhow::Result<Self> {
-        if let Some((platform, id)) = s.split_once(":") {
-            ChannelIdentifier::new(platform, id.to_string())
-        } else {
-            Err(anyhow!("Delimiter missing from channel identifier"))
-        }
+        let mut split = s.split(":");
+        let platform = split
+            .next()
+            .ok_or_else(|| anyhow!("Platform not specified!"))?;
+        let id = split.next().unwrap_or_default();
+
+        ChannelIdentifier::new(platform, id.to_string())
     }
 }
 
@@ -264,6 +271,7 @@ impl Hash for ChannelIdentifier {
             | ChannelIdentifier::DiscordChannel(id) => id.hash(state),
             ChannelIdentifier::IrcChannel(channel) => channel.hash(state),
             ChannelIdentifier::LocalAddress(addr) => addr.hash(state),
+            ChannelIdentifier::Minecraft => (),
             ChannelIdentifier::Anonymous => (),
         }
     }

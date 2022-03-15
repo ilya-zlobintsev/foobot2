@@ -11,6 +11,7 @@ pub mod twitch_api;
 use crate::database::models::{Filter, NewEventSubTrigger};
 use crate::database::DatabaseError;
 use crate::database::{models::User, Database};
+use crate::platform::minecraft;
 use crate::platform::{
     twitch, ChannelIdentifier, ExecutionContext, Permissions, ServerExecutionContext,
     UserIdentifierError,
@@ -30,7 +31,7 @@ use std::str::FromStr;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 use std::vec::IntoIter;
-use tokio::sync::RwLock;
+use tokio::sync::{Mutex, RwLock};
 
 use handlebars::Handlebars;
 use inquiry_helper::*;
@@ -71,7 +72,7 @@ pub static COMMAND_PROCESSING_HISTOGRAM: Lazy<HistogramVec> = Lazy::new(|| {
     .expect("Failed to create histogram")
 });
 
-#[derive(Clone, Debug)]
+#[derive(Clone)]
 pub struct CommandHandler {
     pub db: Database,
     pub platform_handler: Arc<RwLock<PlatformHandler>>,
@@ -152,10 +153,29 @@ impl CommandHandler {
 
         tracing::trace!("Loaded filters: {:?}", filters);
 
+        let minecraft = match minecraft::init() {
+            Ok(mut minecraft) => {
+                db.get_or_create_channel(&ChannelIdentifier::Minecraft)
+                    .expect("DB error")
+                    .expect("Failed to initialize Minecraft channel in the DB!");
+                if env::var("PROFILE") == Ok("debug".to_string()) {
+                    minecraft
+                        .send_command("say Foobot2 connected".to_string())
+                        .unwrap();
+                }
+                Some(minecraft)
+            }
+            Err(e) => {
+                tracing::error!("Failed to initialize Minecraft: {}", e);
+                None
+            }
+        };
+
         let platform_handler = PlatformHandler {
             twitch_api,
             discord_api,
             irc_sender: None,
+            minecraft_client: minecraft.and_then(|m| Some(Arc::new(Mutex::new(m)))),
             filters: Arc::new(std::sync::RwLock::new(filters)),
         };
 
@@ -1063,7 +1083,8 @@ impl CommandHandler {
             ChannelIdentifier::IrcChannel(_) => Ok(Permissions::Default), // TODO
             ChannelIdentifier::Anonymous => Ok(Permissions::Default),
             ChannelIdentifier::LocalAddress(_) => Ok(Permissions::ChannelOwner), // on the local platform, each ip address is its own channel
-            ChannelIdentifier::TelegramChat(_) => Ok(Permissions::Default),      // TODO
+            ChannelIdentifier::Minecraft => Ok(Permissions::Default),
+            ChannelIdentifier::TelegramChat(_) => Ok(Permissions::Default), // TODO
         }
     }
 
@@ -1148,6 +1169,7 @@ impl CommandHandler {
             ChannelIdentifier::TelegramChat(_) => todo!(),
             ChannelIdentifier::IrcChannel(_) => Err(anyhow!("Not implemented yet")),
             ChannelIdentifier::LocalAddress(_) => Err(anyhow!("This is not possible")),
+            ChannelIdentifier::Minecraft => panic!("This should never happen"),
             ChannelIdentifier::Anonymous => Err(anyhow!("Invalid channel specified")),
         }
     }

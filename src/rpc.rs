@@ -26,7 +26,6 @@ pub fn start_server(command_handler: CommandHandler) {
     });
 }
 
-#[derive(Debug)]
 struct FoobotService {
     command_handler: CommandHandler,
 }

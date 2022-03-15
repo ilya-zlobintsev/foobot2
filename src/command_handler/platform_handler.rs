@@ -1,23 +1,25 @@
+use super::discord_api::DiscordApi;
 use crate::{
     database::{models::Filter, Database},
     platform::{twitch, ChannelIdentifier},
 };
+use anyhow::anyhow;
 use anyhow::Error;
+use irc::client::Sender as IrcSender;
 use regex::Regex;
 use std::sync::{Arc, RwLock};
 use std::{collections::HashMap, fmt::Display};
+use tokio::sync::Mutex;
 use twitch_irc::login::RefreshingLoginCredentials;
-
-use super::discord_api::DiscordApi;
-use irc::client::Sender as IrcSender;
 
 type TwitchApi = super::twitch_api::TwitchApi<RefreshingLoginCredentials<Database>>;
 
-#[derive(Clone, Debug)]
+#[derive(Clone)]
 pub struct PlatformHandler {
     pub twitch_api: Option<TwitchApi>,
     pub discord_api: Option<DiscordApi>,
     pub irc_sender: Option<IrcSender>,
+    pub minecraft_client: Option<Arc<Mutex<minecraft_client_rs::Client>>>,
     pub filters: Arc<RwLock<HashMap<ChannelIdentifier, Vec<Filter>>>>,
 }
 
@@ -64,6 +66,20 @@ impl PlatformHandler {
                 sender
                     .send_privmsg(channel, &msg)
                     .map_err(|e| Error::new(e))?;
+
+                Ok(())
+            }
+            ChannelIdentifier::Minecraft => {
+                let mut minecraft = self
+                    .minecraft_client
+                    .as_ref()
+                    .ok_or(PlatformHandlerError::Unconfigured)?
+                    .lock()
+                    .await;
+
+                minecraft
+                    .send_command(format!("say {}", msg))
+                    .map_err(|e| anyhow!("Failed to send Minecraft message: {}", e))?;
 
                 Ok(())
             }

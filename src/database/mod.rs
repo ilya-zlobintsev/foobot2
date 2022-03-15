@@ -211,9 +211,10 @@ impl Database {
 
         let query = channels::table.into_boxed();
 
-        if let Some(channel) = channel_identifier.get_channel() {
+        if let Some(platform) = channel_identifier.get_platform_name() {
+            let channel = channel_identifier.get_channel().unwrap_or_default();
             match query
-                .filter(channels::platform.eq_all(channel_identifier.get_platform_name().unwrap()))
+                .filter(channels::platform.eq_all(platform))
                 .filter(channels::channel.eq_all(channel))
                 .first(&mut conn)
                 .optional()?
