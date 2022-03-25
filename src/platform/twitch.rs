@@ -121,13 +121,14 @@ impl ChatPlatform for Twitch {
                 match msg {
                     SenderMessage::Privmsg(mut pm) => {
                         while pm.message.len() > MSG_LENGTH_LIMIT {
-                            let mut rest = pm.message.split_off(MSG_LENGTH_LIMIT);
+                            let mut rest = pm.message.split_off(MSG_LENGTH_LIMIT - 1);
 
                             if pm.message.chars().last().map(|c| c.is_whitespace()) != Some(true) {
                                 let mut words = pm.message.split_whitespace();
                                 if let Some(last_word) = words.next_back() {
-                                    rest = format!("{} {}", last_word, rest);
+                                    rest = format!("{}{}", last_word, rest);
                                 }
+                                pm.message = words.collect::<Vec<&str>>().join(" ").to_owned();
                             }
 
                             client
