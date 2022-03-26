@@ -121,7 +121,13 @@ impl ChatPlatform for Twitch {
                 match msg {
                     SenderMessage::Privmsg(mut pm) => {
                         while pm.message.len() > MSG_LENGTH_LIMIT {
-                            let mut rest = pm.message.split_off(MSG_LENGTH_LIMIT - 1);
+                            let mut index = MSG_LENGTH_LIMIT - 1;
+
+                            while !pm.message.is_char_boundary(index) {
+                                index -= 1;
+                            }
+
+                            let mut rest = pm.message.split_off(index);
 
                             if pm.message.chars().last().map(|c| c.is_whitespace()) != Some(true) {
                                 let mut words = pm.message.split_whitespace();
