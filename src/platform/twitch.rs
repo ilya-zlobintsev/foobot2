@@ -120,6 +120,30 @@ impl ChatPlatform for Twitch {
                 tracing::trace!("Received Twitch sender message: {:?}", msg);
                 match msg {
                     SenderMessage::Privmsg(mut pm) => {
+                        let send = |pm: Privmsg| {
+                            let client = client.clone();
+                            async move {
+                                match pm.reply_to_id {
+                                    Some(reply_to_id) => {
+                                        client
+                                            .say_in_response(
+                                                pm.channel_login.clone(),
+                                                pm.message,
+                                                Some(reply_to_id),
+                                            )
+                                            .await
+                                            .expect("Failed to send message");
+                                    }
+                                    None => {
+                                        client
+                                            .privmsg(pm.channel_login, pm.message)
+                                            .await
+                                            .expect("Failed to send message");
+                                    }
+                                }
+                            }
+                        };
+
                         while pm.message.len() > MSG_LENGTH_LIMIT {
                             let mut index = MSG_LENGTH_LIMIT - 1;
 
@@ -137,25 +161,14 @@ impl ChatPlatform for Twitch {
                                 pm.message = words.collect::<Vec<&str>>().join(" ").to_owned();
                             }
 
-                            client
-                                .say_in_response(
-                                    pm.channel_login.clone(),
-                                    pm.message,
-                                    pm.reply_to_id.clone(),
-                                )
-                                .await
-                                .expect("Failed to send message");
+                            send.clone()(pm.clone()).await;
 
                             pm.message = rest;
 
                             sleep(Duration::from_secs(1)).await;
                         }
-                        if let Err(e) = client
-                            .say_in_response(pm.channel_login, pm.message, pm.reply_to_id)
-                            .await
-                        {
-                            tracing::error!("Error sending twitch message: {}", e);
-                        }
+                        send.clone()(pm.clone()).await;
+
                         sleep(Duration::from_secs(1)).await;
                     }
                     SenderMessage::JoinChannel(channel_login) => {
