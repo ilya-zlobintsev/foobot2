@@ -1,12 +1,13 @@
+FROM node:latest as frontend
+WORKDIR /web
+COPY web .
+RUN npm install
+RUN npm run build
+
 FROM docker.io/rust:slim-bullseye as builder
 
 RUN apt-get update
 RUN apt-get install --assume-yes libmariadb-dev-compat pkg-config git
-
-RUN cargo install sccache
-
-ENV RUSTC_WRAPPER="/usr/local/cargo/bin/sccache"
-ARG SCCACHE_MEMCACHED
 
 WORKDIR /build
 
@@ -19,11 +20,8 @@ RUN cargo build --release
 
 RUN rustup component add rustfmt
 
-# We need to touch our real main.rs file or else docker will use
-# the cached one.
 COPY . .
 RUN touch src/main.rs
-
 
 RUN cargo build --release
 
@@ -35,8 +33,7 @@ RUN apt-get install --assume-yes libmariadb-dev-compat ca-certificates openssl
 WORKDIR /app
 
 COPY --from=builder /build/target/release/foobot2 .
-COPY static ./static
-COPY templates ./templates
+COPY --from=frontend /web/public ./web/public
 COPY Rocket.toml .
 
 STOPSIGNAL SIGINT

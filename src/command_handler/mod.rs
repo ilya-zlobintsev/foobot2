@@ -8,20 +8,16 @@ pub mod platform_handler;
 pub mod spotify_api;
 pub mod twitch_api;
 
-use crate::database::models::{Filter, NewEventSubTrigger};
-use crate::database::DatabaseError;
-use crate::database::{models::User, Database};
-use crate::platform::minecraft;
-use crate::platform::{
-    twitch, ChannelIdentifier, ExecutionContext, Permissions, ServerExecutionContext,
-    UserIdentifierError,
-};
-use crate::{get_version, web};
-
 use anyhow::{anyhow, Context};
 use core::fmt;
 use dashmap::DashMap;
+use discord_api::DiscordApi;
+use handlebars::Handlebars;
+use inquiry_helper::*;
+use lastfm_api::LastFMApi;
+use lingva_api::LingvaApi;
 use once_cell::sync::Lazy;
+use owm_api::OwmApi;
 use prometheus::{HistogramOpts, HistogramVec, IntCounterVec, Opts};
 use reqwest::Client;
 use std::collections::HashMap;
@@ -31,19 +27,10 @@ use std::str::FromStr;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 use std::vec::IntoIter;
-use tokio::sync::{Mutex, RwLock};
-
-use handlebars::Handlebars;
-use inquiry_helper::*;
 use tokio::process::Command;
+use tokio::sync::{Mutex, RwLock};
 use tokio::{fs, task};
-
-use discord_api::DiscordApi;
-use lastfm_api::LastFMApi;
-use lingva_api::LingvaApi;
-use owm_api::OwmApi;
 use twitch_api::TwitchApi;
-
 use twitch_irc::login::{LoginCredentials, RefreshingLoginCredentials};
 
 use self::finnhub_api::FinnhubApi;
@@ -52,6 +39,15 @@ use self::twitch_api::eventsub::conditions::*;
 use self::twitch_api::eventsub::EventSubSubscriptionType;
 use self::twitch_api::helix::HelixApi;
 use self::twitch_api::{get_client_id, get_client_secret};
+use crate::database::models::{Filter, NewEventSubTrigger};
+use crate::database::DatabaseError;
+use crate::database::{models::User, Database};
+use crate::platform::minecraft;
+use crate::platform::{
+    twitch, ChannelIdentifier, ExecutionContext, Permissions, ServerExecutionContext,
+    UserIdentifierError,
+};
+use crate::{api, get_version};
 
 pub static COMMAND_COUNTER: Lazy<IntCounterVec> = Lazy::new(|| {
     IntCounterVec::new(
@@ -888,7 +884,7 @@ impl CommandHandler {
         let response = if arguments.len() == 0 {
             Ok(Some(format!(
                 "{}/channels/{}/commands",
-                web::get_base_url(),
+                api::get_base_url(),
                 self.db
                     .get_or_create_channel(&execution_context.get_channel())?
                     .ok_or_else(|| CommandError::InvalidArgument(

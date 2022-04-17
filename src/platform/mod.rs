@@ -7,11 +7,11 @@ pub mod twitch;
 
 use crate::command_handler::CommandHandler;
 
-use async_trait::async_trait;
-
-use serde::{Deserialize, Serialize};
-
 use anyhow::anyhow;
+use async_trait::async_trait;
+use rocket_okapi::okapi::schemars;
+use rocket_okapi::okapi::schemars::JsonSchema;
+use serde::{Deserialize, Serialize};
 use std::cmp::Ordering;
 use std::env::{self, VarError};
 use std::fmt::{self, Display};
@@ -277,12 +277,12 @@ impl Hash for ChannelIdentifier {
     }
 }
 
-#[derive(Debug, PartialEq, Eq, Serialize, Deserialize, Clone)]
+#[derive(Debug, PartialEq, Eq, Serialize, Deserialize, Clone, JsonSchema)]
 pub enum Permissions {
-    Default,
-    ChannelMod,
-    ChannelOwner,
-    Admin,
+    Default = 0,
+    ChannelMod = 5,
+    ChannelOwner = 10,
+    Admin = 15,
 }
 
 impl Display for Permissions {

@@ -10,7 +10,7 @@ use serde_json::{json, Value};
 use tokio::task;
 use twitch_irc::login::{LoginCredentials, StaticLoginCredentials};
 
-use crate::{command_handler::twitch_api::model::UsersResponse, web::response_ok};
+use crate::{api::response_ok, command_handler::twitch_api::model::UsersResponse};
 
 use super::{
     eventsub::{EventSubSubscription, EventSubSubscriptionResponse, EventSubSubscriptionType},

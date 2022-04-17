@@ -666,8 +666,8 @@ impl Database {
                 numbers: true,
                 lowercase_letters: true,
                 uppercase_letters: true,
-                symbols: true,
-                spaces: true,
+                symbols: false,
+                spaces: false,
                 exclude_similar_characters: false,
                 strict: true,
             }
@@ -682,6 +682,17 @@ impl Database {
             .execute(&mut conn)?;
 
         Ok(session.session_id)
+    }
+
+    pub fn remove_web_session(&self, session_id: &str) -> Result<(), DatabaseError> {
+        let mut conn = self.conn_pool.get().unwrap();
+
+        diesel::delete(web_sessions::table)
+            .filter(web_sessions::session_id.eq(session_id))
+            .execute(&mut conn)?;
+        self.web_sessions_cache.remove(session_id);
+
+        Ok(())
     }
 
     pub fn add_eventsub_trigger(&self, trigger: NewEventSubTrigger) -> Result<(), DatabaseError> {

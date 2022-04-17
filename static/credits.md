@@ -1,1 +1,0 @@
-Icons licensed under [Creative Commons 4 attribution](https://fontawesome.com/license)

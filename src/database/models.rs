@@ -3,9 +3,21 @@ use std::str::FromStr;
 use crate::platform::ChannelIdentifier;
 
 use super::schema::*;
+use rocket_okapi::okapi::schemars::JsonSchema;
+use rocket_okapi::{okapi::schemars, OpenApiFromRequest};
 use serde::{Deserialize, Serialize};
 
-#[derive(Queryable, Identifiable, AsChangeset, Debug, Serialize, Deserialize, Clone)]
+#[derive(
+    Queryable,
+    Identifiable,
+    AsChangeset,
+    Debug,
+    Serialize,
+    Deserialize,
+    Clone,
+    JsonSchema,
+    OpenApiFromRequest,
+)]
 pub struct User {
     pub id: u64,
     pub twitch_id: Option<String>,
@@ -37,7 +49,7 @@ pub struct NewUser<'a> {
     pub telegram_id: Option<String>,
 }
 
-#[derive(Queryable, Debug, PartialEq, Eq, Serialize, Clone)]
+#[derive(Queryable, Debug, PartialEq, Eq, Serialize, Clone, JsonSchema)]
 pub struct Channel {
     pub id: u64,
     pub platform: String,
@@ -57,7 +69,7 @@ pub struct NewChannel<'a> {
     pub channel: &'a str,
 }
 
-#[derive(Queryable, Debug, PartialEq, Eq, Serialize)]
+#[derive(Queryable, Debug, PartialEq, Eq, Serialize, JsonSchema)]
 pub struct Command {
     pub name: String,
     pub action: String,
@@ -92,9 +104,10 @@ pub struct UserDataUserId {
     pub user_id: u64,
 }
 
-#[derive(Queryable, Insertable, Clone, Serialize, Debug)]
+#[derive(Queryable, Insertable, Clone, Serialize, Debug, JsonSchema, OpenApiFromRequest)]
 #[diesel(table_name = web_sessions)]
 pub struct WebSession {
+    #[serde(skip)]
     pub session_id: String,
     pub user_id: u64,
     pub username: String,
@@ -132,9 +145,10 @@ pub struct MirrorConnection {
     pub to_channel_id: u64,
 }
 
-#[derive(Queryable, Insertable, Debug)]
+#[derive(Queryable, Insertable, Debug, Serialize, JsonSchema)]
 #[diesel(table_name = filters)]
 pub struct Filter {
+    #[serde(skip)]
     pub channel_id: u64,
     pub regex: String,
     pub block_message: bool,

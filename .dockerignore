@@ -2,3 +2,5 @@ target
 Dockerfile
 Dockerfile.aarch64
 deploy.sh
+web/node_modules
+web/public/build

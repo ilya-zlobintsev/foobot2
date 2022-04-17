@@ -3,11 +3,11 @@ extern crate diesel;
 #[macro_use]
 extern crate rocket;
 
+mod api;
 mod command_handler;
 mod database;
 mod platform;
 mod rpc;
-mod web;
 
 use command_handler::{get_admin_channel, CommandHandler};
 use database::Database;
@@ -83,7 +83,7 @@ async fn main() {
 
     rpc::start_server(command_handler.clone());
 
-    web::run(command_handler).await;
+    api::run(command_handler).await;
 }
 
 pub fn get_version() -> String {

@@ -1,17 +1,15 @@
 pub mod conditions;
 pub mod events;
 
-use std::str::FromStr;
-
 use anyhow::anyhow;
 use serde::Deserialize;
 use serde::Serialize;
 use serde_json::{json, Value};
-
-use crate::web;
+use std::str::FromStr;
 
 use self::conditions::*;
 use self::events::*;
+use crate::api;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum EventSubSubscriptionType {
@@ -43,7 +41,7 @@ impl EventSubSubscriptionType {
     }
 
     fn get_transport() -> Value {
-        let callback_url = format!("{}/hooks/twitch/eventsub", web::get_base_url(),);
+        let callback_url = format!("{}/api/hooks/twitch/eventsub", api::get_base_url());
 
         json!({
            "method": "webhook",
