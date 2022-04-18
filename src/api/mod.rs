@@ -100,7 +100,7 @@ pub async fn run(command_handler: CommandHandler) {
             channels::get_channel_eventsub_triggers,
             channels::get_filters,
         ],
-        "/webhooks" => openapi_get_routes_spec![webhooks::eventsub_callback],
+        "/hooks" => openapi_get_routes_spec![webhooks::eventsub_callback],
     };
 
     let rocket = building_rocket
