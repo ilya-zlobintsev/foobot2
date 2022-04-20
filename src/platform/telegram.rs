@@ -3,9 +3,7 @@ use super::{
     UserIdentifier,
 };
 use crate::command_handler::CommandHandler;
-use frankenstein::{
-    AsyncApi, AsyncTelegramApi, GetUpdatesParamsBuilder, Message, SendMessageParamsBuilder,
-};
+use frankenstein::{AsyncApi, AsyncTelegramApi, GetUpdatesParams, Message, SendMessageParams};
 use std::env;
 use std::sync::Arc;
 
@@ -32,11 +30,9 @@ impl ChatPlatform for Telegram {
     }
 
     async fn run(self) {
-        let mut update_params_builder = GetUpdatesParamsBuilder::default();
-        update_params_builder
+        let update_params_builder = GetUpdatesParams::builder()
             .allowed_updates(vec!["message".to_string(), "channel_post".to_string()]);
-
-        let mut update_params = update_params_builder.build().unwrap();
+        let mut update_params = update_params_builder.clone().build();
 
         tokio::spawn(async move {
             loop {
@@ -94,13 +90,11 @@ impl ChatPlatform for Telegram {
                                             .handle_message(&message_text, context)
                                             .await
                                         {
-                                            let send_message_params =
-                                                SendMessageParamsBuilder::default()
-                                                    .chat_id(message.chat.id)
-                                                    .text(&response)
-                                                    .reply_to_message_id(message.message_id)
-                                                    .build()
-                                                    .unwrap();
+                                            let send_message_params = SendMessageParams::builder()
+                                                .chat_id(message.chat.id)
+                                                .text(&response)
+                                                .reply_to_message_id(message.message_id)
+                                                .build();
 
                                             if let Err(e) =
                                                 api.send_message(&send_message_params).await
@@ -114,9 +108,9 @@ impl ChatPlatform for Telegram {
                                     });
                                 }
                                 update_params = update_params_builder
+                                    .clone()
                                     .offset(update.update_id + 1)
-                                    .build()
-                                    .unwrap();
+                                    .build();
                             }
                         }
                     }
