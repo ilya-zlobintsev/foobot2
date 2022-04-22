@@ -73,16 +73,13 @@ irc = { version = "0.15.0", default-features = false, features = [
     "toml_config",
 ] }
 
-prometheus = { version = "0.13.0", features = ["process"] }
-rocket_prometheus = "0.10.0-rc.1"
-once_cell = "1.10.0"
-
 rhai = { version = "1.6.1", features = ["sync", "serde"] }
 
 tonic = { version = "0.7.1", features = ["tls", "compression"] }
 prost = "0.10.1"
 
 regex = "1.5.5"
+strum = { version = "0.24.0", features = ["derive", "strum_macros"] }
 
 [build-dependencies]
 tonic-build = { version = "0.7.0", features = ["prost", "compression"] }

@@ -13,7 +13,6 @@ use rocket::{
 use rocket_okapi::{
     mount_endpoints_and_merged_docs, openapi_get_routes_spec, rapidoc, settings::UrlObject,
 };
-use rocket_prometheus::PrometheusMetrics;
 use std::{env, path::PathBuf};
 use tokio::task;
 
@@ -23,24 +22,9 @@ use crate::command_handler::{get_admin_channel, CommandHandler};
 type Result<T> = std::result::Result<T, ApiError>;
 
 pub async fn run(command_handler: CommandHandler) {
-    let prometheus = PrometheusMetrics::new();
-
-    prometheus
-        .registry()
-        .register(Box::new(crate::command_handler::COMMAND_COUNTER.clone()))
-        .unwrap();
-
-    prometheus
-        .registry()
-        .register(Box::new(
-            crate::command_handler::COMMAND_PROCESSING_HISTOGRAM.clone(),
-        ))
-        .unwrap();
-
     let state_storage: DashMap<String, String> = DashMap::new();
 
     let mut building_rocket = rocket::build()
-        .attach(prometheus.clone())
         .manage(Client::new())
         .manage(command_handler.clone())
         .manage(state_storage)

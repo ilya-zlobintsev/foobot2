@@ -784,9 +784,7 @@ dependencies = [
  "http",
  "irc",
  "minecraft-client-rs",
- "once_cell",
  "passwords",
- "prometheus",
  "prost",
  "rand",
  "regex",
@@ -794,10 +792,10 @@ dependencies = [
  "rhai",
  "rocket",
  "rocket_okapi",
- "rocket_prometheus",
  "serde",
  "serde_json",
  "sha2 0.10.2",
+ "strum",
  "thiserror",
  "tokio",
  "tonic",
@@ -1836,37 +1834,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "procfs"
-version = "0.10.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "95e344cafeaeefe487300c361654bcfc85db3ac53619eeccced29f5ea18c4c70"
-dependencies = [
- "bitflags",
- "byteorder",
- "flate2",
- "hex",
- "lazy_static",
- "libc",
-]
-
-[[package]]
-name = "prometheus"
-version = "0.13.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b7f64969ffd5dd8f39bd57a68ac53c163a095ed9d0fb707146da1b27025a3504"
-dependencies = [
- "cfg-if",
- "fnv",
- "lazy_static",
- "libc",
- "memchr",
- "parking_lot 0.11.2",
- "procfs",
- "protobuf",
- "thiserror",
-]
-
-[[package]]
 name = "prost"
 version = "0.10.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1920,12 +1887,6 @@ dependencies = [
  "bytes",
  "prost",
 ]
-
-[[package]]
-name = "protobuf"
-version = "2.27.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "cf7e6d18738ecd0902d30d1ad232c9125985a3422929b16c65517b38adc14f96"
 
 [[package]]
 name = "quick-error"
@@ -2270,16 +2231,6 @@ dependencies = [
  "quote",
  "rocket_http",
  "syn",
-]
-
-[[package]]
-name = "rocket_prometheus"
-version = "0.10.0-rc.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "738c535f2b35b4040c7cc9dfc6f3f32e4062809ce84387e50fe0b604b4d2d91f"
-dependencies = [
- "prometheus",
- "rocket",
 ]
 
 [[package]]
@@ -2759,6 +2710,28 @@ name = "strsim"
 version = "0.10.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "73473c0e59e6d5812c5dfe2a064a6444949f089e20eec9a2e5506596494e4623"
+
+[[package]]
+name = "strum"
+version = "0.24.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e96acfc1b70604b8b2f1ffa4c57e59176c7dbb05d556c71ecd2f5498a1dee7f8"
+dependencies = [
+ "strum_macros",
+]
+
+[[package]]
+name = "strum_macros"
+version = "0.24.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "6878079b17446e4d3eba6192bb0a2950d5b14f0ed8424b852310e5a94345d0ef"
+dependencies = [
+ "heck",
+ "proc-macro2",
+ "quote",
+ "rustversion",
+ "syn",
+]
 
 [[package]]
 name = "subtle"

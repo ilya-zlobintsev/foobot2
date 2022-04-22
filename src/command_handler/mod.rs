@@ -1,3 +1,4 @@
+mod commands;
 pub mod discord_api;
 pub mod finnhub_api;
 pub mod inquiry_helper;
@@ -16,9 +17,7 @@ use handlebars::Handlebars;
 use inquiry_helper::*;
 use lastfm_api::LastFMApi;
 use lingva_api::LingvaApi;
-use once_cell::sync::Lazy;
 use owm_api::OwmApi;
-use prometheus::{HistogramOpts, HistogramVec, IntCounterVec, Opts};
 use reqwest::Client;
 use std::collections::HashMap;
 use std::env::{self, VarError};
@@ -27,18 +26,20 @@ use std::str::FromStr;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 use std::vec::IntoIter;
-use tokio::process::Command;
 use tokio::sync::{Mutex, RwLock};
-use tokio::{fs, task};
+use tokio::task;
 use twitch_api::TwitchApi;
 use twitch_irc::login::{LoginCredentials, RefreshingLoginCredentials};
 
+use self::commands::Command;
 use self::finnhub_api::FinnhubApi;
 use self::platform_handler::PlatformHandler;
 use self::twitch_api::eventsub::conditions::*;
 use self::twitch_api::eventsub::EventSubSubscriptionType;
 use self::twitch_api::helix::HelixApi;
 use self::twitch_api::{get_client_id, get_client_secret};
+use crate::api;
+use crate::command_handler::commands::builtin::BuiltinCommand;
 use crate::database::models::{Filter, NewEventSubTrigger};
 use crate::database::DatabaseError;
 use crate::database::{models::User, Database};
@@ -47,26 +48,6 @@ use crate::platform::{
     twitch, ChannelIdentifier, ExecutionContext, Permissions, ServerExecutionContext,
     UserIdentifierError,
 };
-use crate::{api, get_version};
-
-pub static COMMAND_COUNTER: Lazy<IntCounterVec> = Lazy::new(|| {
-    IntCounterVec::new(
-        Opts::new("command_counter", "Command call counter"),
-        &["command", "channel", "success"],
-    )
-    .expect("Failed to create counter")
-});
-
-pub static COMMAND_PROCESSING_HISTOGRAM: Lazy<HistogramVec> = Lazy::new(|| {
-    HistogramVec::new(
-        HistogramOpts::new(
-            "command_processing_duration",
-            "The time it took to process a command",
-        ),
-        &["command"],
-    )
-    .expect("Failed to create histogram")
-});
 
 #[derive(Clone)]
 pub struct CommandHandler {
@@ -385,66 +366,74 @@ impl CommandHandler {
     where
         C: ExecutionContext + Sync,
     {
-        if message_text.trim().is_empty() {
-            Some("❗".to_string())
-        } else {
+        if !message_text.trim().is_empty() {
             let mut split = message_text.split_whitespace();
-
-            let command = split.next().unwrap().to_owned();
-
+            let command_string = split.next().unwrap().to_owned();
             let arguments: Vec<&str> = split.collect();
 
-            let timer = COMMAND_PROCESSING_HISTOGRAM
-                .with_label_values(&[&command])
-                .start_timer();
-            let channel = context.get_channel().to_string();
+            let command_result = match BuiltinCommand::from_str(&command_string) {
+                Ok(builtin) => self.run_command(builtin, arguments, context).await,
+                Err(()) => {
+                    let custom_command = self
+                        .db
+                        .get_command(&context.get_channel(), &command_string)
+                        .expect("DB error")?;
 
-            let command_result = self.run_command(&command, arguments, context).await;
-
-            timer.observe_duration();
-
+                    self.run_command(custom_command, arguments, context).await
+                }
+            };
             match command_result {
-                Ok(result) => {
-                    if result.is_some() {
-                        COMMAND_COUNTER
-                            .with_label_values(&[&command, &channel, "true"])
-                            .inc();
-                    }
-
-                    result
-                }
-                Err(e) => {
-                    COMMAND_COUNTER
-                        .with_label_values(&[&command, &channel, "false"])
-                        .inc();
-
-                    Some(e.to_string())
-                }
+                Ok(result) if !result.is_empty() => Some(result),
+                Err(e) => Some(e.to_string()),
+                _ => None,
             }
+        } else {
+            None
         }
     }
 
-    // #[async_recursion]
-    async fn run_command<C: ExecutionContext + std::marker::Sync>(
+    async fn run_command<C: ExecutionContext + std::marker::Sync, X: Command>(
         &self,
-        command: &str,
-        mut arguments: Vec<&str>,
+        command: X,
+        arguments: Vec<&str>,
         execution_context: C,
-    ) -> Result<Option<String>, CommandError> {
+    ) -> Result<String, CommandError> {
         tracing::info!("Processing command {} with {:?}", command, arguments);
 
         let user_identifier = execution_context.get_user_identifier();
-
         let user = self.db.get_or_create_user(&user_identifier)?;
+        let command_string = command.to_string();
 
         if !self
             .cooldowns
             .read()
             .await
-            .contains(&(user.id, command.to_string()))
+            .contains(&(user.id, command_string.clone()))
         {
-            let result = match command {
-                "ping" => (Some(self.ping().await), Some(5)),
+            let permissions = command.get_permissions();
+            let cooldown = command.get_cooldown();
+
+            self.start_cooldown(user.id, command_string, cooldown).await;
+
+            // This optimization is needed to avoid quering permissions, since it can be expensive on some platforms.
+            let permitted = if permissions >= Permissions::Default {
+                execution_context.get_permissions().await >= permissions
+            } else {
+                true
+            };
+
+            if permitted {
+                let response = command
+                    .execute(self, arguments, &execution_context, &user)
+                    .await?;
+
+                Ok(response)
+            } else {
+                Err(CommandError::NoPermissions)
+            }
+
+            /*let result = match command {
+                // "ping" => (Some(self.ping().await), Some(5)),
                 "whoami" | "id" => (
                     Some(format!(
                         "{:?}, identified as {}, channel: {}, permissions: {:?}",
@@ -574,41 +563,10 @@ impl CommandHandler {
                         None,
                     )
                 }
-                _ => match self
-                    .db
-                    .get_command(&execution_context.get_channel(), command)?
-                {
-                    Some(cmd) => {
-                        tracing::info!("Executing custom command {:?}", cmd);
-
-                        (
-                            self.execute_command_action(
-                                cmd.action,
-                                execution_context,
-                                user.clone(),
-                                arguments.into_iter().map(|a| a.to_owned()).collect(),
-                            )
-                            .await?,
-                            cmd.cooldown,
-                        )
-                    }
-                    None => {
-                        tracing::info!("Command not found");
-
-                        (None, None)
-                    }
-                },
-            };
-
-            if let Some(cooldown) = result.1 {
-                self.start_cooldown(user.id, command.to_string(), cooldown)
-                    .await;
-            }
-
-            Ok(result.0)
+            };*/
         } else {
             tracing::info!("Ignoring command, on cooldown");
-            Ok(None)
+            Ok(String::new())
         }
     }
 
@@ -631,10 +589,10 @@ impl CommandHandler {
     async fn execute_command_action<C: ExecutionContext>(
         &self,
         action: String,
-        execution_context: C,
+        execution_context: &C,
         user: User,
         arguments: Vec<String>,
-    ) -> Result<Option<String>, CommandError> {
+    ) -> Result<String, CommandError> {
         tracing::info!("Parsing action {}", action);
 
         let template_registry = self.template_registry.clone();
@@ -642,7 +600,7 @@ impl CommandHandler {
         let display_name = execution_context.get_display_name().to_string();
         let channel = execution_context.get_channel();
 
-        let response = match task::spawn_blocking(move || {
+        Ok(task::spawn_blocking(move || {
             template_registry.render_template(
                 &action,
                 &(InquiryContext {
@@ -654,69 +612,7 @@ impl CommandHandler {
             )
         })
         .await
-        .expect("Failed to join")
-        {
-            Ok(result) => result,
-            Err(e) => {
-                tracing::info!("Failed to render command template: {:?}", e);
-                e.desc
-            }
-        };
-
-        if !response.is_empty() {
-            Ok(Some(response))
-        } else {
-            Ok(None)
-        }
-    }
-
-    async fn ping(&self) -> String {
-        let uptime = {
-            let duration = self.startup_time.elapsed();
-
-            let minutes = (duration.as_secs() / 60) % 60;
-            let hours = (duration.as_secs() / 60) / 60;
-
-            let mut result = String::new();
-
-            if hours != 0 {
-                result.push_str(&format!("{}h ", hours));
-            };
-
-            if minutes != 0 {
-                result.push_str(&format!("{}m ", minutes));
-            }
-
-            if result.is_empty() {
-                result.push_str(&format!("{}s", duration.as_secs()));
-            }
-
-            result
-        };
-
-        let smaps = fs::read_to_string("/proc/self/smaps")
-            .await
-            .expect("Proc FS not found");
-
-        let mut mem_usage = 0; // in KB
-
-        for line in smaps.lines() {
-            if line.starts_with("Pss:") || line.starts_with("SwapPss:") {
-                let mut split = line.split_whitespace();
-                split.next().unwrap();
-
-                let pss = split.next().unwrap();
-
-                mem_usage += pss.parse::<i32>().unwrap();
-            }
-        }
-
-        format!(
-            "Pong! Version: {}, Uptime {}, RAM usage: {} MiB",
-            get_version(),
-            uptime,
-            mem_usage / 1024,
-        )
+        .expect("Failed to join")?)
     }
 
     async fn manage_eventsub<C: ExecutionContext + Sync>(
@@ -1110,21 +1006,22 @@ impl CommandHandler {
     pub async fn handle_server_message(
         &self,
         action: String,
-        context: ServerExecutionContext,
+        execution_context: ServerExecutionContext,
         arguments: Vec<String>,
     ) -> anyhow::Result<()> {
-        let user = self.db.get_or_create_user(&context.executing_user)?;
+        let user = self
+            .db
+            .get_or_create_user(&execution_context.executing_user)?;
 
         let response = self
-            .execute_command_action(action, context.clone(), user, arguments) // TODO
-            .await?
-            .unwrap_or_else(|| "Event triggered with no action".to_string());
+            .execute_command_action(action, &execution_context, user, arguments) // TODO
+            .await?;
 
         Ok(self
             .platform_handler
             .read()
             .await
-            .send_to_channel(context.get_channel(), response)
+            .send_to_channel(execution_context.get_channel(), response)
             .await?)
     }
 
