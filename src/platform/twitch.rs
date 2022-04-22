@@ -119,57 +119,10 @@ impl ChatPlatform for Twitch {
             while let Some(msg) = rx.recv().await {
                 tracing::trace!("Received Twitch sender message: {:?}", msg);
                 match msg {
-                    SenderMessage::Privmsg(mut pm) => {
-                        let send = |pm: Privmsg| {
-                            let client = client.clone();
-                            async move {
-                                match pm.reply_to_id {
-                                    Some(reply_to_id) => {
-                                        client
-                                            .say_in_response(
-                                                pm.channel_login.clone(),
-                                                pm.message,
-                                                Some(reply_to_id),
-                                            )
-                                            .await
-                                            .expect("Failed to send message");
-                                    }
-                                    None => {
-                                        client
-                                            .privmsg(pm.channel_login, pm.message)
-                                            .await
-                                            .expect("Failed to send message");
-                                    }
-                                }
-                            }
-                        };
-
-                        while pm.message.len() > MSG_LENGTH_LIMIT {
-                            let mut index = MSG_LENGTH_LIMIT - 1;
-
-                            while !pm.message.is_char_boundary(index) {
-                                index -= 1;
-                            }
-
-                            let mut rest = pm.message.split_off(index);
-
-                            if pm.message.chars().last().map(|c| c.is_whitespace()) != Some(true) {
-                                let mut words = pm.message.split_whitespace();
-                                if let Some(last_word) = words.next_back() {
-                                    rest = format!("{}{}", last_word, rest);
-                                }
-                                pm.message = words.collect::<Vec<&str>>().join(" ").to_owned();
-                            }
-
-                            send.clone()(pm.clone()).await;
-
-                            pm.message = rest;
-
-                            sleep(Duration::from_secs(1)).await;
+                    SenderMessage::Privmsg(pm) => {
+                        if let Err(error) = send_message(pm, &client).await {
+                            tracing::error!("Failed to send message: {error}");
                         }
-                        send.clone()(pm.clone()).await;
-
-                        sleep(Duration::from_secs(1)).await;
                     }
                     SenderMessage::JoinChannel(channel_login) => {
                         if let Err(e) = client.join(channel_login) {
@@ -391,6 +344,50 @@ impl Twitch {
             }
         });
     }
+}
+
+async fn send_message(mut pm: Privmsg, client: &TwitchClient) -> Result<(), anyhow::Error> {
+    let send = |pm: Privmsg| {
+        let client = client.clone();
+        async move {
+            match pm.reply_to_id {
+                Some(reply_to_id) => {
+                    client
+                        .say_in_response(pm.channel_login.clone(), pm.message, Some(reply_to_id))
+                        .await
+                }
+                None => client.privmsg(pm.channel_login, pm.message).await,
+            }
+        }
+    };
+
+    while pm.message.len() > MSG_LENGTH_LIMIT {
+        let mut index = MSG_LENGTH_LIMIT - 1;
+
+        while !pm.message.is_char_boundary(index) {
+            index -= 1;
+        }
+
+        let mut rest = pm.message.split_off(index);
+
+        if pm.message.chars().last().map(|c| c.is_whitespace()) != Some(true) {
+            let mut words = pm.message.split_whitespace();
+            if let Some(last_word) = words.next_back() {
+                rest = format!("{}{}", last_word, rest);
+            }
+            pm.message = words.collect::<Vec<&str>>().join(" ").to_owned();
+        }
+
+        send(pm.clone()).await?;
+
+        pm.message = rest;
+
+        sleep(Duration::from_secs(1)).await;
+    }
+    send(pm).await?;
+
+    sleep(Duration::from_secs(1)).await;
+    Ok(())
 }
 
 #[derive(Clone, Debug)]
