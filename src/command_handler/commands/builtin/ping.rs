@@ -1,5 +1,6 @@
+use super::{ExecutableCommand, BuiltinCommand};
 use crate::{
-    command_handler::{CommandError, CommandHandler, commands::ExecutableCommand},
+    command_handler::{CommandError, CommandHandler},
     database::models::User,
     get_version,
     platform::ExecutionContext,
@@ -11,6 +12,7 @@ pub struct Command;
 #[async_trait]
 impl ExecutableCommand for Command {
     async fn execute<C: ExecutionContext + Sync>(
+        _: BuiltinCommand,
         handler: &CommandHandler,
         _: Vec<&str>,
         _: &C,

@@ -18,6 +18,7 @@ use std::fmt::{self, Display};
 use std::hash::{Hash, Hasher};
 use std::net::IpAddr;
 use std::str::FromStr;
+use strum::EnumString;
 
 #[async_trait]
 pub trait ChatPlatform {
@@ -277,27 +278,15 @@ impl Hash for ChannelIdentifier {
     }
 }
 
-#[derive(Debug, PartialEq, Eq, Serialize, Deserialize, Clone, JsonSchema)]
+#[derive(
+    Debug, PartialEq, Eq, Serialize, Deserialize, Clone, JsonSchema, EnumString, strum::Display,
+)]
+#[strum(serialize_all = "snake_case")]
 pub enum Permissions {
     Default = 0,
     ChannelMod = 5,
     ChannelOwner = 10,
     Admin = 15,
-}
-
-impl Display for Permissions {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(
-            f,
-            "{}",
-            match self {
-                Permissions::Default => "default",
-                Permissions::ChannelMod => "channel_mod",
-                Permissions::ChannelOwner => "channel_owner",
-                Permissions::Admin => "admin",
-            }
-        )
-    }
 }
 
 impl PartialOrd for Permissions {
@@ -326,6 +315,12 @@ impl PartialOrd for Permissions {
                 Permissions::Default => Some(Ordering::Equal),
             },
         }
+    }
+}
+
+impl Default for Permissions {
+    fn default() -> Self {
+        Permissions::Default
     }
 }
 

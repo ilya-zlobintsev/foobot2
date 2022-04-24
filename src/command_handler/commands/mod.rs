@@ -1,23 +1,16 @@
 pub mod builtin;
 
+use tracing::error;
 use super::{CommandError, CommandHandler};
 use crate::database::models::Command as CustomCommand;
 use crate::{
     database::models::User,
     platform::{ExecutionContext, Permissions},
 };
+use std::str::FromStr;
 
 type CommandResult = std::result::Result<String, CommandError>;
 
-#[async_trait]
-trait ExecutableCommand {
-    async fn execute<C: ExecutionContext + Sync>(
-        handler: &CommandHandler,
-        args: Vec<&str>,
-        execution_context: &C,
-        user: &User,
-    ) -> CommandResult;
-}
 #[async_trait]
 pub trait Command: std::fmt::Display {
     async fn execute<C: ExecutionContext + Sync>(
@@ -57,7 +50,15 @@ impl Command for CustomCommand {
     }
 
     fn get_permissions(&self) -> Permissions {
-        Permissions::Default // TODO
-                             // self.permissions.unwrap_or_default()
+        self.permissions
+            .as_ref()
+            .and_then(|s| {
+                Permissions::from_str(&s)
+                    .map_err(|error| {
+                        error!("Failed to parse permissions from a custom command: {error}")
+                    })
+                    .ok()
+            })
+            .unwrap_or_default()
     }
 }
