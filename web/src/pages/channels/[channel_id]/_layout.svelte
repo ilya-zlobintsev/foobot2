@@ -14,11 +14,10 @@
                 links.push(["./filters", "Filters"]);
             }
         }
-        
+
         for (const section of channel_info["extra_sections"]) {
             links.push(section);
         }
-        
     }
 
     $: {
@@ -83,5 +82,20 @@
     .content {
         margin: 15px;
         width: 100%;
+    }
+
+    :global(table) {
+        width: 100%;
+        border-collapse: collapse;
+    }
+
+    :global(table, td, th) {
+        border: 1px solid #2f2f2f;
+        background-color: #161616;
+        font-size: 14pt;
+    }
+
+    :global(thead, tr) {
+        height: 34pt;
     }
 </style>

@@ -52,9 +52,3 @@
         No EventSub triggers configured
     {/if}
 {/await}
-
-<style>
-    table {
-        border-collapse: collapse;
-    }
-</style>

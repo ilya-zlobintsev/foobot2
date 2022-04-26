@@ -36,10 +36,3 @@
         No filters configured
     {/if}
 {/await}
-
-<style>
-    table {
-        width: 100%;
-        border-collapse: collapse;
-    }
-</style>
