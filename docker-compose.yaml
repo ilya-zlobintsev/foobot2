@@ -1,0 +1,18 @@
+version: "3"
+
+services:
+  db:
+    image: docker.io/mariadb
+    restart: always
+    environment:
+      MARIADB_USER: foobot
+      MARIADB_PASSWORD: foobot
+      MARIADB_RANDOM_ROOT_PASSWORD: "true"
+      MARIADB_DATABASE: "foobot"
+    volumes:
+      - db:/var/lib/mysql
+    ports:
+      - 3306:3306
+
+volumes:
+  db:
