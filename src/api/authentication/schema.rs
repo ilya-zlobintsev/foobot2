@@ -34,7 +34,10 @@ pub async fn get_user_info(cmd: &CommandHandler, user: User) -> Result<UserInfo,
             .map_or_else(
                 |error| {
                     tracing::error!("Failed to query Twitch user: {error}");
-                    None
+                    Some(twitch_api::model::User {
+                        id: twitch_id.clone(),
+                        ..Default::default()
+                    })
                 },
                 |user| Some(user),
             ),
