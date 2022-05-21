@@ -87,13 +87,15 @@ impl ChatPlatform for Irc {
     }
 
     async fn run(self) {
-        let mut stream = {
-            let mut client = self.client.write().unwrap();
+        let client = self.client.clone();
+        let get_stream = move || {
+            let mut client = client.write().unwrap();
 
             client.identify().expect("Failed to identify");
 
             client.stream().unwrap()
         };
+        let mut stream = get_stream();
 
         tracing::info!("IRC connected");
 
@@ -107,6 +109,7 @@ impl ChatPlatform for Irc {
                     Err(e) => {
                         tracing::warn!("IRC error: {}", e);
                         tokio::time::sleep(Duration::from_secs(5)).await;
+                        stream = get_stream();
                     }
                 }
             }
