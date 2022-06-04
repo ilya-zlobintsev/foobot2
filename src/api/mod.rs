@@ -127,7 +127,7 @@ pub async fn run(command_handler: CommandHandler) {
         }
     });
 
-    rocket.launch().await.expect("Failed to launch web server")
+    let _ = rocket.launch().await.expect("Failed to launch web server");
 }
 
 pub fn get_base_url() -> String {

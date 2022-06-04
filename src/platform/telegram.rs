@@ -3,7 +3,10 @@ use super::{
     UserIdentifier,
 };
 use crate::command_handler::CommandHandler;
-use frankenstein::{AsyncApi, AsyncTelegramApi, GetUpdatesParams, Message, SendMessageParams};
+use frankenstein::{
+    AllowedUpdate, AsyncApi, AsyncTelegramApi, GetUpdatesParams, Message, SendMessageParams,
+    UpdateContent,
+};
 use std::env;
 use std::sync::Arc;
 
@@ -31,7 +34,7 @@ impl ChatPlatform for Telegram {
 
     async fn run(self) {
         let update_params_builder = GetUpdatesParams::builder()
-            .allowed_updates(vec!["message".to_string(), "channel_post".to_string()]);
+            .allowed_updates(vec![AllowedUpdate::Message, AllowedUpdate::ChannelPost]);
         let mut update_params = update_params_builder.clone().build();
 
         tokio::spawn(async move {
@@ -41,10 +44,10 @@ impl ChatPlatform for Telegram {
                     Ok(response) => {
                         for update in response.result {
                             tracing::trace!("Update: {:?}", update);
-                            let maybe_message = if let Some(message) = update.message {
-                                Some(message)
-                            } else {
-                                update.channel_post
+                            let maybe_message = match update.content {
+                                UpdateContent::Message(message) => Some(message),
+                                UpdateContent::ChannelPost(post) => Some(post),
+                                _ => None,
                             };
 
                             if let Some(message) = maybe_message {

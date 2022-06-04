@@ -1,7 +1,7 @@
 use std::{env, sync::Arc};
 
 use futures::StreamExt;
-use twilight_gateway::{cluster::ShardScheme, Cluster, Event, Intents};
+use twilight_gateway::{Cluster, Event, Intents};
 use twilight_http::Client;
 use twilight_model::{gateway::payload::incoming::MessageCreate, guild::Permissions};
 
@@ -66,12 +66,9 @@ impl ChatPlatform for Discord {
     }
 
     async fn run(self) {
-        let scheme = ShardScheme::Auto;
-
         let intents = Intents::GUILD_MESSAGES | Intents::DIRECT_MESSAGES;
 
         let (cluster, mut events) = Cluster::builder(self.token.clone(), intents)
-            .shard_scheme(scheme)
             .build()
             .await
             .expect("Failed to connect to Discord");
