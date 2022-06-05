@@ -84,7 +84,7 @@ impl ChatPlatform for Telegram {
 
                                     tokio::spawn(async move {
                                         let context = TelegramExectuionContext {
-                                            msg: &message,
+                                            msg: message.clone(),
                                             display_name,
                                             prefix,
                                         };
@@ -124,14 +124,14 @@ impl ChatPlatform for Telegram {
     }
 }
 
-pub struct TelegramExectuionContext<'a> {
-    msg: &'a Message,
+pub struct TelegramExectuionContext {
+    msg: Message,
     display_name: String,
     prefix: Arc<String>,
 }
 
 #[async_trait]
-impl ExecutionContext for TelegramExectuionContext<'_> {
+impl ExecutionContext for TelegramExectuionContext {
     async fn get_permissions_internal(&self) -> Permissions {
         match &self.msg.chat.permissions {
             Some(permissions) => {

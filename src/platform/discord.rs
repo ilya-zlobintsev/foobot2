@@ -30,8 +30,8 @@ impl Discord {
 
         tokio::spawn(async move {
             let context = DiscordExecutionContext {
-                msg: &msg,
-                cmd: &command_handler,
+                msg: msg.clone(),
+                cmd: command_handler.clone(),
                 prefix,
                 self_mention,
             };
@@ -104,15 +104,15 @@ impl ChatPlatform for Discord {
 }
 
 #[derive(Clone)]
-pub struct DiscordExecutionContext<'a> {
-    msg: &'a MessageCreate,
-    cmd: &'a CommandHandler,
+pub struct DiscordExecutionContext {
+    msg: MessageCreate,
+    cmd: CommandHandler,
     prefix: Arc<String>,
     self_mention: Arc<String>,
 }
 
 #[async_trait]
-impl ExecutionContext for DiscordExecutionContext<'_> {
+impl ExecutionContext for DiscordExecutionContext {
     async fn get_permissions_internal(&self) -> super::Permissions {
         tracing::info!(
             "Querying permissions for Discord user {}",

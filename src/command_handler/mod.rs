@@ -1,3 +1,4 @@
+mod commands;
 pub mod discord_api;
 pub mod finnhub_api;
 pub mod inquiry_helper;
@@ -27,18 +28,21 @@ use std::str::FromStr;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 use std::vec::IntoIter;
-use tokio::process::Command;
 use tokio::sync::{Mutex, RwLock};
 use tokio::{fs, task};
 use twitch_api::TwitchApi;
 use twitch_irc::login::{LoginCredentials, RefreshingLoginCredentials};
 
+use self::commands::custom::execute_action;
+use self::commands::{DynCommand, DynExecutionContext};
 use self::finnhub_api::FinnhubApi;
 use self::platform_handler::PlatformHandler;
 use self::twitch_api::eventsub::conditions::*;
 use self::twitch_api::eventsub::EventSubSubscriptionType;
 use self::twitch_api::helix::HelixApi;
 use self::twitch_api::{get_client_id, get_client_secret};
+use crate::command_handler::commands::custom::CustomCommand;
+use crate::command_handler::commands::{as_dyn_command, create_builtin_commands};
 use crate::database::models::{Filter, NewEventSubTrigger};
 use crate::database::DatabaseError;
 use crate::database::{models::User, Database};
@@ -72,11 +76,11 @@ pub static COMMAND_PROCESSING_HISTOGRAM: Lazy<HistogramVec> = Lazy::new(|| {
 pub struct CommandHandler {
     pub db: Database,
     pub platform_handler: Arc<RwLock<PlatformHandler>>,
-    startup_time: Arc<Instant>,
     template_registry: Arc<Handlebars<'static>>,
     cooldowns: Arc<RwLock<Vec<(u64, String)>>>, // User id and command
     command_triggers: Arc<DashMap<u64, Arc<DashMap<String, String>>>>, // Channel id, trigger phrase and command name
     mirror_connections: Arc<HashMap<String, ChannelIdentifier>>,       // from and to channel
+    builtin_commands: Arc<HashMap<String, DynCommand>>,
 }
 
 impl CommandHandler {
@@ -286,23 +290,26 @@ impl CommandHandler {
         }
         tracing::info!("Mirroring channels: {:?}", mirror_connections);
 
+        let builtin_commands = create_builtin_commands();
+
         start_supinic_heartbeat().await;
 
         Self {
             db,
             platform_handler: Arc::new(RwLock::new(platform_handler)),
-            startup_time: Arc::new(Instant::now()),
             template_registry: Arc::new(template_registry),
             cooldowns,
             mirror_connections: Arc::new(mirror_connections),
             command_triggers: Arc::new(DashMap::new()),
+            builtin_commands: Arc::new(builtin_commands),
         }
     }
 
-    pub async fn handle_message<C>(&self, message_text: &str, context: C) -> Option<String>
-    where
-        C: ExecutionContext + Sync,
-    {
+    pub async fn handle_message<C: ExecutionContext + Sync + Send + 'static>(
+        &self,
+        message_text: &str,
+        context: C,
+    ) -> Option<String> {
         let channel = context.get_channel();
         let platform_handler = self.platform_handler.read().await;
 
@@ -319,10 +326,11 @@ impl CommandHandler {
             })
     }
 
-    pub async fn handle_message_internal<C>(&self, message_text: &str, context: C) -> Option<String>
-    where
-        C: ExecutionContext + Sync,
-    {
+    pub async fn handle_message_internal<C: ExecutionContext + Sync + Send + 'static>(
+        &self,
+        message_text: &str,
+        context: C,
+    ) -> Option<String> {
         tracing::trace!("Handling message in channel {}", context.get_channel());
         if let Some(mirror_channel) = self.mirror_connections.get(&format!(
             "{}-{}",
@@ -381,10 +389,11 @@ impl CommandHandler {
     }
 
     /// This function expects a raw message that appears to be a command without the leading command prefix.
-    async fn handle_command_message<C>(&self, message_text: &str, context: C) -> Option<String>
-    where
-        C: ExecutionContext + Sync,
-    {
+    async fn handle_command_message<C: ExecutionContext + Sync + Send + 'static>(
+        &self,
+        message_text: &str,
+        context: C,
+    ) -> Option<String> {
         if message_text.trim().is_empty() {
             Some("❗".to_string())
         } else {
@@ -392,14 +401,14 @@ impl CommandHandler {
 
             let command = split.next().unwrap().to_owned();
 
-            let arguments: Vec<&str> = split.collect();
+            let arguments = split.map(|s| s.to_owned()).collect();
 
             let timer = COMMAND_PROCESSING_HISTOGRAM
                 .with_label_values(&[&command])
                 .start_timer();
             let channel = context.get_channel().to_string();
 
-            let command_result = self.run_command(&command, arguments, context).await;
+            let command_result = self.run_command(command.clone(), arguments, context).await;
 
             timer.observe_duration();
 
@@ -425,189 +434,57 @@ impl CommandHandler {
     }
 
     // #[async_recursion]
-    async fn run_command<C: ExecutionContext + std::marker::Sync>(
+    async fn run_command<C: ExecutionContext + Sync + Send + 'static>(
         &self,
-        command: &str,
-        mut arguments: Vec<&str>,
+        command_name: String,
+        arguments: Vec<String>,
         execution_context: C,
     ) -> Result<Option<String>, CommandError> {
-        tracing::info!("Processing command {} with {:?}", command, arguments);
+        tracing::info!("Processing command {} with {:?}", command_name, arguments);
 
         let user_identifier = execution_context.get_user_identifier();
 
         let user = self.db.get_or_create_user(&user_identifier)?;
 
-        if !self
-            .cooldowns
-            .read()
-            .await
-            .contains(&(user.id, command.to_string()))
-        {
-            let result = match command {
-                "ping" => (Some(self.ping().await), Some(5)),
-                "whoami" | "id" => (
-                    Some(format!(
-                        "{:?}, identified as {}, channel: {}, permissions: {:?}",
-                        user,
-                        user_identifier,
-                        execution_context.get_channel(),
-                        execution_context.get_permissions().await,
-                    )),
-                    Some(5),
-                ),
-                "help" => (
-                    self.edit_cmds("commands", vec![], execution_context)
-                        .await?,
-                    Some(5),
-                ),
-                "cmd" => (
-                    self.edit_cmds(command, arguments, execution_context)
-                        .await?,
-                    Some(1),
-                ),
-                "command" | "commands" => (
-                    self.edit_cmds(command, vec![], execution_context).await?,
-                    Some(5),
-                ),
-                // Old commands for convenience
-                "addcmd" | "cmdadd" => (
-                    self.edit_cmds(
-                        "command",
-                        {
-                            arguments.insert(0, "add");
-                            arguments
-                        },
-                        execution_context,
-                    )
-                    .await?,
-                    Some(1),
-                ),
-                "delcmd" | "cmddel" => (
-                    self.edit_cmds(
-                        "command",
-                        {
-                            arguments.insert(0, "remove");
-                            arguments
-                        },
-                        execution_context,
-                    )
-                    .await?,
-                    Some(1),
-                ),
-                "showcmd" | "checkcmd" => (
-                    self.edit_cmds(
-                        "command",
-                        {
-                            arguments.insert(0, "show");
-                            arguments
-                        },
-                        execution_context,
-                    )
-                    .await?,
-                    Some(1),
-                ),
-                "debug" | "check" => {
-                    if execution_context.get_permissions().await >= Permissions::ChannelMod {
-                        let action = arguments.join(" ");
+        let maybe_command = self
+            .builtin_commands
+            .get(&command_name)
+            .cloned()
+            .or_else(|| {
+                self.db
+                    .get_command(&execution_context.get_channel(), &command_name)
+                    .expect("DB error")
+                    .map(|command| {
+                        as_dyn_command(CustomCommand {
+                            template_registry: Arc::clone(&self.template_registry),
+                            command,
+                            user: user.clone(),
+                        })
+                    })
+            });
 
-                        (
-                            self.execute_command_action(
-                                action,
-                                execution_context,
-                                user.clone(),
-                                arguments.into_iter().map(|a| a.to_owned()).collect(),
-                            )
-                            .await?,
-                            None,
-                        )
-                    } else {
-                        (
-                            Some("Debug is only available to mods and higher!".to_owned()),
-                            Some(5),
-                        )
-                    }
-                }
-                "sh" | "shell" => {
-                    let allow_shell =
-                        env::var("ALLOW_SHELL").map_err(|_| CommandError::NoPermissions)?;
+        if let Some(command) = maybe_command {
+            if !self
+                .cooldowns
+                .read()
+                .await
+                .contains(&(user.id, command_name.clone()))
+            {
+                let context =
+                    Box::new(execution_context) as Box<dyn ExecutionContext + Send + Sync>;
 
-                    match &allow_shell as &str {
-                        "1" => match execution_context.get_permissions().await {
-                            Permissions::Admin => {
-                                let mut cmd = Command::new("sh");
+                let response = command.execute(context, arguments).await?;
 
-                                cmd.arg("-c").arg(arguments.join(" "));
+                let cooldown = command.get_cooldown();
 
-                                tracing::info!("Running command {:?}", cmd);
+                self.cooldowns.write().await.push((user.id, command_name));
 
-                                let output = cmd
-                                    .output()
-                                    .await
-                                    .map(|o| {
-                                        let stdout =
-                                            String::from_utf8_lossy(&o.stdout).into_owned();
-                                        let stderr =
-                                            String::from_utf8_lossy(&o.stderr).into_owned();
-                                        format!("{}{}", stdout, stderr)
-                                    })
-                                    .unwrap_or_else(|e| e.to_string())
-                                    .trim()
-                                    .to_owned();
-
-                                (Some(output), None)
-                            }
-                            _ => return Err(CommandError::NoPermissions),
-                        },
-                        _ => return Err(CommandError::NoPermissions),
-                    }
-                }
-                "eventsub" => {
-                    let mut arguments = arguments.into_iter();
-
-                    let action = arguments.next().context("action not specified")?;
-
-                    (
-                        Some(
-                            self.manage_eventsub(action, arguments, execution_context)
-                                .await?,
-                        ),
-                        None,
-                    )
-                }
-                _ => match self
-                    .db
-                    .get_command(&execution_context.get_channel(), command)?
-                {
-                    Some(cmd) => {
-                        tracing::info!("Executing custom command {:?}", cmd);
-
-                        (
-                            self.execute_command_action(
-                                cmd.action,
-                                execution_context,
-                                user.clone(),
-                                arguments.into_iter().map(|a| a.to_owned()).collect(),
-                            )
-                            .await?,
-                            cmd.cooldown,
-                        )
-                    }
-                    None => {
-                        tracing::info!("Command not found");
-
-                        (None, None)
-                    }
-                },
-            };
-
-            if let Some(cooldown) = result.1 {
-                self.start_cooldown(user.id, command.to_string(), cooldown)
-                    .await;
+                Ok(response)
+            } else {
+                tracing::debug!("Ignoring command, on cooldown");
+                Ok(None)
             }
-
-            Ok(result.0)
         } else {
-            tracing::info!("Ignoring command, on cooldown");
             Ok(None)
         }
     }
@@ -626,97 +503,6 @@ impl CommandHandler {
                 cooldowns.retain(|(id, cmd)| id != &user_id && cmd != &command)
             }
         });
-    }
-
-    async fn execute_command_action<C: ExecutionContext>(
-        &self,
-        action: String,
-        execution_context: C,
-        user: User,
-        arguments: Vec<String>,
-    ) -> Result<Option<String>, CommandError> {
-        tracing::info!("Parsing action {}", action);
-
-        let template_registry = self.template_registry.clone();
-
-        let display_name = execution_context.get_display_name().to_string();
-        let channel = execution_context.get_channel();
-
-        let response = match task::spawn_blocking(move || {
-            template_registry.render_template(
-                &action,
-                &(InquiryContext {
-                    user,
-                    arguments: arguments.iter().map(|s| s.to_owned()).collect(),
-                    display_name,
-                    channel,
-                }),
-            )
-        })
-        .await
-        .expect("Failed to join")
-        {
-            Ok(result) => result,
-            Err(e) => {
-                tracing::info!("Failed to render command template: {:?}", e);
-                e.desc
-            }
-        };
-
-        if !response.is_empty() {
-            Ok(Some(response))
-        } else {
-            Ok(None)
-        }
-    }
-
-    async fn ping(&self) -> String {
-        let uptime = {
-            let duration = self.startup_time.elapsed();
-
-            let minutes = (duration.as_secs() / 60) % 60;
-            let hours = (duration.as_secs() / 60) / 60;
-
-            let mut result = String::new();
-
-            if hours != 0 {
-                result.push_str(&format!("{}h ", hours));
-            };
-
-            if minutes != 0 {
-                result.push_str(&format!("{}m ", minutes));
-            }
-
-            if result.is_empty() {
-                result.push_str(&format!("{}s", duration.as_secs()));
-            }
-
-            result
-        };
-
-        let smaps = fs::read_to_string("/proc/self/smaps")
-            .await
-            .expect("Proc FS not found");
-
-        let mut mem_usage = 0; // in KB
-
-        for line in smaps.lines() {
-            if line.starts_with("Pss:") || line.starts_with("SwapPss:") {
-                let mut split = line.split_whitespace();
-                split.next().unwrap();
-
-                let pss = split.next().unwrap();
-
-                mem_usage += pss.parse::<i32>().unwrap();
-            }
-        }
-
-        format!(
-            "Pong! Version: {}, Uptime {}, RAM usage: {} MiB",
-            get_version(),
-            uptime,
-            mem_usage / 1024,
-        )
     }
 
     async fn manage_eventsub<C: ExecutionContext + Sync>(
@@ -1114,17 +900,23 @@ impl CommandHandler {
         arguments: Vec<String>,
     ) -> anyhow::Result<()> {
         let user = self.db.get_or_create_user(&context.executing_user)?;
+        let channel = context.get_channel();
 
-        let response = self
-            .execute_command_action(action, context.clone(), user, arguments) // TODO
-            .await?
-            .unwrap_or_else(|| "Event triggered with no action".to_string());
+        let response = execute_action(
+            Arc::clone(&self.template_registry),
+            action,
+            arguments,
+            user,
+            Box::new(context) as DynExecutionContext,
+        )
+        .await?
+        .context("Server command executed with no response")?;
 
         Ok(self
             .platform_handler
             .read()
             .await
-            .send_to_channel(context.get_channel(), response)
+            .send_to_channel(channel, response)
             .await?)
     }
 

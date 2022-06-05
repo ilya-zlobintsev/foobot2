@@ -69,7 +69,7 @@ pub struct NewChannel<'a> {
     pub channel: &'a str,
 }
 
-#[derive(Queryable, Debug, PartialEq, Eq, Serialize, JsonSchema)]
+#[derive(Queryable, Debug, PartialEq, Eq, Serialize, JsonSchema, Clone)]
 pub struct Command {
     pub name: String,
     pub action: String,
