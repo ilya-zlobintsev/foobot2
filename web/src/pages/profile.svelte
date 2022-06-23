@@ -75,6 +75,7 @@
             <b>Last.FM:</b>
             {#if user.lastfm_name}
                 {user.lastfm_name}
+                <button on:click={setLastfmName}>Change</button>
             {:else}
                 Not set <button on:click={setLastfmName}>Set</button>
             {/if}
