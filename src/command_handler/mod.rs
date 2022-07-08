@@ -19,6 +19,7 @@ use lingva_api::LingvaApi;
 use once_cell::sync::Lazy;
 use owm_api::OwmApi;
 use prometheus::{HistogramOpts, HistogramVec, IntCounterVec, Opts};
+use redis::aio::MultiplexedConnection;
 use reqwest::Client;
 use std::collections::HashMap;
 use std::env::{self, VarError};
@@ -77,10 +78,19 @@ pub struct CommandHandler {
     cooldowns: Arc<RwLock<Vec<(u64, String)>>>, // User id and command
     command_triggers: Arc<DashMap<u64, Arc<DashMap<String, String>>>>, // Channel id, trigger phrase and command name
     mirror_connections: Arc<HashMap<String, ChannelIdentifier>>,       // from and to channel
+    pub redis_conn: MultiplexedConnection,
+    pub redis_client: redis::Client,
 }
 
 impl CommandHandler {
     pub async fn init(db: Database) -> Self {
+        let redis_url = env::var("REDIS_URL").unwrap_or_else(|_| String::from("redis://127.0.0.1"));
+        let redis_client = redis::Client::open(redis_url).expect("Failed to open redis client");
+        let redis_conn = redis_client
+            .get_multiplexed_async_connection()
+            .await
+            .expect("Failed to connect to redis");
+
         let twitch_api = match TwitchApi::init_refreshing(db.clone()).await {
             Ok(api) => {
                 let active_triggers = api
@@ -296,6 +306,8 @@ impl CommandHandler {
             cooldowns,
             mirror_connections: Arc::new(mirror_connections),
             command_triggers: Arc::new(DashMap::new()),
+            redis_client,
+            redis_conn,
         }
     }
 

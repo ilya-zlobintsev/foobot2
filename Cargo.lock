@@ -346,6 +346,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "connector-schema"
+version = "0.1.0"
+source = "git+https://git.hyron.dev/foobot/foobot-chat-connector#696daab440376197e6ef70a6df2ce8b03ebca47a"
+dependencies = [
+ "redis",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
 name = "cookie"
 version = "0.16.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -731,6 +741,7 @@ dependencies = [
  "anyhow",
  "async-trait",
  "chrono",
+ "connector-schema",
  "dashmap",
  "diesel",
  "diesel_migrations",
@@ -738,6 +749,7 @@ dependencies = [
  "foobot-permissions-proto",
  "frankenstein",
  "futures",
+ "futures-util",
  "handlebars",
  "hex",
  "hmac",

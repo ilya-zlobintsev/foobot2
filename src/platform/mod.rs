@@ -1,3 +1,4 @@
+pub mod connector;
 pub mod discord;
 pub mod irc;
 pub mod local;
