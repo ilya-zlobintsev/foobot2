@@ -12,6 +12,7 @@ mod rpc;
 use command_handler::{get_admin_channel, CommandHandler};
 use database::Database;
 use dotenv::dotenv;
+use platform::connector::Connector;
 use platform::local::Local;
 use std::env;
 
@@ -67,6 +68,12 @@ async fn main() {
         Ok(local) => local.run().await,
         Err(e) => tracing::warn!("Failed to initialize the local platform: {:?}", e),
     }
+
+    Connector::init(command_handler.clone())
+        .await
+        .expect("Failed to init connector")
+        .run()
+        .await;
 
     if let Some(admin_channel) = get_admin_channel() {
         let platform_handler = command_handler.platform_handler.read().await;

@@ -7,13 +7,10 @@ pub mod telegram;
 pub mod twitch;
 
 use crate::command_handler::CommandHandler;
-
 use anyhow::anyhow;
 use async_trait::async_trait;
-use rocket_okapi::okapi::schemars;
-use rocket_okapi::okapi::schemars::JsonSchema;
+use foobot_permissions_proto::channel_permissions_response::Permissions;
 use serde::{Deserialize, Serialize};
-use std::cmp::Ordering;
 use std::env::{self, VarError};
 use std::fmt::{self, Display};
 use std::hash::{Hash, Hasher};
@@ -274,58 +271,6 @@ impl Hash for ChannelIdentifier {
             ChannelIdentifier::LocalAddress(addr) => addr.hash(state),
             ChannelIdentifier::Minecraft => (),
             ChannelIdentifier::Anonymous => (),
-        }
-    }
-}
-
-#[derive(Debug, PartialEq, Eq, Serialize, Deserialize, Clone, JsonSchema)]
-pub enum Permissions {
-    Default = 0,
-    ChannelMod = 5,
-    ChannelOwner = 10,
-    Admin = 15,
-}
-
-impl Display for Permissions {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(
-            f,
-            "{}",
-            match self {
-                Permissions::Default => "default",
-                Permissions::ChannelMod => "channel_mod",
-                Permissions::ChannelOwner => "channel_owner",
-                Permissions::Admin => "admin",
-            }
-        )
-    }
-}
-
-impl PartialOrd for Permissions {
-    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
-        match self {
-            Permissions::Admin => match other {
-                Permissions::Admin => Some(Ordering::Equal),
-                Permissions::ChannelOwner | Permissions::ChannelMod | Permissions::Default => {
-                    Some(Ordering::Greater)
-                }
-            },
-            Permissions::ChannelOwner => match other {
-                Permissions::Admin => Some(Ordering::Less),
-                Permissions::ChannelOwner => Some(Ordering::Equal),
-                Permissions::ChannelMod | Permissions::Default => Some(Ordering::Greater),
-            },
-            Permissions::ChannelMod => match other {
-                Permissions::Admin | Permissions::ChannelOwner => Some(Ordering::Less),
-                Permissions::ChannelMod => Some(Ordering::Equal),
-                Permissions::Default => Some(Ordering::Greater),
-            },
-            Permissions::Default => match other {
-                Permissions::ChannelMod | Permissions::ChannelOwner | Permissions::Admin => {
-                    Some(Ordering::Less)
-                }
-                Permissions::Default => Some(Ordering::Equal),
-            },
         }
     }
 }

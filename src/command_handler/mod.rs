@@ -45,10 +45,10 @@ use crate::database::DatabaseError;
 use crate::database::{models::User, Database};
 use crate::platform::minecraft;
 use crate::platform::{
-    twitch, ChannelIdentifier, ExecutionContext, Permissions, ServerExecutionContext,
-    UserIdentifierError,
+    twitch, ChannelIdentifier, ExecutionContext, ServerExecutionContext, UserIdentifierError,
 };
 use crate::{api, get_version};
+use foobot_permissions_proto::channel_permissions_response::Permissions;
 
 pub static COMMAND_COUNTER: Lazy<IntCounterVec> = Lazy::new(|| {
     IntCounterVec::new(

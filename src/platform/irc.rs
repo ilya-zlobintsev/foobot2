@@ -1,13 +1,12 @@
+use super::{ChannelIdentifier, ChatPlatform, ChatPlatformError};
+use crate::command_handler::CommandHandler;
+use crate::platform::{ExecutionContext, UserIdentifier};
+use foobot_permissions_proto::channel_permissions_response::Permissions;
+use futures::StreamExt;
+use irc::client::{prelude::*, Client};
 use std::sync::RwLock;
 use std::time::Duration;
 use std::{env, sync::Arc};
-
-use crate::command_handler::CommandHandler;
-use crate::platform::{ExecutionContext, UserIdentifier};
-
-use super::{ChannelIdentifier, ChatPlatform, ChatPlatformError, Permissions};
-use futures::StreamExt;
-use irc::client::{prelude::*, Client};
 use tokio::task;
 
 #[derive(Clone)]

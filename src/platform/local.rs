@@ -9,11 +9,9 @@ use tokio::{
 };
 
 use crate::command_handler::CommandHandler;
+use foobot_permissions_proto::channel_permissions_response::Permissions;
 
-use super::{
-    ChannelIdentifier, ChatPlatform, ChatPlatformError, ExecutionContext, Permissions,
-    UserIdentifier,
-};
+use super::{ChannelIdentifier, ChatPlatform, ChatPlatformError, ExecutionContext, UserIdentifier};
 
 pub struct Local {
     listener: TcpListener,

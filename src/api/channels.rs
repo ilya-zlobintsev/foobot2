@@ -1,3 +1,4 @@
+use foobot_permissions_proto::channel_permissions_response::Permissions;
 use futures::future::join_all;
 use rocket::serde::json::Json;
 use rocket::State;
@@ -15,7 +16,7 @@ use crate::api::error::ApiError;
 use crate::command_handler::CommandHandler;
 use crate::database;
 use crate::database::models::{Command, Filter, User, WebSession};
-use crate::platform::{ChannelIdentifier, Permissions};
+use crate::platform::ChannelIdentifier;
 
 #[openapi(tag = "Channels")]
 #[get("/")]
@@ -266,6 +267,7 @@ pub struct ChannelInfo {
 
 #[derive(Serialize, JsonSchema)]
 pub struct PermissionsInfo {
+    #[schemars(skip)]
     pub name: Permissions,
     pub value: usize,
 }

@@ -1,9 +1,11 @@
-use std::{env, sync::Arc};
-
+use foobot_permissions_proto::channel_permissions_response::Permissions;
 use futures::StreamExt;
+use std::{env, sync::Arc};
 use twilight_gateway::{Cluster, Event, Intents};
 use twilight_http::Client;
-use twilight_model::{gateway::payload::incoming::MessageCreate, guild::Permissions};
+use twilight_model::{
+    gateway::payload::incoming::MessageCreate, guild::Permissions as DiscordPermissions,
+};
 
 use crate::command_handler::CommandHandler;
 
@@ -113,7 +115,9 @@ pub struct DiscordExecutionContext<'a> {
 
 #[async_trait]
 impl ExecutionContext for DiscordExecutionContext<'_> {
-    async fn get_permissions_internal(&self) -> super::Permissions {
+    async fn get_permissions_internal(
+        &self,
+    ) -> foobot_permissions_proto::channel_permissions_response::Permissions {
         tracing::info!(
             "Querying permissions for Discord user {}",
             self.msg.author.id
@@ -131,13 +135,13 @@ impl ExecutionContext for DiscordExecutionContext<'_> {
                     .await
                     .expect("Failed to get permissions");
 
-                if permissions.contains(Permissions::ADMINISTRATOR) {
-                    crate::platform::Permissions::ChannelMod
+                if permissions.contains(DiscordPermissions::ADMINISTRATOR) {
+                    Permissions::ChannelMod
                 } else {
-                    crate::platform::Permissions::Default
+                    Permissions::Default
                 }
             }
-            None => crate::platform::Permissions::ChannelMod, // for DMs
+            None => Permissions::ChannelMod, // for DMs
         }
     }
 

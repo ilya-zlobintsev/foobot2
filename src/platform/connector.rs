@@ -1,9 +1,7 @@
-use super::{
-    ChannelIdentifier, ChatPlatform, ChatPlatformError, ExecutionContext, Permissions,
-    UserIdentifier,
-};
+use super::{ChannelIdentifier, ChatPlatform, ChatPlatformError, ExecutionContext, UserIdentifier};
 use crate::command_handler::CommandHandler;
 use connector_schema::{IncomingMessage, OutgoingMessage};
+use foobot_permissions_proto::channel_permissions_response::Permissions;
 use foobot_permissions_proto::permissions_handler_client::PermissionsHandlerClient;
 use foobot_permissions_proto::ChannelPermissionsRequest;
 use futures_util::stream::StreamExt;
@@ -44,7 +42,7 @@ impl ChatPlatform for Connector {
         );
 
         let permissions_handler_url = env::var("FOOBOT_PERMISSIONS_HANDLER_URL")
-            .unwrap_or_else(|_| "localhost:50053".to_owned());
+            .unwrap_or_else(|_| "http://localhost:50053".to_owned());
         let permissions_handler_client = PermissionsHandlerClient::connect(permissions_handler_url)
             .await
             .unwrap();
@@ -62,10 +60,12 @@ impl ChatPlatform for Connector {
     async fn run(mut self) {
         tokio::spawn(async move {
             let channel_glob = format!("{}*", self.incoming_channel_prefix);
+            info!("Subscribing to {channel_glob}");
             self.pubsub_conn.psubscribe(channel_glob).await.unwrap();
 
             let prefixes = vec![Connector::get_prefix()];
 
+            info!("Listening on connector messages");
             while let Some(msg) = self.pubsub_conn.on_message().next().await {
                 let command_handler = self.command_handler.clone();
                 let mut publish_conn = self.publish_conn.clone();
@@ -77,6 +77,8 @@ impl ChatPlatform for Connector {
                 tokio::spawn(async move {
                     match serde_json::from_slice(msg.get_payload_bytes()) {
                         Ok(incoming_message) => {
+                            info!("Received {incoming_message:?}");
+
                             let platform = msg
                                 .get_channel_name()
                                 .strip_prefix(&*incoming_channel_prefix)
@@ -91,18 +93,20 @@ impl ChatPlatform for Connector {
 
                             if let Some(response) = command_handler
                                 .handle_message(
-                                    connector_message.incoming_message.contents,
+                                    &connector_message.incoming_message.contents,
                                     &connector_message,
                                 )
                                 .await
                             {
                                 let outgoing_message = OutgoingMessage {
                                     channel_id: connector_message.incoming_message.channel.id,
-                                    contents: &response,
+                                    contents: response,
                                 };
 
                                 let outgoing_channel =
                                     format!("{}{}", outgoing_channel_prefix, platform);
+
+                                info!("Repying with {outgoing_message:?} to {outgoing_channel}");
 
                                 publish_conn
                                     .publish::<_, _, u64>(outgoing_channel, outgoing_message)
@@ -138,6 +142,7 @@ impl<'a> ExecutionContext for &ConnectorMessage<'a> {
 
         let response = self
             .permissions_handler_client
+            .clone()
             .get_permissions_in_channel(request)
             .await
             .expect("Failed to fetch permissions");
