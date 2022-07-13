@@ -24,9 +24,7 @@ pub async fn get_user_info(cmd: &CommandHandler, user: User) -> Result<UserInfo,
         false
     };
 
-    let platform_handler = cmd.platform_handler.read().await;
-
-    let twitch_user = match (&user.twitch_id, platform_handler.twitch_api.as_ref()) {
+    let twitch_user = match (&user.twitch_id, cmd.twitch_api.as_ref()) {
         (Some(twitch_id), Some(twitch_api)) => twitch_api
             .helix_api
             .get_user_by_id(&twitch_id)
@@ -44,7 +42,7 @@ pub async fn get_user_info(cmd: &CommandHandler, user: User) -> Result<UserInfo,
         _ => None,
     };
 
-    let discord_user = match (&user.discord_id, platform_handler.discord_api.as_ref()) {
+    let discord_user = match (&user.discord_id, cmd.discord_api.as_ref()) {
         (Some(discord_id), Some(discord_api)) => {
             Some(discord_api.get_user(discord_id.parse().unwrap()).await?)
         }

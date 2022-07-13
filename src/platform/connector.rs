@@ -41,11 +41,7 @@ impl ChatPlatform for Connector {
                 .unwrap_or_else(|_| "messages.outgoing.".to_owned()),
         );
 
-        let permissions_handler_url = env::var("FOOBOT_PERMISSIONS_HANDLER_URL")
-            .unwrap_or_else(|_| "http://localhost:50053".to_owned());
-        let permissions_handler_client = PermissionsHandlerClient::connect(permissions_handler_url)
-            .await
-            .unwrap();
+        let permissions_handler_client = command_handler.permissions_handler_client.clone();
 
         Ok(Box::new(Self {
             command_handler,

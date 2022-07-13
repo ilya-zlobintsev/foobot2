@@ -36,7 +36,7 @@ twilight-cache-inmemory = "0.11.0"
 twilight-gateway = "0.11.0"
 twilight-http = "0.11.0"
 twilight-model = "0.11.0"
-twilight-util = { version = "0.11.0", features = ["permission-calculator"] }
+twilight-util = "0.11.0"
 twitch-irc = { version = "4.0.0", default-features = false, features = [
     "transport-tcp-rustls-webpki-roots",
     "refreshing-token-rustls-webpki-roots",
@@ -46,7 +46,6 @@ frankenstein = { version = "0.18.0", default-features = false, features = [
     "async-http-client",
 ] }
 
-minecraft-client-rs = "0.1.0"
 
 handlebars = "4.3.1"
 
@@ -68,12 +67,6 @@ sha2 = "0.10.2"
 dashmap = "5.3.4"
 
 chrono = "0.4.19"
-
-irc = { version = "0.15.0", default-features = false, features = [
-    "tls-rust",
-    "ctcp",
-    "toml_config",
-] }
 
 once_cell = "1.12.0"
 prometheus = { version = "0.13.1", features = ["process"] }

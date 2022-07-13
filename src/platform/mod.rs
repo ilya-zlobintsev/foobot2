@@ -1,10 +1,5 @@
 pub mod connector;
-pub mod discord;
-pub mod irc;
-pub mod local;
-pub mod minecraft;
-pub mod telegram;
-pub mod twitch;
+// pub mod twitch;
 
 use crate::command_handler::CommandHandler;
 use anyhow::anyhow;
@@ -96,8 +91,6 @@ impl ExecutionContext for ServerExecutionContext {
 pub enum ChatPlatformError {
     ReqwestError(reqwest::Error),
     MissingAuthentication,
-    MissingEnv(String),
-    ServiceError(String),
 }
 
 impl From<reqwest::Error> for ChatPlatformError {

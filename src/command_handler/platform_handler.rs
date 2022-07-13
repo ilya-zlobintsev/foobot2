@@ -1,26 +1,18 @@
-use super::discord_api::DiscordApi;
-use crate::{
-    database::{models::Filter, Database},
-    platform::{twitch, ChannelIdentifier},
-};
-use anyhow::anyhow;
-use anyhow::Error;
-use irc::client::Sender as IrcSender;
+use crate::{database::models::Filter, platform::ChannelIdentifier};
+use connector_schema::OutgoingMessage;
+use redis::{aio::MultiplexedConnection, AsyncCommands};
 use regex::Regex;
-use std::sync::{Arc, RwLock};
 use std::{collections::HashMap, fmt::Display};
+use std::{
+    env,
+    sync::{Arc, RwLock},
+};
 use tokio::sync::Mutex;
-use twitch_irc::login::RefreshingLoginCredentials;
-
-type TwitchApi = super::twitch_api::TwitchApi<RefreshingLoginCredentials<Database>>;
 
 #[derive(Clone)]
 pub struct PlatformHandler {
-    pub twitch_api: Option<TwitchApi>,
-    pub discord_api: Option<DiscordApi>,
-    pub irc_sender: Option<IrcSender>,
-    pub minecraft_client: Option<Arc<Mutex<minecraft_client_rs::Client>>>,
     pub filters: Arc<RwLock<HashMap<ChannelIdentifier, Vec<Filter>>>>,
+    pub redis_conn: Arc<Mutex<MultiplexedConnection>>,
 }
 
 impl PlatformHandler {
@@ -31,60 +23,29 @@ impl PlatformHandler {
     ) -> Result<(), PlatformHandlerError> {
         self.filter_message(&mut msg, &channel);
 
-        match channel {
-            ChannelIdentifier::TwitchChannel((channel_id, _)) => {
-                let twitch_api = self
-                    .twitch_api
-                    .as_ref()
-                    .ok_or(PlatformHandlerError::Unconfigured)?;
+        let outgoing_channel_prefix = Arc::new(
+            env::var("OUTGOING_MESSAGES_CHANNEL_PREFIX")
+                .unwrap_or_else(|_| "messages.outgoing.".to_owned()),
+        );
 
-                let broadcaster = twitch_api.helix_api.get_user_by_id(&channel_id).await?;
+        let redis_channel = format!(
+            "{outgoing_channel_prefix}{platform}",
+            platform = channel
+                .get_platform_name()
+                .ok_or_else(|| PlatformHandlerError::Unsupported)?
+        );
 
-                let chat_sender_guard = twitch_api.chat_sender.lock().await;
-                let chat_sender = chat_sender_guard.as_ref().expect("Chat client missing");
+        let message = OutgoingMessage {
+            channel_id: channel.get_channel().unwrap_or_default(),
+            contents: msg,
+        };
 
-                tracing::info!("Sending {} to {}", msg, broadcaster.login);
-
-                let message = msg.split_whitespace().collect::<Vec<&str>>().join(" ");
-
-                chat_sender
-                    .send(twitch::SenderMessage::Privmsg(twitch::Privmsg {
-                        channel_login: broadcaster.login,
-                        message,
-                        reply_to_id: None,
-                    }))
-                    .unwrap();
-
-                Ok(())
-            }
-            ChannelIdentifier::IrcChannel(channel) => {
-                let sender = self
-                    .irc_sender
-                    .as_ref()
-                    .ok_or(PlatformHandlerError::Unconfigured)?;
-
-                sender
-                    .send_privmsg(channel, &msg)
-                    .map_err(|e| Error::new(e))?;
-
-                Ok(())
-            }
-            ChannelIdentifier::Minecraft => {
-                let mut minecraft = self
-                    .minecraft_client
-                    .as_ref()
-                    .ok_or(PlatformHandlerError::Unconfigured)?
-                    .lock()
-                    .await;
-
-                minecraft
-                    .send_command(format!("say {}", msg))
-                    .map_err(|e| anyhow!("Failed to send Minecraft message: {}", e))?;
-
-                Ok(())
-            }
-            _ => Err(PlatformHandlerError::Unsupported),
-        }
+        self.redis_conn
+            .lock()
+            .await
+            .publish(redis_channel, message)
+            .await
+            .map_err(|error| PlatformHandlerError::PlatformError(error.into()))
     }
 
     pub fn filter_message(&self, message: &mut String, channel: &ChannelIdentifier) {

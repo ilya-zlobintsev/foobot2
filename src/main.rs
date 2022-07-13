@@ -13,14 +13,8 @@ use command_handler::{get_admin_channel, CommandHandler};
 use database::Database;
 use dotenv::dotenv;
 use platform::connector::Connector;
-use platform::local::Local;
-use std::env;
-
-use platform::discord::Discord;
-use platform::irc::Irc;
-use platform::telegram::Telegram;
-use platform::twitch::Twitch;
 use platform::ChatPlatform;
+use std::env;
 
 #[tokio::main]
 async fn main() {
@@ -34,40 +28,6 @@ async fn main() {
     db.start_cron();
 
     let command_handler = CommandHandler::init(db).await;
-
-    match &command_handler.platform_handler.read().await.twitch_api {
-        Some(_) => match Twitch::init(command_handler.clone()).await {
-            Ok(twitch) => twitch.run().await,
-            Err(e) => tracing::warn!("Platform {:?}", e),
-        },
-        None => {
-            tracing::info!("Twitch is not initialized! Not connecting to chat.");
-        }
-    }
-
-    match Discord::init(command_handler.clone()).await {
-        Ok(discord) => discord.run().await,
-        Err(e) => {
-            tracing::warn!("Error loading Discord: {:?}", e);
-        }
-    };
-
-    match Irc::init(command_handler.clone()).await {
-        Ok(irc) => irc.run().await,
-        Err(e) => {
-            tracing::warn!("Error loading IRC: {:?}", e);
-        }
-    }
-
-    match Telegram::init(command_handler.clone()).await {
-        Ok(telegram) => telegram.run().await,
-        Err(e) => tracing::warn!("Error loading Telegram: {:?}", e),
-    }
-
-    match Local::init(command_handler.clone()).await {
-        Ok(local) => local.run().await,
-        Err(e) => tracing::warn!("Failed to initialize the local platform: {:?}", e),
-    }
 
     Connector::init(command_handler.clone())
         .await

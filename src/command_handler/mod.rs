@@ -12,6 +12,8 @@ use anyhow::{anyhow, Context};
 use core::fmt;
 use dashmap::DashMap;
 use discord_api::DiscordApi;
+use foobot_permissions_proto::permissions_handler_client::PermissionsHandlerClient;
+use foobot_permissions_proto::ChannelPermissionsRequest;
 use handlebars::Handlebars;
 use inquiry_helper::*;
 use lastfm_api::LastFMApi;
@@ -31,7 +33,7 @@ use std::vec::IntoIter;
 use tokio::process::Command;
 use tokio::sync::{Mutex, RwLock};
 use tokio::{fs, task};
-use twitch_api::TwitchApi;
+use tonic::transport::Channel;
 use twitch_irc::login::{LoginCredentials, RefreshingLoginCredentials};
 
 use self::finnhub_api::FinnhubApi;
@@ -43,12 +45,13 @@ use self::twitch_api::{get_client_id, get_client_secret};
 use crate::database::models::{Filter, NewEventSubTrigger};
 use crate::database::DatabaseError;
 use crate::database::{models::User, Database};
-use crate::platform::minecraft;
 use crate::platform::{
-    twitch, ChannelIdentifier, ExecutionContext, ServerExecutionContext, UserIdentifierError,
+    ChannelIdentifier, ExecutionContext, ServerExecutionContext, UserIdentifierError,
 };
 use crate::{api, get_version};
 use foobot_permissions_proto::channel_permissions_response::Permissions;
+
+type TwitchApi = twitch_api::TwitchApi<RefreshingLoginCredentials<Database>>;
 
 pub static COMMAND_COUNTER: Lazy<IntCounterVec> = Lazy::new(|| {
     IntCounterVec::new(
@@ -80,6 +83,9 @@ pub struct CommandHandler {
     mirror_connections: Arc<HashMap<String, ChannelIdentifier>>,       // from and to channel
     pub redis_conn: MultiplexedConnection,
     pub redis_client: redis::Client,
+    pub twitch_api: Option<TwitchApi>,
+    pub discord_api: Option<DiscordApi>,
+    pub permissions_handler_client: PermissionsHandlerClient<Channel>,
 }
 
 impl CommandHandler {
@@ -90,6 +96,12 @@ impl CommandHandler {
             .get_multiplexed_async_connection()
             .await
             .expect("Failed to connect to redis");
+
+        let permissions_handler_url = env::var("FOOBOT_PERMISSIONS_HANDLER_URL")
+            .unwrap_or_else(|_| "http://localhost:50053".to_owned());
+        let permissions_handler_client = PermissionsHandlerClient::connect(permissions_handler_url)
+            .await
+            .unwrap();
 
         let twitch_api = match TwitchApi::init_refreshing(db.clone()).await {
             Ok(api) => {
@@ -159,30 +171,9 @@ impl CommandHandler {
 
         tracing::trace!("Loaded filters: {:?}", filters);
 
-        let minecraft = match minecraft::init() {
-            Ok(mut minecraft) => {
-                db.get_or_create_channel(&ChannelIdentifier::Minecraft)
-                    .expect("DB error")
-                    .expect("Failed to initialize Minecraft channel in the DB!");
-                if env::var("PROFILE") == Ok("debug".to_string()) {
-                    minecraft
-                        .send_command("say Foobot2 connected".to_string())
-                        .unwrap();
-                }
-                Some(minecraft)
-            }
-            Err(e) => {
-                tracing::error!("Failed to initialize Minecraft: {}", e);
-                None
-            }
-        };
-
         let platform_handler = PlatformHandler {
-            twitch_api,
-            discord_api,
-            irc_sender: None,
-            minecraft_client: minecraft.and_then(|m| Some(Arc::new(Mutex::new(m)))),
             filters: Arc::new(std::sync::RwLock::new(filters)),
+            redis_conn: Arc::new(Mutex::new(redis_conn.clone())),
         };
 
         let lingva_api = LingvaApi::init(lingva_url);
@@ -230,7 +221,7 @@ impl CommandHandler {
             )
         }
 
-        if let Some(twitch_api) = &platform_handler.twitch_api {
+        if let Some(twitch_api) = &twitch_api {
             template_registry.register_helper(
                 "twitchuser",
                 Box::new(TwitchUserHelper {
@@ -308,6 +299,9 @@ impl CommandHandler {
             command_triggers: Arc::new(DashMap::new()),
             redis_client,
             redis_conn,
+            permissions_handler_client,
+            twitch_api,
+            discord_api,
         }
     }
 
@@ -744,9 +738,7 @@ impl CommandHandler {
         if let ChannelIdentifier::TwitchChannel((broadcaster_id, _)) =
             execution_context.get_channel()
         {
-            let platform_handler = self.platform_handler.read().await;
-
-            let app_api = &platform_handler.twitch_api.as_ref().unwrap().helix_api_app;
+            let app_api = &self.twitch_api.as_ref().unwrap().helix_api_app;
 
             match action {
                 "add" | "create" => {
@@ -1029,71 +1021,25 @@ impl CommandHandler {
         user: User,
         channel: &ChannelIdentifier,
     ) -> anyhow::Result<Permissions> {
-        if let Ok(Some(admin_user)) = self.db.get_admin_user() {
-            if user.id == admin_user.id {
-                return Ok(Permissions::Admin);
-            }
-        }
+        let request = ChannelPermissionsRequest {
+            platform: channel
+                .get_platform_name()
+                .context("Could not get platform name")?
+                .to_owned(),
+            channel_id: channel
+                .get_channel()
+                .context("Could not get channel")?
+                .to_owned(),
+            user_id: user.id.to_string(),
+        };
 
-        match channel {
-            ChannelIdentifier::TwitchChannel((channel_id, _)) => {
-                let twitch_id = user
-                    .twitch_id
-                    .ok_or_else(|| anyhow!("Not registered on this platform"))?;
+        let response = self
+            .permissions_handler_client
+            .clone()
+            .get_permissions_in_channel(request)
+            .await?;
 
-                let platform_handler = self.platform_handler.read().await;
-
-                let twitch_api = platform_handler
-                    .twitch_api
-                    .as_ref()
-                    .ok_or_else(|| anyhow!("Twitch not configured"))?;
-
-                let users_response = twitch_api
-                    .helix_api
-                    .get_users(None, Some(&vec![channel_id]))
-                    .await?;
-
-                let channel_login = &users_response.first().expect("User not found").login;
-
-                match twitch_api.get_channel_mods(channel_login).await?.contains(
-                    &twitch_api
-                        .helix_api
-                        .get_users(None, Some(&vec![&twitch_id]))
-                        .await?
-                        .first()
-                        .unwrap()
-                        .display_name,
-                ) {
-                    true => Ok(Permissions::ChannelMod),
-                    false => Ok(Permissions::Default),
-                }
-            }
-            ChannelIdentifier::DiscordChannel(guild_id) => {
-                let user_id = user
-                    .discord_id
-                    .ok_or_else(|| anyhow!("Invalid user"))?
-                    .parse()
-                    .unwrap();
-
-                let platform_handler = self.platform_handler.read().await;
-                let discord_api = platform_handler.discord_api.as_ref().unwrap();
-
-                match discord_api
-                    .get_permissions_in_guild(user_id, guild_id.parse().unwrap())
-                    .await
-                    .map_err(|_| anyhow!("discord error"))?
-                    .contains(twilight_model::guild::Permissions::ADMINISTRATOR)
-                {
-                    true => Ok(Permissions::ChannelMod),
-                    false => Ok(Permissions::Default),
-                }
-            }
-            ChannelIdentifier::IrcChannel(_) => Ok(Permissions::Default), // TODO
-            ChannelIdentifier::Anonymous => Ok(Permissions::Default),
-            ChannelIdentifier::LocalAddress(_) => Ok(Permissions::ChannelOwner), // on the local platform, each ip address is its own channel
-            ChannelIdentifier::Minecraft => Ok(Permissions::Default),
-            ChannelIdentifier::TelegramChat(_) => Ok(Permissions::Default), // TODO
-        }
+        Ok(response.into_inner().permissions())
     }
 
     pub async fn get_permissions_in_channel_by_id(
@@ -1141,45 +1087,7 @@ impl CommandHandler {
     }
 
     pub async fn join_channel(&self, channel: &ChannelIdentifier) -> anyhow::Result<()> {
-        match channel {
-            ChannelIdentifier::TwitchChannel((id, _)) => {
-                let platform_handler = self.platform_handler.read().await;
-                let twitch_api = platform_handler
-                    .twitch_api
-                    .as_ref()
-                    .context("Twitch not initialized")?;
-
-                let user = twitch_api.helix_api.get_user_by_id(id).await?;
-
-                let chat_sender_guard = twitch_api.chat_sender.lock().await;
-                let chat_sender = chat_sender_guard
-                    .as_ref()
-                    .context("Twitch chat not initialized")?;
-
-                chat_sender
-                    .send(twitch::SenderMessage::JoinChannel(user.login.clone()))
-                    .unwrap();
-                chat_sender
-                    .send(twitch::SenderMessage::Privmsg(twitch::Privmsg {
-                        channel_login: user.login,
-                        message: String::from("MrDestructoid 👍 Foobot2 joined"),
-                        reply_to_id: None,
-                    }))
-                    .unwrap();
-
-                self.db
-                    .get_or_create_channel(channel)?
-                    .context("Failed to add channel")?;
-
-                Ok(())
-            }
-            ChannelIdentifier::DiscordChannel(_) => Ok(()), // Discord guilds don't need to be joined client side and get added to the DB on demand
-            ChannelIdentifier::TelegramChat(_) => todo!(),
-            ChannelIdentifier::IrcChannel(_) => Err(anyhow!("Not implemented yet")),
-            ChannelIdentifier::LocalAddress(_) => Err(anyhow!("This is not possible")),
-            ChannelIdentifier::Minecraft => panic!("This should never happen"),
-            ChannelIdentifier::Anonymous => Err(anyhow!("Invalid channel specified")),
-        }
+        todo!()
     }
 
     fn get_command_triggers(

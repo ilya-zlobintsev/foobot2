@@ -109,8 +109,7 @@ pub async fn get_channel_eventsub_triggers(
 
     match channel.get_identifier() {
         ChannelIdentifier::TwitchChannel((id, _)) => {
-            let platform_handler = cmd.platform_handler.read().await;
-            let helix = platform_handler
+            let helix = cmd
                 .twitch_api
                 .as_ref()
                 .map(|twitch_api| &twitch_api.helix_api)
@@ -197,11 +196,10 @@ async fn get_friendly_names(
 
     let results = Arc::new(Mutex::new(HashMap::new()));
 
-    let platform_handler = cmd.platform_handler.read().await;
     let mut handles = Vec::new();
 
     if !twitch_channels.is_empty() {
-        let helix = platform_handler
+        let helix = cmd
             .twitch_api
             .as_ref()
             .expect("Twitch API not initialized even though there are Twitch channels registered")
@@ -233,7 +231,7 @@ async fn get_friendly_names(
     }
 
     if !discord_channels.is_empty() {
-        let discord_api = platform_handler.discord_api.clone().expect(
+        let discord_api = cmd.discord_api.clone().expect(
             "Discord API not initialized even though there are Discord channels registered",
         );
 
@@ -276,11 +274,9 @@ async fn get_channel_display_name(
     channel: &database::models::Channel,
     cmd: &CommandHandler,
 ) -> Result<Option<String>> {
-    let platform_handler_guard = cmd.platform_handler.read().await;
-
     match channel.platform.as_str() {
         "twitch" => {
-            let twitch_api = platform_handler_guard
+            let twitch_api = cmd
                 .twitch_api
                 .as_ref()
                 .expect("Twitch channel found but Twitch is not configured");
@@ -293,7 +289,7 @@ async fn get_channel_display_name(
             Ok(Some(twitch_user.display_name))
         }
         "discord_guild" => {
-            let discord_api = platform_handler_guard
+            let discord_api = cmd
                 .discord_api
                 .as_ref()
                 .expect("Discord channel found but DIscord is not configured");
