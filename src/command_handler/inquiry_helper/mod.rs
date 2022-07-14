@@ -1,3 +1,4 @@
+mod forsencode;
 pub mod script;
 
 use std::env;
@@ -973,4 +974,22 @@ impl HelperDef for JsonHelper {
             |e| RenderError::new(format!("Failed to parse json: {}", e)),
         )?))
     }
+}
+
+pub fn forsencode_encode_helper(
+    h: &Helper,
+    _: &Handlebars,
+    ctx: &Context,
+    _: &mut RenderContext,
+    out: &mut dyn Output,
+) -> HelperResult {
+    let params = h
+        .params()
+        .iter()
+        .map(|param| param.value().render())
+        .collect::<Vec<String>>()
+        .join(" ");
+
+    out.write(&forsencode::encode(&params))?;
+    Ok(())
 }
