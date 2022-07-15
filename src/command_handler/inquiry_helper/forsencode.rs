@@ -1,70 +1,52 @@
-/// Implementation credit to GaZaTu
+/// Encode implementation credits:
 /// https://gist.github.com/GaZaTu/427d7d2a6d7974c1acfe4eaced36ac87
-static CODEWORD: &str = "forsen";
-static CODEWORD_BIT_SIZE: usize = CODEWORD.len() + 1;
-static CODEWORD_LIMIT: usize = usize::pow(2, CODEWORD_BIT_SIZE as u32);
+/// https://gist.github.com/Nerixyz/080eac37f39512cb49bc7041f02078d4
 
 pub fn encode(text: &str) -> String {
     let mut prev_char_was_invalid = false;
-
-    let mut code = String::with_capacity(text.len() * CODEWORD.len());
-
+    let mut code = String::with_capacity(text.len() * 6);
     for decoded_char in text.trim().chars() {
         if !code.is_empty() && !prev_char_was_invalid {
             code.push(' ');
         }
-
-        let ascii = decoded_char as usize;
-        if ascii >= CODEWORD_LIMIT {
+        let ascii = u32::from(decoded_char);
+        if !decoded_char.is_ascii() {
             prev_char_was_invalid = true;
             code.push(decoded_char);
             continue;
         }
-
         if decoded_char == ' ' && prev_char_was_invalid {
             prev_char_was_invalid = false;
             continue;
         }
 
-        let ascii_bit_string = format!("{:07b}", ascii);
-
-        let mut bit: usize = 0;
-
-        for cc in CODEWORD.chars() {
-            if cc == 'o' {
-                let state = &ascii_bit_string[bit..bit + 2];
-
-                let new_char = match state {
-                    "00" => 'Ö',
-                    "01" => 'ö',
-                    "10" => 'O',
-                    "11" => 'o',
-                    _ => panic!("fdm"),
-                };
-                code.push(new_char);
-
-                bit += 2;
-                continue;
-            }
-
-            let upper = ascii_bit_string
-                .chars()
-                .nth(bit)
-                .unwrap()
-                .to_digit(2)
-                .unwrap();
-            let new_char = if upper != 0 {
-                cc.to_ascii_uppercase()
-            } else {
-                cc.to_ascii_lowercase()
-            };
-            code.push(new_char);
-
-            bit += 1;
-        }
+        code.push(if (ascii & 0b100_0000) != 0 { 'F' } else { 'f' });
+        code.push(match (ascii >> 4) & 0b11 {
+            0b00 => 'Ö',
+            0b01 => 'ö',
+            0b10 => 'O',
+            _ /* 0b11 */ => 'o',
+        });
+        code.push(if (ascii & 0b000_1000) != 0 { 'R' } else { 'r' });
+        code.push(if (ascii & 0b000_0100) != 0 { 'S' } else { 's' });
+        code.push(if (ascii & 0b000_0010) != 0 { 'E' } else { 'e' });
+        code.push(if (ascii & 0b000_0001) != 0 { 'N' } else { 'n' });
 
         prev_char_was_invalid = false;
     }
-
     code
+}
+
+#[cfg(test)]
+mod tests {
+    use super::encode;
+    use pretty_assertions::assert_eq;
+
+    #[test]
+    fn encode_non_ascii() {
+        let text = "Hello world! 🤓";
+        let code = encode(text);
+
+        assert_eq!(code, "FÖRsen FOrSeN FORSen FORSen FORSEN fOrsen ForSEN FORSEN ForsEn FORSen FOrSen fOrseN fOrsen 🤓");
+    }
 }
