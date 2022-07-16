@@ -2,17 +2,11 @@ pub mod credentials;
 pub mod models;
 mod schema;
 
-use std::env;
-use std::fmt::Display;
-use std::sync::Arc;
-use std::time::Duration;
-
 use self::credentials::Credentials;
 use self::models::*;
 use crate::command_handler::spotify_api::SpotifyApi;
 use crate::database::schema::*;
 use crate::platform::{ChannelIdentifier, UserIdentifier, UserIdentifierError};
-
 use chrono::{DateTime, Utc};
 use dashmap::DashMap;
 use diesel::mysql::MysqlConnection;
@@ -21,13 +15,20 @@ use diesel::sql_types::{BigInt, Unsigned};
 use diesel::{sql_query, EqAll, QueryDsl};
 use diesel::{ConnectionError, OptionalExtension};
 use diesel::{ExpressionMethods, RunQueryDsl};
-use passwords::PasswordGenerator;
-
-use reqwest::Client;
-use tokio::time;
-
 use diesel_migrations::{embed_migrations, EmbeddedMigrations, MigrationHarness};
+use passwords::PasswordGenerator;
+use redis::aio::{ConnectionLike, MultiplexedConnection};
+use redis::{AsyncCommands, RedisError};
+use reqwest::Client;
+use std::collections::HashMap;
+use std::env;
+use std::fmt::{Debug, Display};
+use std::sync::Arc;
+use std::time::Duration;
+use tokio::time;
+use tracing::info;
 use twitch_irc::login::{TokenStorage, UserAccessToken};
+
 pub const MIGRATIONS: EmbeddedMigrations = embed_migrations!();
 
 const BUILTIN_COMMANDS: &[&str] = &[
@@ -35,9 +36,11 @@ const BUILTIN_COMMANDS: &[&str] = &[
     "checkcmd",
 ];
 
-#[derive(Clone, Debug)]
+#[derive(Clone)]
 pub struct Database {
     conn_pool: Pool<ConnectionManager<MysqlConnection>>,
+    pub redis_conn: MultiplexedConnection,
+    pub redis_client: redis::Client,
     web_sessions_cache: Arc<DashMap<String, WebSession>>,
     users_cache: Arc<DashMap<u64, User>>,
     user_identifiers_cache: Arc<DashMap<UserIdentifier, u64>>, // Caches the user IDs
@@ -47,7 +50,7 @@ pub struct Database {
 }
 
 impl Database {
-    pub fn connect(database_url: String) -> Result<Self, ConnectionError> {
+    pub async fn connect(database_url: String) -> Result<Self, ConnectionError> {
         let manager = ConnectionManager::<MysqlConnection>::new(&database_url);
         let conn_pool = r2d2::Pool::new(manager).expect("Failed to set up DB connection pool");
 
@@ -63,6 +66,13 @@ impl Database {
         let prefixes_cache = Arc::new(DashMap::new());
         let channels_cache = Arc::new(DashMap::new());
 
+        let redis_url = env::var("REDIS_URL").unwrap_or_else(|_| String::from("redis://127.0.0.1"));
+        let redis_client = redis::Client::open(redis_url).expect("Failed to open redis client");
+        let redis_conn = redis_client
+            .get_multiplexed_async_connection()
+            .await
+            .expect("Failed to connect to redis");
+
         Ok(Self {
             conn_pool,
             web_sessions_cache,
@@ -70,6 +80,8 @@ impl Database {
             user_identifiers_cache,
             prefixes_cache,
             channels_cache,
+            redis_conn,
+            redis_client,
         })
     }
 
@@ -203,10 +215,10 @@ impl Database {
         }
     }
 
-    pub fn get_or_create_channel(
+    pub async fn get_or_create_channel(
         &self,
         channel_identifier: &ChannelIdentifier,
-    ) -> Result<Option<Channel>, diesel::result::Error> {
+    ) -> Result<Option<Channel>, DatabaseError> {
         let mut conn = self.conn_pool.get().unwrap();
 
         let query = channels::table.into_boxed();
@@ -231,7 +243,16 @@ impl Database {
                         .execute(&mut conn)
                         .expect("Failed to create channel");
 
-                    self.get_or_create_channel(channel_identifier)
+                    let redis_key = format!("channels:{platform}");
+
+                    self.redis_conn.clone().sadd(redis_key, channel).await?;
+
+                    let channel = channels::table
+                        .filter(channels::platform.eq(platform))
+                        .filter(channels::channel.eq(channel))
+                        .first(&mut conn)?;
+
+                    Ok(Some(channel))
                 }
             }
         } else {
@@ -303,13 +324,17 @@ impl Database {
             .load::<Command>(&mut conn)
     }
 
-    pub fn add_command_to_channel(
+    pub async fn add_command_to_channel(
         &self,
         channel_identifier: &ChannelIdentifier,
         trigger: &str,
         action: &str,
     ) -> Result<(), DatabaseError> {
-        let channel_id = self.get_or_create_channel(channel_identifier)?.unwrap().id;
+        let channel_id = self
+            .get_or_create_channel(channel_identifier)
+            .await?
+            .unwrap()
+            .id;
 
         self.add_command(NewCommand {
             name: trigger,
@@ -345,12 +370,15 @@ impl Database {
         Ok(())
     }
 
-    pub fn delete_command_from_channel(
+    pub async fn delete_command_from_channel(
         &self,
         channel_identifier: &ChannelIdentifier,
         command_name: &str,
     ) -> Result<(), DatabaseError> {
-        let channel = self.get_or_create_channel(channel_identifier)?.unwrap();
+        let channel = self
+            .get_or_create_channel(channel_identifier)
+            .await?
+            .unwrap();
 
         self.delete_command(channel.id, command_name)
     }
@@ -829,17 +857,70 @@ impl Database {
             .ok_or(DatabaseError::InvalidValue)?;
         self.get_filters_in_channel_id(channel.id)
     }
+
+    pub async fn load_channels_into_redis(&self) -> Result<(), DatabaseError> {
+        let channels = self.get_channels()?;
+
+        let mut platforms: HashMap<String, Vec<String>> = HashMap::new();
+
+        for channel in channels {
+            platforms
+                .entry(channel.platform)
+                .or_default()
+                .push(channel.channel);
+        }
+
+        let mut redis_conn = self.redis_conn.clone();
+
+        for (platform, platform_chanels) in platforms {
+            info!("Updating channel list for {platform}");
+
+            let redis_key = format!("channels:{platform}");
+
+            redis_conn.del(&redis_key).await?;
+            redis_conn.sadd(&redis_key, platform_chanels).await?;
+
+            let update_channel_name = format!("channels.update.{platform}");
+
+            redis_conn
+                .publish(update_channel_name, "Channel list updated")
+                .await?;
+        }
+
+        Ok(())
+    }
+}
+
+impl Debug for Database {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("Database")
+            .field("conn_pool", &self.conn_pool)
+            .field("redis_conn", &self.redis_conn.get_db())
+            .field("web_sessions_cache", &self.web_sessions_cache)
+            .field("users_cache", &self.users_cache)
+            .field("user_identifiers_cache", &self.user_identifiers_cache)
+            .field("prefixes_cache", &self.prefixes_cache)
+            .field("channels_cache", &self.channels_cache)
+            .finish()
+    }
 }
 
 #[derive(Debug)]
 pub enum DatabaseError {
     DieselError(diesel::result::Error),
+    RedisError(RedisError),
     InvalidValue,
 }
 
 impl From<diesel::result::Error> for DatabaseError {
     fn from(e: diesel::result::Error) -> Self {
         Self::DieselError(e)
+    }
+}
+
+impl From<RedisError> for DatabaseError {
+    fn from(e: RedisError) -> Self {
+        Self::RedisError(e)
     }
 }
 
@@ -857,6 +938,7 @@ impl Display for DatabaseError {
             match self {
                 DatabaseError::DieselError(e) => format!("Database error: {}", e),
                 DatabaseError::InvalidValue => "Invalid value".to_string(),
+                DatabaseError::RedisError(e) => format!("Redis error: {e}"),
             }
         )
     }

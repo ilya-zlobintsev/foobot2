@@ -23,9 +23,11 @@ async fn main() {
     tracing_subscriber::fmt::init();
 
     let db = Database::connect(env::var("DATABASE_URL").expect("DATABASE_URL missing"))
+        .await
         .expect("Failed to connect to DB");
 
     db.start_cron();
+    db.load_channels_into_redis().await.unwrap();
 
     let command_handler = CommandHandler::init(db).await;
 

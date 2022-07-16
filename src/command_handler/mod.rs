@@ -90,18 +90,11 @@ pub struct CommandHandler {
 
 impl CommandHandler {
     pub async fn init(db: Database) -> Self {
-        let redis_url = env::var("REDIS_URL").unwrap_or_else(|_| String::from("redis://127.0.0.1"));
-        let redis_client = redis::Client::open(redis_url).expect("Failed to open redis client");
-        let redis_conn = redis_client
-            .get_multiplexed_async_connection()
-            .await
-            .expect("Failed to connect to redis");
-
         let permissions_handler_url = env::var("FOOBOT_PERMISSIONS_HANDLER_URL")
             .unwrap_or_else(|_| "http://localhost:50053".to_owned());
         let permissions_handler_client = PermissionsHandlerClient::connect(permissions_handler_url)
             .await
-            .unwrap();
+            .expect("Could not connect to perimssions handler");
 
         let twitch_api = match TwitchApi::init_refreshing(db.clone()).await {
             Ok(api) => {
@@ -173,7 +166,7 @@ impl CommandHandler {
 
         let platform_handler = PlatformHandler {
             filters: Arc::new(std::sync::RwLock::new(filters)),
-            redis_conn: Arc::new(Mutex::new(redis_conn.clone())),
+            redis_conn: Arc::new(Mutex::new(db.redis_conn.clone())),
         };
 
         let lingva_api = LingvaApi::init(lingva_url);
@@ -285,6 +278,10 @@ impl CommandHandler {
                 );
             }
         }
+
+        let redis_client = db.redis_client.clone();
+        let redis_conn = db.redis_conn.clone();
+
         tracing::info!("Mirroring channels: {:?}", mirror_connections);
 
         start_supinic_heartbeat().await;
@@ -364,6 +361,7 @@ impl CommandHandler {
         if let Some(channel) = self
             .db
             .get_or_create_channel(&context.get_channel())
+            .await
             .expect("DB error")
         {
             let triggers = self.get_command_triggers(channel.id).expect("DB error");
@@ -880,7 +878,8 @@ impl CommandHandler {
     ) -> Result<Option<String>, CommandError> {
         let channel = self
             .db
-            .get_or_create_channel(&execution_context.get_channel())?
+            .get_or_create_channel(&execution_context.get_channel())
+            .await?
             .ok_or_else(|| CommandError::NoPermissions)?; // Shouldn't happen anyway
 
         let mut arguments = arguments.into_iter();
@@ -890,7 +889,8 @@ impl CommandHandler {
                 "{}/channels/{}/commands",
                 api::get_base_url(),
                 self.db
-                    .get_or_create_channel(&execution_context.get_channel())?
+                    .get_or_create_channel(&execution_context.get_channel())
+                    .await?
                     .ok_or_else(|| CommandError::InvalidArgument(
                         "can't add commands outside of channels".to_string()
                     ))?
@@ -917,11 +917,15 @@ impl CommandHandler {
                         return Err(CommandError::MissingArgument("command action".to_string()));
                     }
 
-                    match self.db.add_command_to_channel(
-                        &execution_context.get_channel(),
-                        command_name,
-                        &command_action,
-                    ) {
+                    match self
+                        .db
+                        .add_command_to_channel(
+                            &execution_context.get_channel(),
+                            command_name,
+                            &command_action,
+                        )
+                        .await
+                    {
                         Ok(()) => Ok(Some("Command successfully added".to_string())),
                         Err(DatabaseError::DieselError(diesel::result::Error::DatabaseError(
                             diesel::result::DatabaseErrorKind::UniqueViolation,
@@ -942,6 +946,7 @@ impl CommandHandler {
                     match self
                         .db
                         .delete_command_from_channel(&execution_context.get_channel(), command_name)
+                        .await
                     {
                         Ok(()) => Ok(Some("Command succesfully removed".to_string())),
                         Err(e) => Err(CommandError::DatabaseError(e)),
