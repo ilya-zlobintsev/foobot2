@@ -86,6 +86,7 @@ pub struct CommandHandler {
     pub twitch_api: Option<TwitchApi>,
     pub discord_api: Option<DiscordApi>,
     pub permissions_handler_client: PermissionsHandlerClient<Channel>,
+    pub command_prefixes: Arc<DashMap<ChannelIdentifier, Vec<String>>>,
 }
 
 impl CommandHandler {
@@ -279,6 +280,21 @@ impl CommandHandler {
             }
         }
 
+        let command_prefixes = Arc::new(DashMap::new());
+
+        let default_prefix = env::var("COMMAND_PREFIX").unwrap_or_else(|_| "!".to_string());
+
+        for channel in db.get_channels().unwrap() {
+            let prefixes = vec![db
+                .get_prefix(channel.id)
+                .unwrap()
+                .unwrap_or_else(|| default_prefix.clone())];
+
+            let identifier = channel.get_identifier();
+
+            command_prefixes.insert(identifier, prefixes);
+        }
+
         let redis_client = db.redis_client.clone();
         let redis_conn = db.redis_conn.clone();
 
@@ -299,6 +315,7 @@ impl CommandHandler {
             permissions_handler_client,
             twitch_api,
             discord_api,
+            command_prefixes,
         }
     }
 
@@ -376,11 +393,14 @@ impl CommandHandler {
             }
         }
 
-        for prefix in context.get_prefixes() {
-            if let Some(command_msg) = message_text.strip_prefix(prefix) {
-                return self.handle_command_message(command_msg, context).await;
+        if let Some(entry) = self.command_prefixes.get(&context.get_channel()) {
+            for prefix in entry.value() {
+                if let Some(command_msg) = message_text.strip_prefix(prefix) {
+                    return self.handle_command_message(command_msg, context).await;
+                }
             }
         }
+
         None
     }
 
@@ -905,9 +925,12 @@ impl CommandHandler {
                         .next()
                         .ok_or_else(|| CommandError::MissingArgument("command name".to_string()))?;
 
-                    for prefix in execution_context.get_prefixes() {
-                        if let Some(stripped_name) = command_name.strip_prefix(prefix) {
-                            command_name = stripped_name;
+                    if let Some(entry) = self.command_prefixes.get(&execution_context.get_channel())
+                    {
+                        for prefix in entry.value() {
+                            if let Some(stripped_name) = command_name.strip_prefix(prefix) {
+                                command_name = stripped_name;
+                            }
                         }
                     }
 

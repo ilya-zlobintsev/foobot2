@@ -1,4 +1,4 @@
-use super::{ChannelIdentifier, ChatPlatform, ChatPlatformError, ExecutionContext, UserIdentifier};
+use super::{ChannelIdentifier, ChatPlatformError, ExecutionContext, UserIdentifier};
 use crate::command_handler::CommandHandler;
 use connector_schema::{IncomingMessage, OutgoingMessage};
 use foobot_permissions_proto::channel_permissions_response::Permissions;
@@ -21,9 +21,8 @@ pub struct Connector {
     permissions_handler_client: PermissionsHandlerClient<Channel>,
 }
 
-#[async_trait]
-impl ChatPlatform for Connector {
-    async fn init(command_handler: CommandHandler) -> Result<Box<Self>, ChatPlatformError> {
+impl Connector {
+    pub async fn init(command_handler: CommandHandler) -> Result<Box<Self>, ChatPlatformError> {
         let pubsub_conn = command_handler
             .redis_client
             .get_async_connection()
@@ -53,19 +52,16 @@ impl ChatPlatform for Connector {
         }))
     }
 
-    async fn run(mut self) {
+    pub async fn run(mut self) {
         tokio::spawn(async move {
             let channel_glob = format!("{}*", self.incoming_channel_prefix);
             info!("Subscribing to {channel_glob}");
             self.pubsub_conn.psubscribe(channel_glob).await.unwrap();
 
-            let prefixes = vec![Connector::get_prefix()];
-
             info!("Listening on connector messages");
             while let Some(msg) = self.pubsub_conn.on_message().next().await {
                 let command_handler = self.command_handler.clone();
                 let mut publish_conn = self.publish_conn.clone();
-                let prefixes = prefixes.clone();
                 let incoming_channel_prefix = self.incoming_channel_prefix.clone();
                 let outgoing_channel_prefix = self.outgoing_channel_prefix.clone();
                 let permissions_handler_client = self.permissions_handler_client.clone();
@@ -83,7 +79,6 @@ impl ChatPlatform for Connector {
                             let connector_message = ConnectorMessage {
                                 incoming_message,
                                 platform,
-                                prefixes,
                                 permissions_handler_client,
                             };
 
@@ -123,7 +118,6 @@ impl ChatPlatform for Connector {
 pub struct ConnectorMessage<'a> {
     pub incoming_message: IncomingMessage<'a>,
     pub platform: &'a str,
-    pub prefixes: Vec<String>,
     pub permissions_handler_client: PermissionsHandlerClient<Channel>,
 }
 
@@ -164,9 +158,5 @@ impl<'a> ExecutionContext for &ConnectorMessage<'a> {
 
     fn get_display_name(&self) -> &str {
         self.incoming_message.sender.display_name
-    }
-
-    fn get_prefixes(&self) -> Vec<&str> {
-        self.prefixes.iter().map(|s| s.as_str()).collect()
     }
 }

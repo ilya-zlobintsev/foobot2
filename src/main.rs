@@ -13,7 +13,6 @@ use command_handler::{get_admin_channel, CommandHandler};
 use database::Database;
 use dotenv::dotenv;
 use platform::connector::Connector;
-use platform::ChatPlatform;
 use std::env;
 
 #[tokio::main]

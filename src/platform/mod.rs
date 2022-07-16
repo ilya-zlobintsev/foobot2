@@ -13,17 +13,6 @@ use std::net::IpAddr;
 use std::str::FromStr;
 
 #[async_trait]
-pub trait ChatPlatform {
-    async fn init(command_handler: CommandHandler) -> Result<Box<Self>, ChatPlatformError>;
-
-    async fn run(self);
-
-    fn get_prefix() -> String {
-        env::var("COMMAND_PREFIX").unwrap_or_else(|_| "!".to_string())
-    }
-}
-
-#[async_trait]
 pub trait ExecutionContext {
     async fn get_permissions_internal(&self) -> Permissions;
 
@@ -42,8 +31,6 @@ pub trait ExecutionContext {
     fn get_user_identifier(&self) -> UserIdentifier;
 
     fn get_display_name(&self) -> &str;
-
-    fn get_prefixes(&self) -> Vec<&str>;
 }
 
 #[derive(Clone)]
@@ -80,10 +67,6 @@ impl ExecutionContext for ServerExecutionContext {
 
     fn get_display_name(&self) -> &str {
         &self.display_name
-    }
-
-    fn get_prefixes(&self) -> Vec<&str> {
-        vec![""]
     }
 }
 
