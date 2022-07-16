@@ -784,17 +784,6 @@ impl Database {
         }
     }
 
-    pub fn get_prefix_in_channel(
-        &self,
-        channel: &ChannelIdentifier,
-    ) -> Result<Option<String>, DatabaseError> {
-        if let Some(channel) = self.get_channel(channel)? {
-            self.get_prefix(channel.id)
-        } else {
-            Ok(None)
-        }
-    }
-
     pub fn get_mirror_connections(&self) -> Result<Vec<MirrorConnection>, DatabaseError> {
         let mut conn = self.conn_pool.get().unwrap();
 
