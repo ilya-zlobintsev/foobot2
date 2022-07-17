@@ -41,18 +41,10 @@ pub fn decode(code: &str) -> Result<String, String> {
     let mut text = String::with_capacity(code.len() / 6);
 
     for codeword in code.trim().split_whitespace() {
-        match decode_codeword(codeword) {
-            Ok(c) => text.push(c),
-            Err(err) => {
-                // Only check for non-ascii characters when the codeword couldn't be decoded
-                // This will be faster when there isn't a lot of interpolated text since it avoids iterating over the string before decoding
-                // Otherwise it will be slower
-                if codeword.chars().any(|c| !c.is_ascii()) {
-                    text.push_str(codeword)
-                } else {
-                    return Err(err);
-                }
-            }
+        if codeword.to_lowercase().replace('ö', "o") == "forsen" {
+            text.push(decode_codeword(codeword)?);
+        } else {
+            text.push_str(codeword);
         }
     }
 
