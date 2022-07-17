@@ -199,6 +199,10 @@ impl CommandHandler {
             "forsencode_encode",
             Box::new(inquiry_helper::forsencode_encode_helper),
         );
+        template_registry.register_helper(
+            "forsencode_decode",
+            Box::new(inquiry_helper::forsencode_decode_helper),
+        );
 
         if let Ok(api_key) = env::var("FINNHUB_API_KEY") {
             template_registry.register_helper("stock", Box::new(FinnhubApi::init(api_key)));

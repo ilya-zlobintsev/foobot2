@@ -993,3 +993,23 @@ pub fn forsencode_encode_helper(
     out.write(&forsencode::encode(&params))?;
     Ok(())
 }
+
+pub fn forsencode_decode_helper(
+    h: &Helper,
+    _: &Handlebars,
+    ctx: &Context,
+    _: &mut RenderContext,
+    out: &mut dyn Output,
+) -> HelperResult {
+    let params = h
+        .params()
+        .iter()
+        .map(|param| param.value().render())
+        .collect::<Vec<String>>()
+        .join(" ");
+
+    let text = forsencode::decode(&params).map_err(|err| RenderError::new(err))?;
+
+    out.write(&text)?;
+    Ok(())
+}
