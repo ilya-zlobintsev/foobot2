@@ -514,6 +514,18 @@ impl CommandHandler {
                     .await?,
                     Some(1),
                 ),
+                "editcmd" | "updatecmd" => (
+                    self.edit_cmds(
+                        "command",
+                        {
+                            arguments.insert(0, "edit");
+                            arguments
+                        },
+                        execution_context,
+                    )
+                    .await?,
+                    Some(1),
+                ),
                 "debug" | "check" => {
                     if execution_context.get_permissions().await >= Permissions::ChannelMod {
                         let action = arguments.join(" ");
@@ -948,6 +960,25 @@ impl CommandHandler {
                         .delete_command_from_channel(&execution_context.get_channel(), command_name)
                     {
                         Ok(()) => Ok(Some("Command succesfully removed".to_string())),
+                        Err(e) => Err(CommandError::DatabaseError(e)),
+                    }
+                }
+                "edit" | "update" => {
+                    let command_name = arguments
+                        .next()
+                        .ok_or_else(|| CommandError::MissingArgument("command name".to_string()))?;
+                    let command_action = arguments.collect::<Vec<&str>>().join(" ");
+
+                    if command_action.is_empty() {
+                        return Err(CommandError::MissingArgument("command action".to_string()));
+                    }
+
+                    match self.db.update_command_action(
+                        &execution_context.get_channel(),
+                        command_name,
+                        &command_action,
+                    ) {
+                        Ok(()) => Ok(Some(format!("Command {command_name} updated"))),
                         Err(e) => Err(CommandError::DatabaseError(e)),
                     }
                 }

@@ -335,11 +335,19 @@ impl Database {
         }
     }
 
-    pub fn update_command(&self, command: NewCommand) -> Result<(), DatabaseError> {
+    pub fn update_command_action(
+        &self,
+        channel_identifier: &ChannelIdentifier,
+        command_name: &str,
+        new_action: &str,
+    ) -> Result<(), DatabaseError> {
         let mut conn = self.conn_pool.get().unwrap();
+        let channel = self
+            .get_channel(channel_identifier)?
+            .ok_or_else(|| DatabaseError::InvalidValue)?;
 
-        diesel::replace_into(commands::table)
-            .values(&command)
+        diesel::update(commands::table.filter(commands::channel_id.eq(channel.id)))
+            .set(commands::action.eq_all(new_action))
             .execute(&mut conn)?;
 
         Ok(())
