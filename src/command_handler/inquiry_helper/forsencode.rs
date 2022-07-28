@@ -38,17 +38,40 @@ pub fn encode(text: &str) -> String {
 }
 
 pub fn decode(code: &str) -> Result<String, String> {
-    let mut text = String::with_capacity(code.len() / 6);
+    let mut output = String::with_capacity(code.len() / 6);
+    let mut current_buf = String::with_capacity(6);
 
-    for codeword in code.trim().split_whitespace() {
-        if codeword.to_lowercase().replace('ö', "o") == "forsen" {
-            text.push(decode_codeword(codeword)?);
-        } else {
-            text.push_str(codeword);
+    for c in code.trim().chars() {
+        current_buf.push(c);
+        let sanitized_buf = current_buf.to_lowercase().replace('ö', "o");
+
+        if sanitized_buf.ends_with("forsen") {
+            let mid = if current_buf.chars().nth_back(4).unwrap().is_ascii() {
+                6
+            } else {
+                7
+            };
+
+            let (non_codeword, codeword) = current_buf.split_at(current_buf.len() - mid);
+
+            for non_codeword_char in non_codeword.chars() {
+                if !non_codeword_char.is_ascii_whitespace() {
+                    output.push(non_codeword_char);
+                }
+            }
+
+            output.push(decode_codeword(codeword)?);
+
+            current_buf.clear();
+        }
+    }
+    for c in current_buf.chars() {
+        if !c.is_ascii_whitespace() {
+            output.push(c);
         }
     }
 
-    Ok(text)
+    Ok(output)
 }
 
 fn decode_codeword(word: &str) -> Result<char, String> {
@@ -119,6 +142,14 @@ mod tests {
     #[test]
     fn decode_interpolated() {
         let code = "FÖRsen FOrSeN FORSen FORSen FORSEN fOrsen ForSEN FORSEN ForsEn FORSen FOrSen fOrseN fOrsen 🤓";
+        let text = decode(code).unwrap();
+        assert_eq!(text, "Hello world! 🤓");
+    }
+
+    #[test]
+    fn decode_non_whitespaced() {
+        let code =
+            "FÖRsenFOrSeNFORSenFORSenFORSENfOrsenForSENFORSENForsEn FORSen FOrSenfOrseNfOrsen🤓";
         let text = decode(code).unwrap();
         assert_eq!(text, "Hello world! 🤓");
     }
