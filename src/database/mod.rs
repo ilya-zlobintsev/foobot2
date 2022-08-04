@@ -346,9 +346,13 @@ impl Database {
             .get_channel(channel_identifier)?
             .ok_or_else(|| DatabaseError::InvalidValue)?;
 
-        diesel::update(commands::table.filter(commands::channel_id.eq(channel.id)))
-            .set(commands::action.eq_all(new_action))
-            .execute(&mut conn)?;
+        diesel::update(
+            commands::table
+                .filter(commands::channel_id.eq(channel.id))
+                .filter(commands::name.eq(command_name)),
+        )
+        .set(commands::action.eq_all(new_action))
+        .execute(&mut conn)?;
 
         Ok(())
     }
