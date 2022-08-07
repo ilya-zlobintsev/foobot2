@@ -35,7 +35,7 @@
         <h3 class="logo_text">FOOBOT2</h3>
         <a href="/">Home</a>
         <a href="/channels">Channels</a>
-        <a href="/api/doc" target="_self">API</a>
+        <a href="/docs">Docs</a>
     </div>
     <div class="user-section">
         {#await getSession()}
