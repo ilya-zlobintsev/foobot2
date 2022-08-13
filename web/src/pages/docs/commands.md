@@ -82,7 +82,7 @@ Handlebars ships a number of built-in helpers, and the Rust version includes som
 - twitchuser - get information about a Twitch user, returns an object in the format of the [Twitch API](https://dev.twitch.tv/docs/api/reference#get-users). If used on Twitch, will default to the calling user if none is specified.
 
 - get - make an http request for the given url, only plaintext or json is allowed
-- json - get and deserialize a json from the given url
+- json - deserialize a given json, can be used together with get
 
 - data_set - set temporary channel data with a given key and value
 - data_get - fetch temporary chanenl data
