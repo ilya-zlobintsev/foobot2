@@ -22,7 +22,7 @@ Mods or channel owners can manage commands with either **cmd subcommand** or wit
 
 The basic commands are self-explanatory, with the syntax being: **cmd add commandname commandaction**
 
-Command triggers allow you to fire the command when a certian phrase is used, not just when the command is explicitly called. Triggers are fired if the message starts with the given phrase. Triggers are specified with a semicolon-separated list of words/phrases. For example:
+Command triggers allow you to fire the command when a certain phrase is used, not just when the command is explicitly called. Triggers are fired if the message starts with the given phrase. Triggers are specified with a semicolon-separated list of words/phrases. For example:
 
 **cmd set_triggers mycommand hello1;hello2**
 
