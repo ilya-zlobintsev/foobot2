@@ -97,8 +97,6 @@ impl Database {
                 if let Ok(client_secret) = env::var("SPOTIFY_CLIENT_SECRET") {
                     tokio::spawn(async move {
                         loop {
-                            tracing::info!("Updating Spotify tokens...");
-
                             let mut conn = conn_pool.get().unwrap();
 
                             let refresh_tokens = user_data::table
@@ -106,6 +104,10 @@ impl Database {
                                 .filter(user_data::name.eq_all("spotify_refresh_token"))
                                 .load::<(u64, String)>(&mut conn)
                                 .expect("DB Error");
+
+                            if refresh_tokens.len() != 0 {
+                                tracing::info!("Updating Spotify tokens...");
+                            }
 
                             let mut refresh_in = None;
 
@@ -153,11 +155,6 @@ impl Database {
                             if refresh_in == None {
                                 refresh_in = Some(3600);
                             }
-
-                            tracing::info!(
-                                "Completed! Next refresh in {} seconds",
-                                refresh_in.unwrap()
-                            );
 
                             time::sleep(Duration::from_secs(refresh_in.unwrap())).await;
                         }
