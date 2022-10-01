@@ -8,7 +8,9 @@ pub struct Cmd {
 #[async_trait]
 impl ExecutableCommand for Cmd {
     fn get_names(&self) -> &[&str] {
-        &["cmd", "addcmd", "delcmd", "editcmd", "showcmd", "help"]
+        &[
+            "cmd", "addcmd", "delcmd", "editcmd", "showcmd", "help", "commands",
+        ]
     }
 
     fn get_cooldown(&self) -> u64 {
