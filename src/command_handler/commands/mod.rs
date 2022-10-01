@@ -59,13 +59,13 @@ pub fn create_builtin_commands(
     template_registry: Arc<Handlebars<'static>>,
     platform_handler: &PlatformHandler,
 ) -> Vec<BuiltinCommand> {
-    let mut commands = Vec::new();
-
-    commands.push(Ping::default().into());
-    commands.push(Debug::new(db.clone(), template_registry).into());
-    commands.push(Cmd::new(db.clone()).into());
-    commands.push(WhoAmI.into());
-    commands.push(Shell.into());
+    let mut commands = vec![
+        Ping::default().into(),
+        Debug::new(db.clone(), template_registry).into(),
+        Cmd::new(db.clone()).into(),
+        WhoAmI.into(),
+        Shell.into(),
+    ];
 
     if let Some(twitch_api) = &platform_handler.twitch_api {
         commands.push(TwitchEventSub::new(db, twitch_api.helix_api_app.clone()).into());

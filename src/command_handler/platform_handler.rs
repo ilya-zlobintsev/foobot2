@@ -63,9 +63,7 @@ impl PlatformHandler {
                     .as_ref()
                     .ok_or(PlatformHandlerError::Unconfigured)?;
 
-                sender
-                    .send_privmsg(channel, &msg)
-                    .map_err(|e| Error::new(e))?;
+                sender.send_privmsg(channel, &msg).map_err(Error::new)?;
 
                 Ok(())
             }

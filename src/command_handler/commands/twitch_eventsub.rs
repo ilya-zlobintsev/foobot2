@@ -151,7 +151,7 @@ impl TwitchEventSub {
             "channel.channel_points_custom_reward_redemption.add" | "points.redeem" => {
                 let action_clone = action.clone();
 
-                let (reward_name, action_str) = match action_clone.split_once(";") {
+                let (reward_name, action_str) = match action_clone.split_once(';') {
                     Some((reward_name, action_str)) => (reward_name, action_str),
                     None => (action_clone.as_str(), ""),
                 };

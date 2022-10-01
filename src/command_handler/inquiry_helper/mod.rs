@@ -1008,7 +1008,7 @@ pub fn forsencode_decode_helper(
         .collect::<Vec<String>>()
         .join(" ");
 
-    let text = forsencode::decode(&params).map_err(|err| RenderError::new(err))?;
+    let text = forsencode::decode(&params).map_err(RenderError::new)?;
 
     out.write(&text)?;
     Ok(())

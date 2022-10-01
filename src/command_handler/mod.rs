@@ -167,7 +167,7 @@ impl CommandHandler {
             twitch_api,
             discord_api,
             irc_sender: None,
-            minecraft_client: minecraft.and_then(|m| Some(Arc::new(Mutex::new(m)))),
+            minecraft_client: minecraft.map(|m| Arc::new(Mutex::new(m))),
             filters: Arc::new(std::sync::RwLock::new(filters)),
         };
 
@@ -691,13 +691,17 @@ impl CommandHandler {
 
         for command in commands {
             if let Some(command_triggers) = command.triggers {
-                for trigger in command_triggers.split(";") {
+                for trigger in command_triggers.split(';') {
                     triggers.insert(trigger.to_string(), command.name.clone());
                 }
             }
         }
 
-        if let Some(_) = self.command_triggers.insert(channel_id, Arc::new(triggers)) {
+        if self
+            .command_triggers
+            .insert(channel_id, Arc::new(triggers))
+            .is_some()
+        {
             tracing::info!("Reloaded command triggers in channel {}", channel_id);
         }
 

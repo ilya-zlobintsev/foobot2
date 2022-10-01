@@ -27,20 +27,19 @@ pub async fn get_user_info(cmd: &CommandHandler, user: User) -> Result<UserInfo,
     let platform_handler = cmd.platform_handler.read().await;
 
     let twitch_user = match (&user.twitch_id, platform_handler.twitch_api.as_ref()) {
-        (Some(twitch_id), Some(twitch_api)) => twitch_api
-            .helix_api
-            .get_user_by_id(&twitch_id)
-            .await
-            .map_or_else(
-                |error| {
+        (Some(twitch_id), Some(twitch_api)) => Some(
+            twitch_api
+                .helix_api
+                .get_user_by_id(twitch_id)
+                .await
+                .unwrap_or_else(|error| {
                     tracing::error!("Failed to query Twitch user: {error}");
-                    Some(twitch_api::model::User {
+                    twitch_api::model::User {
                         id: twitch_id.clone(),
                         ..Default::default()
-                    })
-                },
-                |user| Some(user),
-            ),
+                    }
+                }),
+        ),
         _ => None,
     };
 

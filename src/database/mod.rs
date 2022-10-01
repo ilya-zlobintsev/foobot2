@@ -105,7 +105,7 @@ impl Database {
                                 .load::<(u64, String)>(&mut conn)
                                 .expect("DB Error");
 
-                            if refresh_tokens.len() != 0 {
+                            if refresh_tokens.is_empty() {
                                 tracing::info!("Updating Spotify tokens...");
                             }
 
@@ -341,7 +341,7 @@ impl Database {
         let mut conn = self.conn_pool.get().unwrap();
         let channel = self
             .get_channel(channel_identifier)?
-            .ok_or_else(|| DatabaseError::InvalidValue)?;
+            .ok_or(DatabaseError::InvalidValue)?;
 
         diesel::update(
             commands::table
@@ -459,7 +459,7 @@ impl Database {
                         ..Default::default()
                     },
                     UserIdentifier::IrcName(name) => NewUser {
-                        irc_name: Some(&*name),
+                        irc_name: Some(name),
                         ..Default::default()
                     },
                     UserIdentifier::IpAddr(addr) => NewUser {

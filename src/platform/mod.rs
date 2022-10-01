@@ -145,7 +145,7 @@ impl UserIdentifier {
             Ok(UserIdentifier::DiscordID(discord_user_id.to_owned()))
         } else {
             let (platform, user_id) = s
-                .split_once(":")
+                .split_once(':')
                 .ok_or(UserIdentifierError::MissingDelimiter)?;
 
             match platform {
@@ -239,7 +239,7 @@ impl FromStr for ChannelIdentifier {
     type Err = anyhow::Error;
 
     fn from_str(s: &str) -> anyhow::Result<Self> {
-        let mut split = s.split(":");
+        let mut split = s.split(':');
         let platform = split
             .next()
             .ok_or_else(|| anyhow!("Platform not specified!"))?;

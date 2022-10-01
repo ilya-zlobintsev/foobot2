@@ -30,7 +30,7 @@ impl ExecutableCommand for Cmd {
         let channel = self
             .db
             .get_or_create_channel(&ctx.get_channel())?
-            .ok_or_else(|| CommandError::NoPermissions)?; // Shouldn't happen anyway
+            .ok_or(CommandError::NoPermissions)?; // Shouldn't happen anyway
 
         match trigger_name {
             "addcmd" => {
@@ -163,7 +163,7 @@ impl ExecutableCommand for Cmd {
                     }
 
                     self.db
-                        .set_command_triggers(channel.id, &command_name, &triggers)?;
+                        .set_command_triggers(channel.id, command_name, &triggers)?;
 
                     Ok(Some(String::from("Succesfully updated command triggers")))
                 }
