@@ -22,9 +22,10 @@
     {#if commands.length > 0}
         <table id="commands_table" border="1">
             <col style="width:15%" />
-            <col style="width:55%" />
+            <col style="width:45%" />
             <col style="width:5%" />
             <col style="width:15%" />
+            <col style="width:10%" />
             {#if mod}
                 <col style="width:10%" />
             {/if}
@@ -34,6 +35,7 @@
                 <th>Action</th>
                 <th>Cooldown</th>
                 <th>Permissions</th>
+                <th>Triggers</th>
                 {#if mod}
                     <th>Mod</th>
                 {/if}
@@ -46,6 +48,7 @@
                         <td>{command.action}</td>
                         <td>{command.cooldown || 0}s</td>
                         <td>{command.permissions || "Everyone"}</td>
+                        <td>{command.triggers || ""}</td>
                         {#if mod}
                             <td> Mod actions </td>
                         {/if}

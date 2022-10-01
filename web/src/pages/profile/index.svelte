@@ -1,6 +1,8 @@
 <script>
     import { redirect } from "@roxi/routify";
-    import { getJson } from "../common";
+    import { getJson } from "../../common";
+    import { Modals, openModal, closeModal } from "svelte-modals";
+    import InputModal from "./_InputModal.svelte";
 
     export let scoped;
     $: {
@@ -18,17 +20,23 @@
     }
 
     async function setLastfmName() {
-        const name = prompt("Enter name", user.lastfm_name || "");
+        openModal(InputModal, {
+            title: "Enter Last.FM username",
+            input: user.lastfm_name,
+            onAccept: async (name) => {
+                if (name) {
+                    await fetch("/api/session/lastfm", {
+                        method: "POST",
+                        body: name,
+                    });
 
-        if (name) {
-            await fetch("/api/session/lastfm", {
-                method: "POST",
-                body: name,
-            });
+                    user.lastfm_name = name;
+                    console.log(user);
 
-            user.lastfm_name = name;
-            console.log(user);
-        }
+                    closeModal();
+                }
+            },
+        });
     }
 
     async function disconectSpotify() {
@@ -39,6 +47,10 @@
         user.spotify_connected = false;
     }
 </script>
+
+<Modals>
+    <div slot="backdrop" class="backdrop" on:click={closeModal} />
+</Modals>
 
 {#await getUser()}
     Loading...
@@ -117,5 +129,14 @@
 
     button:hover {
         background-color: #6e6e6e;
+    }
+
+    .backdrop {
+        position: fixed;
+        top: 0;
+        bottom: 0;
+        right: 0;
+        left: 0;
+        background: rgba(0, 0, 0, 0.5);
     }
 </style>
