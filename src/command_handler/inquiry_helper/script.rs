@@ -14,8 +14,8 @@ impl Default for RhaiHelper {
             engine: Engine::new(),
         };
 
-        helper.engine.register_result_fn("get", get);
-        helper.engine.register_result_fn("get_json", get_json);
+        helper.engine.register_fn("get", get);
+        helper.engine.register_fn("get_json", get_json);
 
         helper
     }
