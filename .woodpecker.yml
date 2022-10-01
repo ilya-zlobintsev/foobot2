@@ -2,9 +2,9 @@ pipeline:
   build-push:
     image: docker
     commands:
-      - echo $DOCKER_PASSWORD | docker login -u $DOCKER_USERNAME --password-stdin
-      - docker build --build-arg=SCCACHE_MEMCACHED="$SCCACHE_MEMCACHED" -t git.hyron.dev/foobot/foobot2
-      - docker push ghcr.io/foobot/foobot2
+      - echo $DOCKER_PASSWORD | docker login git.hyron.dev -u $DOCKER_USERNAME --password-stdin
+      - docker build --build-arg=SCCACHE_MEMCACHED="$SCCACHE_MEMCACHED" -t git.hyron.dev/foobot/foobot2 .
+      - docker push git.hyron.dev/foobot/foobot2
     secrets: [ DOCKER_USERNAME, DOCKER_PASSWORD, SCCACHE_MEMCACHED ]
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
@@ -14,6 +14,6 @@ pipeline:
     volumes:
       - /run/docker.sock:/run/docker.sock
     commands:
-      - ocker service update --image git.hyron.dev/foobot/foobot2 foobot_foobot
+      - docker service update --image git.hyron.dev/foobot/foobot2 foobot_foobot
 
 branches: master
