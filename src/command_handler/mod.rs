@@ -6,12 +6,10 @@ pub mod lingva_api;
 pub mod owm_api;
 pub mod platform_handler;
 pub mod spotify_api;
-mod trivia;
 pub mod twitch_api;
 
 use anyhow::{anyhow, Context};
 use core::fmt;
-use dashmap::mapref::entry::Entry;
 use dashmap::DashMap;
 use discord_api::DiscordApi;
 use handlebars::Handlebars;
@@ -37,7 +35,6 @@ use twitch_irc::login::{LoginCredentials, RefreshingLoginCredentials};
 
 use self::finnhub_api::FinnhubApi;
 use self::platform_handler::PlatformHandler;
-use self::trivia::TriviaClient;
 use self::twitch_api::eventsub::conditions::*;
 use self::twitch_api::eventsub::EventSubSubscriptionType;
 use self::twitch_api::helix::HelixApi;
@@ -80,8 +77,6 @@ pub struct CommandHandler {
     cooldowns: Arc<RwLock<Vec<(u64, String)>>>, // User id and command
     command_triggers: Arc<DashMap<u64, Arc<DashMap<String, String>>>>, // Channel id, trigger phrase and command name
     mirror_connections: Arc<HashMap<String, ChannelIdentifier>>,       // from and to channel
-    trivia_client: TriviaClient,
-    trivia_answers: DashMap<ChannelIdentifier, String>,
 }
 
 impl CommandHandler {
@@ -299,9 +294,6 @@ impl CommandHandler {
         }
         tracing::info!("Mirroring channels: {:?}", mirror_connections);
 
-        let trivia_client = TriviaClient::new();
-        let trivia_answers = DashMap::new();
-
         start_supinic_heartbeat().await;
 
         Self {
@@ -312,8 +304,6 @@ impl CommandHandler {
             cooldowns,
             mirror_connections: Arc::new(mirror_connections),
             command_triggers: Arc::new(DashMap::new()),
-            trivia_client,
-            trivia_answers,
         }
     }
 
@@ -371,10 +361,6 @@ impl CommandHandler {
                     }
                 });
             }
-        }
-
-        if let Some(answer) = self.process_trivia_answer(&context.get_channel(), message_text) {
-            return Some(answer);
         }
 
         if let Some(channel) = self
@@ -476,14 +462,6 @@ impl CommandHandler {
                         execution_context.get_permissions().await,
                     )),
                     Some(5),
-                ),
-                "trivia" => (
-                    self.trivia(
-                        execution_context.get_channel(),
-                        arguments.first().map(|s| *s),
-                    )
-                    .await?,
-                    Some(1),
                 ),
                 "help" => (
                     self.edit_cmds("commands", vec![], execution_context)
@@ -1262,54 +1240,6 @@ impl CommandHandler {
         }
 
         Ok(())
-    }
-
-    async fn trivia(
-        &self,
-        channel: ChannelIdentifier,
-        subcommand: Option<&str>,
-    ) -> Result<Option<String>, CommandError> {
-        match subcommand {
-            Some("finish") => match self.trivia_answers.entry(channel) {
-                Entry::Occupied(occupied) => {
-                    let answer = occupied.remove();
-                    Ok(Some(format!("answer: {answer}")))
-                }
-                Entry::Vacant(_) => Err(CommandError::GenericError(
-                    "no trivia is currently active".to_owned(),
-                )),
-            },
-            None => {
-                if self.trivia_answers.contains_key(&channel) {
-                    return Err(CommandError::GenericError(
-                        "there is already an active trivia".to_owned(),
-                    ));
-                }
-                let trivia = self
-                    .trivia_client
-                    .get_random_trivia()
-                    .await
-                    .map_err(|err| {
-                        CommandError::GenericError(format!("trivia API error: {err}"))
-                    })?;
-
-                self.trivia_answers.insert(channel, trivia.answer);
-
-                Ok(Some(format!("[{}] {}", trivia.category, trivia.question)))
-            }
-            _ => Err(CommandError::InvalidArgument(
-                "unrecognized subcommand".to_owned(),
-            )),
-        }
-    }
-
-    fn process_trivia_answer(&self, channel: &ChannelIdentifier, answer: &str) -> Option<String> {
-        info!("Processing possible trivia answer {answer}");
-        self.trivia_answers
-            .remove_if(channel, |_, expected_answer| {
-                expected_answer.to_lowercase().trim() == answer.to_lowercase().trim()
-            })
-            .map(|(_, proper_answer)| format!("Correct! The answer was: {proper_answer}"))
     }
 }
 
