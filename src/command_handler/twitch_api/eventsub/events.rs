@@ -1,5 +1,6 @@
 use serde::Deserialize;
 
+#[allow(dead_code)]
 #[derive(Debug)]
 pub enum EventSubEventType {
     ChannelUpdate(ChannelUpdateEvent),

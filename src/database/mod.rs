@@ -97,8 +97,6 @@ impl Database {
                 if let Ok(client_secret) = env::var("SPOTIFY_CLIENT_SECRET") {
                     tokio::spawn(async move {
                         loop {
-                            tracing::info!("Updating Spotify tokens...");
-
                             let mut conn = conn_pool.get().unwrap();
 
                             let refresh_tokens = user_data::table
@@ -106,6 +104,10 @@ impl Database {
                                 .filter(user_data::name.eq_all("spotify_refresh_token"))
                                 .load::<(u64, String)>(&mut conn)
                                 .expect("DB Error");
+
+                            if refresh_tokens.is_empty() {
+                                tracing::info!("Updating Spotify tokens...");
+                            }
 
                             let mut refresh_in = None;
 
@@ -153,11 +155,6 @@ impl Database {
                             if refresh_in == None {
                                 refresh_in = Some(3600);
                             }
-
-                            tracing::info!(
-                                "Completed! Next refresh in {} seconds",
-                                refresh_in.unwrap()
-                            );
 
                             time::sleep(Duration::from_secs(refresh_in.unwrap())).await;
                         }
@@ -344,7 +341,7 @@ impl Database {
         let mut conn = self.conn_pool.get().unwrap();
         let channel = self
             .get_channel(channel_identifier)?
-            .ok_or_else(|| DatabaseError::InvalidValue)?;
+            .ok_or(DatabaseError::InvalidValue)?;
 
         diesel::update(
             commands::table
@@ -462,7 +459,7 @@ impl Database {
                         ..Default::default()
                     },
                     UserIdentifier::IrcName(name) => NewUser {
-                        irc_name: Some(&*name),
+                        irc_name: Some(name),
                         ..Default::default()
                     },
                     UserIdentifier::IpAddr(addr) => NewUser {
@@ -785,7 +782,7 @@ impl Database {
         Ok(mirror_connections::table.load(&mut conn)?)
     }
 
-    pub fn create_mirror_connection(
+    /*pub fn create_mirror_connection(
         &self,
         connection: MirrorConnection,
     ) -> Result<(), DatabaseError> {
@@ -795,7 +792,7 @@ impl Database {
             .values(&connection)
             .execute(&mut conn)?;
         Ok(())
-    }
+    }*/
 
     pub fn set_command_triggers(
         &self,
@@ -832,7 +829,7 @@ impl Database {
             .load(&mut conn)?)
     }
 
-    pub fn get_filters_in_channel(
+    /*pub fn get_filters_in_channel(
         &self,
         channel_identifier: &ChannelIdentifier,
     ) -> Result<Vec<Filter>, DatabaseError> {
@@ -840,7 +837,7 @@ impl Database {
             .get_channel(channel_identifier)?
             .ok_or(DatabaseError::InvalidValue)?;
         self.get_filters_in_channel_id(channel.id)
-    }
+    }*/
 }
 
 #[derive(Debug)]

@@ -979,7 +979,7 @@ impl HelperDef for JsonHelper {
 pub fn forsencode_encode_helper(
     h: &Helper,
     _: &Handlebars,
-    ctx: &Context,
+    _: &Context,
     _: &mut RenderContext,
     out: &mut dyn Output,
 ) -> HelperResult {
@@ -997,7 +997,7 @@ pub fn forsencode_encode_helper(
 pub fn forsencode_decode_helper(
     h: &Helper,
     _: &Handlebars,
-    ctx: &Context,
+    _: &Context,
     _: &mut RenderContext,
     out: &mut dyn Output,
 ) -> HelperResult {
@@ -1008,7 +1008,7 @@ pub fn forsencode_decode_helper(
         .collect::<Vec<String>>()
         .join(" ");
 
-    let text = forsencode::decode(&params).map_err(|err| RenderError::new(err))?;
+    let text = forsencode::decode(&params).map_err(RenderError::new)?;
 
     out.write(&text)?;
     Ok(())

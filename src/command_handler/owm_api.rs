@@ -84,7 +84,7 @@ pub struct WeatherResponse {
     pub wind: Wind,
 }
 
-#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Default, Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Clouds {
     pub all: i64,
@@ -111,7 +111,7 @@ pub struct Main {
     pub temp_min: f64,
 }
 
-#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Default, Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Sys {
     pub country: Option<String>,
@@ -120,7 +120,7 @@ pub struct Sys {
     pub sunset: i64,
 }
 
-#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Default, Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Weather {
     pub description: String,

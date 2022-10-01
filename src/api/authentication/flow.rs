@@ -503,7 +503,7 @@ pub struct DiscordAuthenticationResponse {
     pub scope: String,
 }
 
-#[derive(PartialEq)]
+#[derive(PartialEq, Eq)]
 pub enum AuthPlatform {
     Twitch,
     Discord,

@@ -75,7 +75,7 @@ pub fn decode(code: &str) -> Result<String, String> {
 }
 
 fn decode_codeword(word: &str) -> Result<char, String> {
-    let mut ascii = 0b000_000_u32;
+    let mut ascii = 0b00_0000_u32;
     let mut i = 6;
 
     for c in word.chars() {

@@ -189,11 +189,7 @@ impl<'r> FromRequest<'r> for TwitchEventsubCallbackProperties {
                 .parse()
                 .unwrap(),
             message_type: EventSubNotificationType::from_str(
-                &headers
-                    .get("Twitch-Eventsub-Message-Type")
-                    .next()
-                    .unwrap()
-                    .to_string(),
+                headers.get("Twitch-Eventsub-Message-Type").next().unwrap(),
             )
             .expect("Invalid message type!"),
             message_signature: headers

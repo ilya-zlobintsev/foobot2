@@ -390,6 +390,7 @@ async fn send_message(mut pm: Privmsg, client: &TwitchClient) -> Result<(), anyh
     Ok(())
 }
 
+#[allow(dead_code)]
 #[derive(Clone, Debug)]
 pub enum SenderMessage {
     Privmsg(Privmsg),

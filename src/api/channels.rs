@@ -22,7 +22,7 @@ use crate::platform::{ChannelIdentifier, Permissions};
 pub async fn get_channels(cmd: &State<CommandHandler>) -> Result<Json<Vec<Channel>>> {
     let base_channels = cmd.db.get_channels().expect("DB error");
     let mut friendly_names =
-        get_friendly_names(base_channels.iter().map(|ch| ch.id).collect(), &*cmd).await?;
+        get_friendly_names(base_channels.iter().map(|ch| ch.id).collect(), cmd).await?;
 
     let channels = base_channels
         .into_iter()
@@ -45,7 +45,7 @@ pub async fn get_channel_info(
     let channel = cmd
         .db
         .get_channel_by_id(channel_id)?
-        .ok_or_else(|| ApiError::NotFound)?;
+        .ok_or(ApiError::NotFound)?;
 
     let display_name = match get_channel_display_name(&channel, cmd).await {
         Ok(name) => name,
