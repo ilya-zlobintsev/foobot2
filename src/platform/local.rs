@@ -38,17 +38,21 @@ impl ChatPlatform for Local {
 
     async fn run(self) {
         tokio::spawn(async move {
-            match self.listener.accept().await {
-                Ok((stream, addr)) => {
-                    let command_handler = self.command_handler.clone();
+            loop {
+                match self.listener.accept().await {
+                    Ok((stream, addr)) => {
+                        let command_handler = self.command_handler.clone();
 
-                    tokio::spawn(async move {
-                        if let Err(e) = Local::handle_stream(stream, addr, command_handler).await {
-                            tracing::warn!("Failed to handle stream: {}", e);
-                        }
-                    });
+                        tokio::spawn(async move {
+                            if let Err(e) =
+                                Local::handle_stream(stream, addr, command_handler).await
+                            {
+                                tracing::warn!("Failed to handle stream: {}", e);
+                            }
+                        });
+                    }
+                    Err(e) => tracing::warn!("Failed to handle connection: {}", e),
                 }
-                Err(e) => tracing::warn!("Failed to handle connection: {}", e),
             }
         });
     }
