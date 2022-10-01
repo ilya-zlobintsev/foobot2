@@ -155,7 +155,7 @@ impl<C: LoginCredentials> HelixApi<C> {
             .ok_or_else(|| anyhow!("User not found"))
     }
 
-    async fn get_token(&self) -> anyhow::Result<String> {
+    /*async fn get_token(&self) -> anyhow::Result<String> {
         Ok(self
             .credentials
             .get_credentials()
@@ -163,7 +163,7 @@ impl<C: LoginCredentials> HelixApi<C> {
             .map_err(|e| anyhow!("Unable to get credentials: {:?}", e))?
             .token
             .ok_or_else(|| anyhow!("Token missing"))?)
-    }
+    }*/
 
     pub async fn get_self_user(&self) -> anyhow::Result<User> {
         Ok(self

@@ -9,7 +9,7 @@ pub mod platform_handler;
 pub mod spotify_api;
 pub mod twitch_api;
 
-use anyhow::{anyhow, Context};
+use anyhow::anyhow;
 use core::fmt;
 use dashmap::DashMap;
 use discord_api::DiscordApi;
@@ -40,8 +40,7 @@ use crate::database::DatabaseError;
 use crate::database::{models::User, Database};
 use crate::platform::minecraft;
 use crate::platform::{
-    twitch, ChannelIdentifier, ExecutionContext, Permissions, ServerExecutionContext,
-    UserIdentifierError,
+    ChannelIdentifier, ExecutionContext, Permissions, ServerExecutionContext, UserIdentifierError,
 };
 
 const DEFAULT_COOLDOWN: u64 = 5;
@@ -630,7 +629,7 @@ impl CommandHandler {
             .await?)
     }
 
-    pub async fn join_channel(&self, channel: &ChannelIdentifier) -> anyhow::Result<()> {
+    /*pub async fn join_channel(&self, channel: &ChannelIdentifier) -> anyhow::Result<()> {
         match channel {
             ChannelIdentifier::TwitchChannel((id, _)) => {
                 let platform_handler = self.platform_handler.read().await;
@@ -670,7 +669,7 @@ impl CommandHandler {
             ChannelIdentifier::Minecraft => panic!("This should never happen"),
             ChannelIdentifier::Anonymous => Err(anyhow!("Invalid channel specified")),
         }
-    }
+    }*/
 
     fn get_command_triggers(
         &self,

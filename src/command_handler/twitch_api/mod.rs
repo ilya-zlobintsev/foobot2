@@ -112,7 +112,7 @@ impl<C: LoginCredentials + Clone> TwitchApi<C> {
         });
     }
 
-    pub async fn validate_oauth(oauth: &str) -> Result<ValidationResponse, reqwest::Error> {
+    /*pub async fn validate_oauth(oauth: &str) -> Result<ValidationResponse, reqwest::Error> {
         let client = Client::new();
         let response = client
             .get("https://id.twitch.tv/oauth2/validate")
@@ -123,7 +123,7 @@ impl<C: LoginCredentials + Clone> TwitchApi<C> {
         Ok(response.json().await?)
     }
 
-    /*pub fn get_client_id(&self) -> &str {
+    pub fn get_client_id(&self) -> &str {
         self.headers.get("Client-Id").unwrap().to_str().unwrap()
     }*/
 
