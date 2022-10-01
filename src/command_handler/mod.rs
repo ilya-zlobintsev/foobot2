@@ -27,21 +27,15 @@ use std::num::ParseIntError;
 use std::str::FromStr;
 use std::sync::Arc;
 use std::time::Duration;
-use std::vec::IntoIter;
 use tokio::sync::{Mutex, RwLock};
 use tokio::task;
 use twitch_api::TwitchApi;
-use twitch_irc::login::{LoginCredentials, RefreshingLoginCredentials};
 
 use self::commands::BuiltinCommand;
 use self::finnhub_api::FinnhubApi;
 use self::platform_handler::PlatformHandler;
-use self::twitch_api::eventsub::conditions::*;
-use self::twitch_api::eventsub::EventSubSubscriptionType;
-use self::twitch_api::helix::HelixApi;
-use self::twitch_api::{get_client_id, get_client_secret};
 use crate::command_handler::commands::{create_builtin_commands, ExecutableCommand};
-use crate::database::models::{Filter, NewEventSubTrigger};
+use crate::database::models::Filter;
 use crate::database::DatabaseError;
 use crate::database::{models::User, Database};
 use crate::platform::minecraft;
@@ -272,7 +266,8 @@ impl CommandHandler {
 
         let template_registry = Arc::new(template_registry);
 
-        let builtin_commands = create_builtin_commands(db.clone(), template_registry.clone());
+        let builtin_commands =
+            create_builtin_commands(db.clone(), template_registry.clone(), &platform_handler);
         info!("Loaded builtin commands: {builtin_commands:?}");
 
         let cooldowns = Arc::new(RwLock::new(Vec::new()));
@@ -446,7 +441,6 @@ impl CommandHandler {
         tracing::info!("Processing command {} with {:?}", command, args);
 
         let user_identifier = ctx.get_user_identifier();
-
         let user = self.db.get_or_create_user(&user_identifier)?;
 
         if !self
@@ -462,7 +456,9 @@ impl CommandHandler {
             {
                 if ctx.get_permissions().await >= builtin_command.get_permissions() {
                     let cooldown = builtin_command.get_cooldown();
-                    let output = builtin_command.execute(ctx, command, args).await?;
+                    let output = builtin_command
+                        .execute(ctx, command, args, (&user, &user_identifier))
+                        .await?;
 
                     (output, cooldown)
                 } else {
@@ -511,156 +507,6 @@ impl CommandHandler {
                 cooldowns.retain(|(id, cmd)| id != &user_id && cmd != &command)
             }
         });
-    }
-
-    async fn manage_eventsub<C: ExecutionContext + Send + Sync>(
-        &self,
-        action: &str,
-        arguments: IntoIter<&str>,
-        execution_context: C,
-    ) -> anyhow::Result<String> {
-        if execution_context.get_permissions().await < Permissions::ChannelMod {
-            return Err(CommandError::NoPermissions.into());
-        }
-
-        if let ChannelIdentifier::TwitchChannel((broadcaster_id, _)) =
-            execution_context.get_channel()
-        {
-            let platform_handler = self.platform_handler.read().await;
-
-            let app_api = &platform_handler.twitch_api.as_ref().unwrap().helix_api_app;
-
-            match action {
-                "add" | "create" => {
-                    let (subscription, action) = self
-                        .get_subscription(arguments, broadcaster_id.clone())
-                        .await?;
-
-                    if action.is_empty() {
-                        return Err(anyhow!("Action not specified"));
-                    }
-
-                    let subscription_response = app_api
-                        .add_eventsub_subscription(subscription.clone())
-                        .await
-                        .map_err(|e| anyhow!("Failed to create subscription: {}", e))?;
-
-                    let id = &subscription_response.data.first().unwrap().id;
-
-                    self.db.add_eventsub_trigger(NewEventSubTrigger {
-                        broadcaster_id: &broadcaster_id,
-                        event_type: subscription.get_type(),
-                        action: &action,
-                        creation_payload: &serde_json::to_string(&subscription)?,
-                        id,
-                    })?;
-
-                    Ok("Trigger successfully added".to_string())
-                }
-                "remove" | "delete" => {
-                    let (subscription_type, _) = self
-                        .get_subscription(arguments, broadcaster_id.clone())
-                        .await?;
-
-                    let subscriptions = app_api
-                        .get_eventsub_subscriptions(Some(subscription_type.get_type()))
-                        .await?;
-
-                    for subscription in subscriptions {
-                        if subscription.condition == subscription_type.get_condition() {
-                            app_api
-                                .delete_eventsub_subscription(&subscription.id)
-                                .await?;
-
-                            self.db.delete_eventsub_trigger(&subscription.id)?;
-
-                            return Ok("Trigger succesfully removed".to_string());
-                        }
-                    }
-
-                    return Err(anyhow!("Unable to find matching subscription"));
-                }
-                "list" => {
-                    let triggers = self
-                        .db
-                        .get_eventsub_triggers_for_broadcaster(&broadcaster_id)?;
-
-                    if !triggers.is_empty() {
-                        Ok(triggers
-                            .iter()
-                            .map(|trigger| trigger.event_type.clone())
-                            .collect::<Vec<String>>()
-                            .join(", "))
-                    } else {
-                        Ok("No eventsub triggers registered".to_string())
-                    }
-                }
-                _ => Err(anyhow!("invalid action {}", action)),
-            }
-        } else {
-            Err(anyhow!("EventSub can only be used on Twitch"))
-        }
-    }
-
-    async fn get_subscription(
-        &self,
-        mut arguments: IntoIter<&str>,
-        broadcaster_id: String,
-    ) -> anyhow::Result<(EventSubSubscriptionType, String)> {
-        let sub_type = arguments.next().context("Missing subscription type")?;
-
-        let mut action = arguments.collect::<Vec<&str>>().join(" ");
-
-        let subscription = match sub_type {
-            "channel.update" => EventSubSubscriptionType::ChannelUpdate(ChannelUpdateCondition {
-                broadcaster_user_id: broadcaster_id.clone(),
-            }),
-            "channel.channel_points_custom_reward_redemption.add" | "points.redeem" => {
-                let action_clone = action.clone();
-
-                let (reward_name, action_str) = match action_clone.split_once(";") {
-                    Some((reward_name, action_str)) => (reward_name, action_str),
-                    None => (action_clone.as_str(), ""),
-                };
-
-                tracing::info!("Searching for reward {}", reward_name);
-
-                action = action_str.trim().to_string();
-                let reward_name = reward_name.trim();
-
-                let streamer_credentials = self.db.make_twitch_credentials(broadcaster_id.clone());
-                let refreshing_credentials = RefreshingLoginCredentials::init(
-                    get_client_id().unwrap(),
-                    get_client_secret().unwrap(),
-                    streamer_credentials,
-                );
-
-                refreshing_credentials
-                    .get_credentials()
-                    .await
-                    .context("Streamer not authenticated to manage channel points!")?;
-
-                let streamer_api = HelixApi::with_credentials(refreshing_credentials).await;
-
-                let rewards_response = streamer_api.get_custom_rewards().await?;
-
-                let reward = rewards_response
-                    .data
-                    .iter()
-                    .find(|reward| reward.title.trim() == reward_name)
-                    .with_context(|| format!("Failed to find reward \"{}\"", reward_name))?;
-
-                EventSubSubscriptionType::ChannelPointsCustomRewardRedemptionAdd(
-                    ChannelPointsCustomRewardRedemptionAddCondition {
-                        broadcaster_user_id: broadcaster_id,
-                        reward_id: Some(reward.id.clone()),
-                    },
-                )
-            }
-            _ => return Err(anyhow!("Invalid subscription type {}", sub_type)),
-        };
-
-        Ok((subscription, action))
     }
 
     pub async fn get_permissions_in_channel(
@@ -937,6 +783,12 @@ impl From<UserIdentifierError> for CommandError {
 impl From<anyhow::Error> for CommandError {
     fn from(e: anyhow::Error) -> Self {
         Self::GenericError(e.to_string())
+    }
+}
+
+impl From<&'static str> for CommandError {
+    fn from(msg: &'static str) -> Self {
+        CommandError::GenericError(msg.to_owned())
     }
 }
 
