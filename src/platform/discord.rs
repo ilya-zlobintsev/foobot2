@@ -7,7 +7,7 @@ use twilight_model::{gateway::payload::incoming::MessageCreate, guild::Permissio
 
 use crate::command_handler::CommandHandler;
 
-use super::{ChannelIdentifier, ChatPlatform, ExecutionContext, UserIdentifier};
+use super::{ChannelIdentifier, ChatPlatform, PlatformContext, UserIdentifier};
 
 #[derive(Clone)]
 pub struct Discord {
@@ -29,7 +29,7 @@ impl Discord {
         } = self.clone();
 
         tokio::spawn(async move {
-            let context = DiscordExecutionContext {
+            let context = DiscordPlatformContext {
                 msg: &msg,
                 cmd: &command_handler,
                 prefix,
@@ -104,7 +104,7 @@ impl ChatPlatform for Discord {
 }
 
 #[derive(Clone)]
-pub struct DiscordExecutionContext<'a> {
+pub struct DiscordPlatformContext<'a> {
     msg: &'a MessageCreate,
     cmd: &'a CommandHandler,
     prefix: Arc<String>,
@@ -112,7 +112,7 @@ pub struct DiscordExecutionContext<'a> {
 }
 
 #[async_trait]
-impl ExecutionContext for DiscordExecutionContext<'_> {
+impl PlatformContext for DiscordPlatformContext<'_> {
     async fn get_permissions_internal(&self) -> super::Permissions {
         tracing::info!(
             "Querying permissions for Discord user {}",

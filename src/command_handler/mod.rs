@@ -1,5 +1,6 @@
 mod commands;
 pub mod discord_api;
+mod error;
 pub mod finnhub_api;
 pub mod inquiry_helper;
 pub mod lastfm_api;
@@ -10,7 +11,6 @@ pub mod spotify_api;
 pub mod twitch_api;
 
 use anyhow::anyhow;
-use core::fmt;
 use dashmap::DashMap;
 use discord_api::DiscordApi;
 use handlebars::Handlebars;
@@ -22,8 +22,7 @@ use owm_api::OwmApi;
 use prometheus::{HistogramOpts, HistogramVec, IntCounterVec, Opts};
 use reqwest::Client;
 use std::collections::HashMap;
-use std::env::{self, VarError};
-use std::num::ParseIntError;
+use std::env;
 use std::str::FromStr;
 use std::sync::Arc;
 use std::time::Duration;
@@ -32,16 +31,14 @@ use tokio::task;
 use twitch_api::TwitchApi;
 
 use self::commands::BuiltinCommand;
+use self::error::CommandError;
 use self::finnhub_api::FinnhubApi;
 use self::platform_handler::PlatformHandler;
 use crate::command_handler::commands::{create_builtin_commands, ExecutableCommand};
 use crate::database::models::Filter;
-use crate::database::DatabaseError;
 use crate::database::{models::User, Database};
 use crate::platform::minecraft;
-use crate::platform::{
-    ChannelIdentifier, ExecutionContext, Permissions, ServerExecutionContext, UserIdentifierError,
-};
+use crate::platform::{ChannelIdentifier, Permissions, PlatformContext, ServerPlatformContext};
 
 const DEFAULT_COOLDOWN: u64 = 5;
 
@@ -265,8 +262,7 @@ impl CommandHandler {
 
         let template_registry = Arc::new(template_registry);
 
-        let builtin_commands =
-            create_builtin_commands(db.clone(), template_registry.clone(), &platform_handler);
+        let builtin_commands = create_builtin_commands(template_registry.clone());
         info!("Loaded builtin commands: {builtin_commands:?}");
 
         let cooldowns = Arc::new(RwLock::new(Vec::new()));
@@ -305,14 +301,15 @@ impl CommandHandler {
         }
     }
 
-    pub async fn handle_message<C>(&self, message_text: &str, context: C) -> Option<String>
-    where
-        C: ExecutionContext + Send + Sync,
-    {
-        let channel = context.get_channel();
+    pub async fn handle_message<P: PlatformContext + Send + Sync>(
+        &self,
+        message_text: &str,
+        platform_ctx: P,
+    ) -> Option<String> {
+        let channel = platform_ctx.get_channel();
         let platform_handler = self.platform_handler.read().await;
 
-        self.handle_message_internal(message_text, context)
+        self.handle_message_internal(message_text, platform_ctx)
             .await
             .and_then(|mut response| {
                 platform_handler.filter_message(&mut response, &channel);
@@ -325,28 +322,29 @@ impl CommandHandler {
             })
     }
 
-    pub async fn handle_message_internal<C>(&self, message_text: &str, context: C) -> Option<String>
-    where
-        C: ExecutionContext + Send + Sync,
-    {
-        tracing::trace!("Handling message in channel {}", context.get_channel());
+    pub async fn handle_message_internal<P: PlatformContext + Send + Sync>(
+        &self,
+        message_text: &str,
+        platform_ctx: P,
+    ) -> Option<String> {
+        tracing::trace!("Handling message in channel {}", platform_ctx.get_channel());
         if let Some(mirror_channel) = self.mirror_connections.get(&format!(
             "{}-{}",
-            context
+            platform_ctx
                 .get_channel()
                 .get_platform_name()
                 .unwrap_or_default(),
-            context.get_channel().get_channel().unwrap_or_default()
+            platform_ctx.get_channel().get_channel().unwrap_or_default()
         )) {
             let platform_handler = self.platform_handler.clone();
             let mirror_channel = mirror_channel.clone();
-            let channel = context.get_channel();
-            let display_name = context.get_display_name().to_string();
+            let channel = platform_ctx.get_channel();
+            let display_name = platform_ctx.get_display_name().to_string();
 
             let msg = format!("[{}] {}: {}", channel, display_name, message_text);
             tracing::info!(
                 "Mirroring message from {} to {}: {}",
-                context.get_channel(),
+                platform_ctx.get_channel(),
                 mirror_channel,
                 msg
             );
@@ -363,7 +361,7 @@ impl CommandHandler {
 
         if let Some(channel) = self
             .db
-            .get_or_create_channel(&context.get_channel())
+            .get_or_create_channel(&platform_ctx.get_channel())
             .expect("DB error")
         {
             let triggers = self.get_command_triggers(channel.id).expect("DB error");
@@ -373,14 +371,16 @@ impl CommandHandler {
                     let command_msg = format!("{} {}", trigger.value(), command_args);
                     tracing::info!("Executing indirect command {}", command_msg);
 
-                    return self.handle_command_message(&command_msg, context).await;
+                    return self
+                        .handle_command_message(&command_msg, platform_ctx)
+                        .await;
                 }
             }
         }
 
-        for prefix in context.get_prefixes() {
+        for prefix in platform_ctx.get_prefixes() {
             if let Some(command_msg) = message_text.strip_prefix(prefix) {
-                return self.handle_command_message(command_msg, context).await;
+                return self.handle_command_message(command_msg, platform_ctx).await;
             }
         }
         None
@@ -389,7 +389,7 @@ impl CommandHandler {
     /// This function expects a raw message that appears to be a command without the leading command prefix.
     async fn handle_command_message<C>(&self, message_text: &str, context: C) -> Option<String>
     where
-        C: ExecutionContext + Send + Sync,
+        C: PlatformContext + Send + Sync,
     {
         if message_text.trim().is_empty() {
             Some("❗".to_string())
@@ -431,15 +431,15 @@ impl CommandHandler {
     }
 
     // #[async_recursion]
-    async fn run_command<C: ExecutionContext + Send + Sync>(
+    async fn run_command<P: PlatformContext + Send + Sync>(
         &self,
         command: &str,
         args: Vec<&str>,
-        ctx: C,
+        platform_ctx: P,
     ) -> Result<Option<String>, CommandError> {
         tracing::info!("Processing command {} with {:?}", command, args);
 
-        let user_identifier = ctx.get_user_identifier();
+        let user_identifier = platform_ctx.get_user_identifier();
         let user = self.db.get_or_create_user(&user_identifier)?;
 
         if !self
@@ -448,29 +448,41 @@ impl CommandHandler {
             .await
             .contains(&(user.id, command.to_string()))
         {
+            let platform_handler = self.platform_handler.read().await;
+            let execution_ctx = ExecutionContext {
+                db: &self.db,
+                platform_handler: &*platform_handler,
+                platform_ctx,
+                user: &user,
+            };
+
             let (output, cooldown) = if let Some(builtin_command) = self
                 .builtin_commands
                 .iter()
                 .find(|cmd| cmd.get_names().contains(&command))
             {
-                if ctx.get_permissions().await >= builtin_command.get_permissions() {
+                if execution_ctx.platform_ctx.get_permissions().await
+                    >= builtin_command.get_permissions()
+                {
                     let cooldown = builtin_command.get_cooldown();
                     let output = builtin_command
-                        .execute(ctx, command, args, (&user, &user_identifier))
+                        .execute(execution_ctx, command, args)
                         .await?;
 
                     (output, cooldown)
                 } else {
                     return Err(CommandError::NoPermissions);
                 }
-            } else if let Some(command) = self.db.get_command(&ctx.get_channel(), command)? {
+            } else if let Some(command) = self
+                .db
+                .get_command(&execution_ctx.platform_ctx.get_channel(), command)?
+            {
                 // TODO custom permissions
 
                 let output = execute_command_action(
                     self.template_registry.clone(),
                     command.action,
-                    ctx,
-                    user.clone(),
+                    &execution_ctx,
                     args.into_iter().map(|a| a.to_owned()).collect(),
                 )
                 .await?;
@@ -606,16 +618,23 @@ impl CommandHandler {
     pub async fn handle_server_message(
         &self,
         action: String,
-        context: ServerExecutionContext,
+        platform_ctx: ServerPlatformContext,
         arguments: Vec<String>,
     ) -> anyhow::Result<()> {
-        let user = self.db.get_or_create_user(&context.executing_user)?;
+        let user = self.db.get_or_create_user(&platform_ctx.executing_user)?;
+
+        let platform_handler = self.platform_handler.read().await;
+        let execution_ctx = ExecutionContext {
+            db: &self.db,
+            platform_handler: &*platform_handler,
+            platform_ctx,
+            user: &user,
+        };
 
         let response = execute_command_action(
             self.template_registry.clone(),
             action,
-            context.clone(),
-            user,
+            &execution_ctx,
             arguments,
         ) // TODO
         .await?
@@ -625,7 +644,7 @@ impl CommandHandler {
             .platform_handler
             .read()
             .await
-            .send_to_channel(context.get_channel(), response)
+            .send_to_channel(execution_ctx.platform_ctx.target_channel, response)
             .await?)
     }
 
@@ -709,90 +728,11 @@ impl CommandHandler {
     }
 }
 
-#[derive(Debug, thiserror::Error)]
-pub enum CommandError {
-    MissingArgument(String),
-    InvalidArgument(String),
-    NoPermissions,
-    DatabaseError(DatabaseError),
-    TemplateError(handlebars::RenderError),
-    ConfigurationError(VarError),
-    GenericError(String),
-}
-
-impl fmt::Display for CommandError {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            CommandError::MissingArgument(arg) => {
-                f.write_str(&format!("missing argument: {}", arg))
-            }
-            CommandError::InvalidArgument(arg) => {
-                f.write_str(&format!("invalid argument: {}", arg))
-            }
-            CommandError::NoPermissions => {
-                f.write_str("you don't have the permissions to use this command")
-            }
-            CommandError::DatabaseError(e) => f.write_str(&e.to_string()),
-            CommandError::TemplateError(e) => f.write_str(&e.to_string()),
-            CommandError::ConfigurationError(e) => {
-                f.write_str(&format!("configuration error: {}", e))
-            }
-            CommandError::GenericError(s) => f.write_str(s),
-        }
-    }
-}
-
-impl From<diesel::result::Error> for CommandError {
-    fn from(e: diesel::result::Error) -> Self {
-        Self::DatabaseError(DatabaseError::DieselError(e))
-    }
-}
-
-impl From<DatabaseError> for CommandError {
-    fn from(e: DatabaseError) -> Self {
-        Self::DatabaseError(e)
-    }
-}
-
-impl From<handlebars::RenderError> for CommandError {
-    fn from(e: handlebars::RenderError) -> Self {
-        Self::TemplateError(e)
-    }
-}
-
-impl From<VarError> for CommandError {
-    fn from(e: VarError) -> Self {
-        Self::ConfigurationError(e)
-    }
-}
-
-impl From<ParseIntError> for CommandError {
-    fn from(_: ParseIntError) -> Self {
-        Self::InvalidArgument("expected a number".to_string())
-    }
-}
-
-impl From<UserIdentifierError> for CommandError {
-    fn from(e: UserIdentifierError) -> Self {
-        match e {
-            UserIdentifierError::MissingDelimiter => Self::MissingArgument(
-                "separator `:`! Must be in the form of `platform:user`".to_string(),
-            ),
-            UserIdentifierError::InvalidPlatform => Self::InvalidArgument("platform".to_string()),
-        }
-    }
-}
-
-impl From<anyhow::Error> for CommandError {
-    fn from(e: anyhow::Error) -> Self {
-        Self::GenericError(e.to_string())
-    }
-}
-
-impl From<&'static str> for CommandError {
-    fn from(msg: &'static str) -> Self {
-        CommandError::GenericError(msg.to_owned())
-    }
+pub struct ExecutionContext<'a, P: PlatformContext> {
+    db: &'a Database,
+    platform_handler: &'a PlatformHandler,
+    platform_ctx: P,
+    user: &'a User,
 }
 
 async fn start_supinic_heartbeat() {
@@ -825,17 +765,17 @@ async fn start_supinic_heartbeat() {
     });
 }
 
-async fn execute_command_action<C: ExecutionContext>(
+async fn execute_command_action<P: PlatformContext>(
     template_registry: Arc<Handlebars<'static>>,
     action: String,
-    ctx: C,
-    user: User,
+    ctx: &ExecutionContext<'_, P>,
     args: Vec<String>,
 ) -> Result<Option<String>, CommandError> {
     tracing::debug!("Parsing action {}", action);
 
-    let display_name = ctx.get_display_name().to_string();
-    let channel = ctx.get_channel();
+    let display_name = ctx.platform_ctx.get_display_name().to_string();
+    let channel = ctx.platform_ctx.get_channel();
+    let user = ctx.user.clone();
 
     let response = match task::spawn_blocking(move || {
         template_registry.render_template(

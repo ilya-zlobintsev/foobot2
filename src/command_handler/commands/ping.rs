@@ -22,12 +22,11 @@ impl ExecutableCommand for Ping {
         Permissions::Default
     }
 
-    async fn execute<C: ExecutionContext + Send + Sync>(
+    async fn execute<'a, P: PlatformContext + Send + Sync>(
         &self,
-        _ctx: C,
-        _trigger_name: &str,
-        _args: Vec<&str>,
-        _: (&User, &UserIdentifier),
+        _: ExecutionContext<'a, P>,
+        _: &str,
+        _: Vec<&str>,
     ) -> Result<Option<String>, CommandError> {
         let uptime = {
             let duration = self.startup_instant.elapsed();

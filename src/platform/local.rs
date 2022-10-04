@@ -11,7 +11,7 @@ use tokio::{
 use crate::command_handler::CommandHandler;
 
 use super::{
-    ChannelIdentifier, ChatPlatform, ChatPlatformError, ExecutionContext, Permissions,
+    ChannelIdentifier, ChatPlatform, ChatPlatformError, Permissions, PlatformContext,
     UserIdentifier,
 };
 
@@ -68,7 +68,7 @@ impl Local {
         let mut buf = String::new();
 
         while reader.read_line(&mut buf).await? != 0 {
-            let context = LocalExecutionContext {
+            let context = LocalPlatformContext {
                 addr_str: addr.ip().to_string(),
                 addr,
             };
@@ -86,13 +86,13 @@ impl Local {
 }
 
 #[derive(Clone)]
-struct LocalExecutionContext {
+struct LocalPlatformContext {
     pub addr: SocketAddr,
     pub addr_str: String,
 }
 
 #[async_trait]
-impl ExecutionContext for LocalExecutionContext {
+impl PlatformContext for LocalPlatformContext {
     async fn get_permissions_internal(&self) -> Permissions {
         if self.addr.ip() == IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)) {
             Permissions::ChannelOwner

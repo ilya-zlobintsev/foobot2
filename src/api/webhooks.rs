@@ -11,7 +11,7 @@ use crate::{
         twitch_api::eventsub::{events::*, *},
         CommandHandler,
     },
-    platform::{ChannelIdentifier, ServerExecutionContext, UserIdentifier},
+    platform::{ChannelIdentifier, ServerPlatformContext, UserIdentifier},
 };
 
 #[openapi(skip)]
@@ -83,7 +83,7 @@ pub async fn eventsub_callback(
                                 .await
                                 .expect("Failed to get user");
 
-                            let context = ServerExecutionContext {
+                            let context = ServerPlatformContext {
                                 target_channel: ChannelIdentifier::TwitchChannel((
                                     broadcaster_id.to_string(),
                                     None,

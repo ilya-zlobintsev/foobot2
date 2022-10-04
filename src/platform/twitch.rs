@@ -13,7 +13,7 @@ use twitch_irc::{ClientConfig, SecureTCPTransport, TwitchIRCClient};
 
 use crate::command_handler::CommandHandler;
 use crate::database::Database;
-use crate::platform::{ChannelIdentifier, ExecutionContext};
+use crate::platform::{ChannelIdentifier, PlatformContext};
 
 use super::{ChatPlatform, Permissions, UserIdentifier};
 
@@ -210,7 +210,7 @@ pub struct TwitchExecutionContext<M: TwitchMessage + std::marker::Sync + Clone> 
 }
 
 #[async_trait]
-impl<T: TwitchMessage + std::marker::Sync + Clone> ExecutionContext for TwitchExecutionContext<T> {
+impl<T: TwitchMessage + std::marker::Sync + Clone> PlatformContext for TwitchExecutionContext<T> {
     async fn get_permissions_internal(&self) -> Permissions {
         let mut badges_iter = self.msg.get_badges().iter();
 

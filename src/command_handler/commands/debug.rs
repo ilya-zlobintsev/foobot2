@@ -1,11 +1,10 @@
 use super::*;
-use crate::{command_handler::execute_command_action, database::Database};
+use crate::command_handler::execute_command_action;
 use handlebars::Handlebars;
 use std::sync::Arc;
 
 pub struct Debug {
     template_registry: Arc<Handlebars<'static>>,
-    db: Database,
 }
 
 #[async_trait]
@@ -22,25 +21,19 @@ impl ExecutableCommand for Debug {
         Permissions::ChannelMod
     }
 
-    async fn execute<C: ExecutionContext + Send + Sync>(
+    async fn execute<'a, P: PlatformContext + Send + Sync>(
         &self,
-        ctx: C,
+        ctx: ExecutionContext<'a, P>,
         _trigger_name: &str,
         args: Vec<&str>,
-        _: (&User, &UserIdentifier),
     ) -> Result<Option<String>, CommandError> {
-        let user = self.db.get_or_create_user(&ctx.get_user_identifier())?;
         let action = args.join(" ");
-
-        execute_command_action(self.template_registry.clone(), action, ctx, user, vec![]).await
+        execute_command_action(self.template_registry.clone(), action, &ctx, vec![]).await
     }
 }
 
 impl Debug {
-    pub fn new(db: Database, template_registry: Arc<Handlebars<'static>>) -> Self {
-        Self {
-            db,
-            template_registry,
-        }
+    pub fn new(template_registry: Arc<Handlebars<'static>>) -> Self {
+        Self { template_registry }
     }
 }

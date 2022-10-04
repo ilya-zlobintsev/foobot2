@@ -1,5 +1,5 @@
 use super::{
-    ChannelIdentifier, ChatPlatform, ChatPlatformError, ExecutionContext, Permissions,
+    ChannelIdentifier, ChatPlatform, ChatPlatformError, Permissions, PlatformContext,
     UserIdentifier,
 };
 use crate::command_handler::CommandHandler;
@@ -83,7 +83,7 @@ impl ChatPlatform for Telegram {
                                     let api = self.api.clone();
 
                                     tokio::spawn(async move {
-                                        let context = TelegramExectuionContext {
+                                        let context = TelegramPlatformContext {
                                             msg: &message,
                                             display_name,
                                             prefix,
@@ -124,14 +124,14 @@ impl ChatPlatform for Telegram {
     }
 }
 
-pub struct TelegramExectuionContext<'a> {
+pub struct TelegramPlatformContext<'a> {
     msg: &'a Message,
     display_name: String,
     prefix: Arc<String>,
 }
 
 #[async_trait]
-impl ExecutionContext for TelegramExectuionContext<'_> {
+impl PlatformContext for TelegramPlatformContext<'_> {
     async fn get_permissions_internal(&self) -> Permissions {
         match &self.msg.chat.permissions {
             Some(permissions) => {

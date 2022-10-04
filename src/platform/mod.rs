@@ -31,7 +31,7 @@ pub trait ChatPlatform {
 }
 
 #[async_trait]
-pub trait ExecutionContext {
+pub trait PlatformContext {
     async fn get_permissions_internal(&self) -> Permissions;
 
     async fn get_permissions(&self) -> Permissions {
@@ -54,7 +54,7 @@ pub trait ExecutionContext {
 }
 
 #[derive(Clone)]
-pub struct ServerExecutionContext {
+pub struct ServerPlatformContext {
     pub target_channel: ChannelIdentifier,
     pub executing_user: UserIdentifier,
     pub cmd: CommandHandler,
@@ -62,7 +62,7 @@ pub struct ServerExecutionContext {
 }
 
 #[async_trait]
-impl ExecutionContext for ServerExecutionContext {
+impl PlatformContext for ServerPlatformContext {
     async fn get_permissions_internal(&self) -> Permissions {
         let user = self
             .cmd

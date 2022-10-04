@@ -3,7 +3,7 @@ use std::time::Duration;
 use std::{env, sync::Arc};
 
 use crate::command_handler::CommandHandler;
-use crate::platform::{ExecutionContext, UserIdentifier};
+use crate::platform::{PlatformContext, UserIdentifier};
 
 use super::{ChannelIdentifier, ChatPlatform, ChatPlatformError, Permissions};
 use futures::StreamExt;
@@ -28,7 +28,7 @@ impl Irc {
 
         task::spawn(async move {
             if let Command::PRIVMSG(_, content) = &message.command {
-                let context = IrcExecutionContext {
+                let context = IrcPlatformContext {
                     message: &message,
                     command_prefix,
                 };
@@ -118,14 +118,14 @@ impl ChatPlatform for Irc {
 }
 
 #[derive(Clone)]
-struct IrcExecutionContext<'a> {
+struct IrcPlatformContext<'a> {
     message: &'a Message,
     command_prefix: Arc<String>,
 }
 
 // TODO remove the unwraps
 #[async_trait]
-impl ExecutionContext for IrcExecutionContext<'_> {
+impl PlatformContext for IrcPlatformContext<'_> {
     async fn get_permissions_internal(&self) -> Permissions {
         // TODO
         Permissions::Default

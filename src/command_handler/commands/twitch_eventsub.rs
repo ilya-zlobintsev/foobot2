@@ -10,15 +10,12 @@ use crate::{
         get_client_id, get_client_secret,
         helix::HelixApi,
     },
-    database::models::NewEventSubTrigger,
+    database::{models::NewEventSubTrigger, Database},
     platform::ChannelIdentifier,
 };
-use twitch_irc::login::{LoginCredentials, RefreshingLoginCredentials, StaticLoginCredentials};
+use twitch_irc::login::{LoginCredentials, RefreshingLoginCredentials};
 
-pub struct TwitchEventSub {
-    db: Database,
-    app_api: HelixApi<StaticLoginCredentials>,
-}
+pub struct TwitchEventSub;
 
 #[async_trait]
 impl ExecutableCommand for TwitchEventSub {
@@ -34,101 +31,106 @@ impl ExecutableCommand for TwitchEventSub {
         Permissions::ChannelMod
     }
 
-    async fn execute<C: ExecutionContext + Send + Sync>(
+    async fn execute<'a, P: PlatformContext + Send + Sync>(
         &self,
-        ctx: C,
+        ctx: ExecutionContext<'a, P>,
         _: &str,
         args: Vec<&str>,
-        _: (&User, &UserIdentifier),
     ) -> Result<Option<String>, CommandError> {
-        if let ChannelIdentifier::TwitchChannel((broadcaster_id, _)) = ctx.get_channel() {
-            let mut args = args.into_iter();
-            let action = args
-                .next()
-                .ok_or_else(|| CommandError::MissingArgument("action".to_owned()))?;
+        if let ChannelIdentifier::TwitchChannel((broadcaster_id, _)) =
+            ctx.platform_ctx.get_channel()
+        {
+            if let Some(twitch_api) = &ctx.platform_handler.twitch_api {
+                let app_api = &twitch_api.helix_api_app;
 
-            match action {
-                "add" | "create" => {
-                    let (subscription, action) =
-                        self.get_subscription(args, broadcaster_id.clone()).await?;
+                let mut args = args.into_iter();
+                let action = args
+                    .next()
+                    .ok_or_else(|| CommandError::MissingArgument("action".to_owned()))?;
 
-                    if action.is_empty() {
-                        return Err(CommandError::MissingArgument("action".to_owned()));
-                    }
+                match action {
+                    "add" | "create" => {
+                        let (subscription, action) = self
+                            .get_subscription(args, broadcaster_id.clone(), ctx.db)
+                            .await?;
 
-                    let subscription_response = self
-                        .app_api
-                        .add_eventsub_subscription(subscription.clone())
-                        .await
-                        .map_err(|e| {
-                            CommandError::GenericError(format!(
-                                "Failed to create subscription: {}",
-                                e
-                            ))
+                        if action.is_empty() {
+                            return Err(CommandError::MissingArgument("action".to_owned()));
+                        }
+
+                        let subscription_response = app_api
+                            .add_eventsub_subscription(subscription.clone())
+                            .await
+                            .map_err(|e| {
+                                CommandError::GenericError(format!(
+                                    "Failed to create subscription: {}",
+                                    e
+                                ))
+                            })?;
+
+                        let id = &subscription_response.data.first().unwrap().id;
+
+                        ctx.db.add_eventsub_trigger(NewEventSubTrigger {
+                            broadcaster_id: &broadcaster_id,
+                            event_type: subscription.get_type(),
+                            action: &action,
+                            creation_payload: &serde_json::to_string(&subscription)
+                                .expect("failed to serialize"),
+                            id,
                         })?;
 
-                    let id = &subscription_response.data.first().unwrap().id;
-
-                    self.db.add_eventsub_trigger(NewEventSubTrigger {
-                        broadcaster_id: &broadcaster_id,
-                        event_type: subscription.get_type(),
-                        action: &action,
-                        creation_payload: &serde_json::to_string(&subscription)
-                            .expect("failed to serialize"),
-                        id,
-                    })?;
-
-                    Ok(Some("Trigger successfully added".to_owned()))
-                }
-                "remove" | "delete" => {
-                    let (subscription_type, _) =
-                        self.get_subscription(args, broadcaster_id.clone()).await?;
-
-                    let subscriptions = self
-                        .app_api
-                        .get_eventsub_subscriptions(Some(subscription_type.get_type()))
-                        .await?;
-
-                    if let Some(subscription) = subscriptions
-                        .iter()
-                        .find(|sub| sub.condition == subscription_type.get_condition())
-                    {
-                        self.app_api
-                            .delete_eventsub_subscription(&subscription.id)
+                        Ok(Some("Trigger successfully added".to_owned()))
+                    }
+                    "remove" | "delete" => {
+                        let (subscription_type, _) = self
+                            .get_subscription(args, broadcaster_id.clone(), ctx.db)
                             .await?;
-                        self.db.delete_eventsub_trigger(&subscription.id)?;
 
-                        Ok(Some("Trigger succesfully removed".to_owned()))
-                    } else {
-                        Err(CommandError::InvalidArgument(
-                            "unable to find matching subscription".to_owned(),
-                        ))
-                    }
-                }
-                "list" => {
-                    let triggers = self
-                        .db
-                        .get_eventsub_triggers_for_broadcaster(&broadcaster_id)?;
+                        let subscriptions = app_api
+                            .get_eventsub_subscriptions(Some(subscription_type.get_type()))
+                            .await?;
 
-                    if !triggers.is_empty() {
-                        let output = triggers
-                            .into_iter()
-                            .map(|trigger| trigger.event_type)
-                            .collect::<Vec<String>>()
-                            .join(", ");
-                        Ok(Some(output))
-                    } else {
-                        Ok(Some("No eventsub triggers registered".to_owned()))
+                        if let Some(subscription) = subscriptions
+                            .iter()
+                            .find(|sub| sub.condition == subscription_type.get_condition())
+                        {
+                            app_api
+                                .delete_eventsub_subscription(&subscription.id)
+                                .await?;
+                            ctx.db.delete_eventsub_trigger(&subscription.id)?;
+
+                            Ok(Some("Trigger succesfully removed".to_owned()))
+                        } else {
+                            Err(CommandError::InvalidArgument(
+                                "unable to find matching subscription".to_owned(),
+                            ))
+                        }
                     }
+                    "list" => {
+                        let triggers = ctx
+                            .db
+                            .get_eventsub_triggers_for_broadcaster(&broadcaster_id)?;
+
+                        if !triggers.is_empty() {
+                            let output = triggers
+                                .into_iter()
+                                .map(|trigger| trigger.event_type)
+                                .collect::<Vec<String>>()
+                                .join(", ");
+                            Ok(Some(output))
+                        } else {
+                            Ok(Some("No eventsub triggers registered".to_owned()))
+                        }
+                    }
+                    _ => Err(CommandError::GenericError(format!(
+                        "invalid action {action}"
+                    ))),
                 }
-                _ => Err(CommandError::GenericError(format!(
-                    "invalid action {action}"
-                ))),
+            } else {
+                Err("Twitch is not configured".into())
             }
         } else {
-            Err(CommandError::GenericError(
-                "EventSub can only be used on Twitch".into(),
-            ))
+            Err("EventSub can only be used on Twitch".into())
         }
     }
 }
@@ -138,6 +140,7 @@ impl TwitchEventSub {
         &self,
         mut args: IntoIter<&str>,
         broadcaster_id: String,
+        db: &Database,
     ) -> Result<(EventSubSubscriptionType, String), CommandError> {
         let sub_type = args
             .next()
@@ -161,7 +164,7 @@ impl TwitchEventSub {
                 action = action_str.trim().to_string();
                 let reward_name = reward_name.trim();
 
-                let streamer_credentials = self.db.make_twitch_credentials(broadcaster_id.clone());
+                let streamer_credentials = db.make_twitch_credentials(broadcaster_id.clone());
                 let refreshing_credentials = RefreshingLoginCredentials::init(
                     get_client_id().unwrap(),
                     get_client_secret().unwrap(),
@@ -208,11 +211,5 @@ impl TwitchEventSub {
         };
 
         Ok((subscription, action))
-    }
-}
-
-impl TwitchEventSub {
-    pub fn new(db: Database, app_api: HelixApi<StaticLoginCredentials>) -> Self {
-        Self { db, app_api }
     }
 }

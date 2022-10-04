@@ -21,12 +21,11 @@ impl ExecutableCommand for Shell {
         Permissions::Admin
     }
 
-    async fn execute<C: ExecutionContext + Send + Sync>(
+    async fn execute<'a, P: PlatformContext + Send + Sync>(
         &self,
-        _ctx: C,
+        _ctx: ExecutionContext<'a, P>,
         _trigger_name: &str,
         args: Vec<&str>,
-        _: (&User, &UserIdentifier),
     ) -> Result<Option<String>, CommandError> {
         if let Ok("1") = env::var("ALLOW_SHELL").as_deref() {
             match Command::new("sh").arg("-c").args(args).output().await {

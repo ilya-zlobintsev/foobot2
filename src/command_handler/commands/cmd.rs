@@ -1,9 +1,7 @@
 use super::*;
 use crate::{api::get_base_url, database::DatabaseError};
 
-pub struct Cmd {
-    db: Database,
-}
+pub struct Cmd;
 
 #[async_trait]
 impl ExecutableCommand for Cmd {
@@ -21,17 +19,16 @@ impl ExecutableCommand for Cmd {
         Permissions::Default // There is custom permission handling per-subcommand
     }
 
-    async fn execute<C: ExecutionContext + Send + Sync>(
+    async fn execute<'a, P: PlatformContext + Send + Sync>(
         &self,
-        ctx: C,
+        ctx: ExecutionContext<'a, P>,
         mut trigger_name: &str,
         mut args: Vec<&str>,
-        _: (&User, &UserIdentifier),
     ) -> Result<Option<String>, CommandError> {
-        let channel_identifier = ctx.get_channel();
-        let channel = self
+        let channel_identifier = ctx.platform_ctx.get_channel();
+        let channel = ctx
             .db
-            .get_or_create_channel(&ctx.get_channel())?
+            .get_or_create_channel(&channel_identifier)?
             .ok_or(CommandError::NoPermissions)?; // Shouldn't happen anyway
 
         match trigger_name {
@@ -65,7 +62,7 @@ impl ExecutableCommand for Cmd {
                 get_base_url(),
                 channel.id,
             )))
-        } else if ctx.get_permissions().await >= Permissions::ChannelMod {
+        } else if ctx.platform_ctx.get_permissions().await >= Permissions::ChannelMod {
             match arguments.next().ok_or_else(|| {
                 CommandError::MissingArgument("must be either add or delete".to_string())
             })? {
@@ -74,7 +71,7 @@ impl ExecutableCommand for Cmd {
                         .next()
                         .ok_or_else(|| CommandError::MissingArgument("command name".to_string()))?;
 
-                    for prefix in ctx.get_prefixes() {
+                    for prefix in ctx.platform_ctx.get_prefixes() {
                         if let Some(stripped_name) = command_name.strip_prefix(prefix) {
                             command_name = stripped_name;
                         }
@@ -86,7 +83,7 @@ impl ExecutableCommand for Cmd {
                         return Err(CommandError::MissingArgument("command action".to_string()));
                     }
 
-                    match self.db.add_command_to_channel(
+                    match ctx.db.add_command_to_channel(
                         &channel_identifier,
                         command_name,
                         &command_action,
@@ -108,7 +105,7 @@ impl ExecutableCommand for Cmd {
                         command_name = stripped_name;
                     }
 
-                    match self
+                    match ctx
                         .db
                         .delete_command_from_channel(&channel_identifier, command_name)
                     {
@@ -126,7 +123,7 @@ impl ExecutableCommand for Cmd {
                         return Err(CommandError::MissingArgument("command action".to_string()));
                     }
 
-                    match self.db.update_command_action(
+                    match ctx.db.update_command_action(
                         &channel_identifier,
                         command_name,
                         &command_action,
@@ -144,7 +141,7 @@ impl ExecutableCommand for Cmd {
                         command_name = stripped_name;
                     }
 
-                    match self.db.get_command(&channel_identifier, command_name)? {
+                    match ctx.db.get_command(&channel_identifier, command_name)? {
                         Some(command) => Ok(Some(command.action)),
                         None => Ok(Some(format!("command {} doesn't exist", command_name))),
                     }
@@ -164,7 +161,7 @@ impl ExecutableCommand for Cmd {
                         return Err(CommandError::MissingArgument("triggers".to_string()));
                     }
 
-                    self.db
+                    ctx.db
                         .set_command_triggers(channel.id, command_name, &triggers)?;
 
                     Ok(Some(String::from("Succesfully updated command triggers")))
@@ -178,7 +175,7 @@ impl ExecutableCommand for Cmd {
                         command_name = stripped_name;
                     }
 
-                    let commands = self.db.get_commands(channel.id)?;
+                    let commands = ctx.db.get_commands(channel.id)?;
 
                     for command in commands {
                         if command.name == command_name {
@@ -200,11 +197,5 @@ impl ExecutableCommand for Cmd {
         // self.refresh_command_triggers(channel.id)?;
 
         Ok(response)
-    }
-}
-
-impl Cmd {
-    pub fn new(db: Database) -> Self {
-        Self { db }
     }
 }

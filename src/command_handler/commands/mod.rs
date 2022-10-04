@@ -9,11 +9,8 @@ use self::{
     cmd::Cmd, debug::Debug, ping::Ping, shell::Shell, twitch_eventsub::TwitchEventSub,
     whoami::WhoAmI,
 };
-use super::{platform_handler::PlatformHandler, CommandError};
-use crate::{
-    database::{models::User, Database},
-    platform::{ExecutionContext, Permissions, UserIdentifier},
-};
+use super::{CommandError, ExecutionContext};
+use crate::platform::{Permissions, PlatformContext};
 use async_trait::async_trait;
 use enum_dispatch::enum_dispatch;
 use handlebars::Handlebars;
@@ -28,12 +25,11 @@ pub trait ExecutableCommand {
 
     fn get_permissions(&self) -> Permissions;
 
-    async fn execute<C: ExecutionContext + Send + Sync>(
+    async fn execute<'a, P: PlatformContext + Send + Sync>(
         &self,
-        ctx: C,
+        ctx: ExecutionContext<'a, P>,
         trigger_name: &str,
         args: Vec<&str>,
-        (user, user_identifier): (&User, &UserIdentifier),
     ) -> Result<Option<String>, CommandError>;
 }
 
@@ -54,22 +50,13 @@ impl std::fmt::Debug for BuiltinCommand {
     }
 }
 
-pub fn create_builtin_commands(
-    db: Database,
-    template_registry: Arc<Handlebars<'static>>,
-    platform_handler: &PlatformHandler,
-) -> Vec<BuiltinCommand> {
-    let mut commands = vec![
+pub fn create_builtin_commands(template_registry: Arc<Handlebars<'static>>) -> Vec<BuiltinCommand> {
+    vec![
         Ping::default().into(),
-        Debug::new(db.clone(), template_registry).into(),
-        Cmd::new(db.clone()).into(),
+        Debug::new(template_registry).into(),
+        Cmd.into(),
         WhoAmI.into(),
         Shell.into(),
-    ];
-
-    if let Some(twitch_api) = &platform_handler.twitch_api {
-        commands.push(TwitchEventSub::new(db, twitch_api.helix_api_app.clone()).into());
-    }
-
-    commands
+        TwitchEventSub.into(),
+    ]
 }

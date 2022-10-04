@@ -17,19 +17,18 @@ impl ExecutableCommand for WhoAmI {
         Permissions::Default
     }
 
-    async fn execute<C: ExecutionContext + Send + Sync>(
+    async fn execute<'a, P: PlatformContext + Send + Sync>(
         &self,
-        ctx: C,
+        ctx: ExecutionContext<'a, P>,
         _trigger_name: &str,
         _args: Vec<&str>,
-        (user, user_identifier): (&User, &UserIdentifier),
     ) -> Result<Option<String>, CommandError> {
         Ok(Some(format!(
             "{:?}, identified as {}, channel: {}, permissions: {:?}",
-            user,
-            user_identifier,
-            ctx.get_channel(),
-            ctx.get_permissions().await,
+            ctx.user,
+            ctx.platform_ctx.get_user_identifier(),
+            ctx.platform_ctx.get_channel(),
+            ctx.platform_ctx.get_permissions().await,
         )))
     }
 }
