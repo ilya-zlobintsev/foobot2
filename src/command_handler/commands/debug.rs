@@ -28,7 +28,7 @@ impl ExecutableCommand for Debug {
         args: Vec<&str>,
     ) -> Result<Option<String>, CommandError> {
         let action = args.join(" ");
-        execute_command_action(self.template_registry.clone(), action, &ctx, vec![]).await
+        execute_command_action(self.template_registry.clone(), action, ctx, vec![]).await
     }
 }
 
