@@ -21,7 +21,7 @@ impl ExecutableCommand for Cmd {
 
     async fn execute<'a, P: PlatformContext + Send + Sync>(
         &self,
-        ctx: ExecutionContext<'a, P>,
+        ctx: &ExecutionContext<'a, P>,
         mut trigger_name: &str,
         mut args: Vec<&str>,
     ) -> Result<Option<String>, CommandError> {

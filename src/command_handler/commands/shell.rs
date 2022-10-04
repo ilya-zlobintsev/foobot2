@@ -23,7 +23,7 @@ impl ExecutableCommand for Shell {
 
     async fn execute<'a, P: PlatformContext + Send + Sync>(
         &self,
-        _ctx: ExecutionContext<'a, P>,
+        _ctx: &ExecutionContext<'a, P>,
         _trigger_name: &str,
         args: Vec<&str>,
     ) -> Result<Option<String>, CommandError> {

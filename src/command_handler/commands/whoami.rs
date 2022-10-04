@@ -19,7 +19,7 @@ impl ExecutableCommand for WhoAmI {
 
     async fn execute<'a, P: PlatformContext + Send + Sync>(
         &self,
-        ctx: ExecutionContext<'a, P>,
+        ctx: &ExecutionContext<'a, P>,
         _trigger_name: &str,
         _args: Vec<&str>,
     ) -> Result<Option<String>, CommandError> {

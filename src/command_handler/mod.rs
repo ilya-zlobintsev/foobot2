@@ -466,7 +466,7 @@ impl CommandHandler {
                 {
                     let cooldown = builtin_command.get_cooldown();
                     let output = builtin_command
-                        .execute(execution_ctx, command, args)
+                        .execute(&execution_ctx, command, args)
                         .await?;
 
                     (output, cooldown)

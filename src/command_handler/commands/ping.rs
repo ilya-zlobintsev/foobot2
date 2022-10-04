@@ -24,7 +24,7 @@ impl ExecutableCommand for Ping {
 
     async fn execute<'a, P: PlatformContext + Send + Sync>(
         &self,
-        _: ExecutionContext<'a, P>,
+        _: &ExecutionContext<'a, P>,
         _: &str,
         _: Vec<&str>,
     ) -> Result<Option<String>, CommandError> {

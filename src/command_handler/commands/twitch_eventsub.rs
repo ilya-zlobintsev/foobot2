@@ -33,7 +33,7 @@ impl ExecutableCommand for TwitchEventSub {
 
     async fn execute<'a, P: PlatformContext + Send + Sync>(
         &self,
-        ctx: ExecutionContext<'a, P>,
+        ctx: &ExecutionContext<'a, P>,
         _: &str,
         args: Vec<&str>,
     ) -> Result<Option<String>, CommandError> {
