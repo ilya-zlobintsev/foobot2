@@ -461,18 +461,19 @@ impl CommandHandler {
                 .iter()
                 .find(|cmd| cmd.get_names().contains(&command))
             {
-                if execution_ctx.platform_ctx.get_permissions().await
-                    >= builtin_command.get_permissions()
-                {
-                    let cooldown = builtin_command.get_cooldown();
-                    let output = builtin_command
-                        .execute(&execution_ctx, command, args)
-                        .await?;
-
-                    (output, cooldown)
-                } else {
-                    return Err(CommandError::NoPermissions);
+                let command_permissions = builtin_command.get_permissions();
+                if command_permissions > Permissions::Default {
+                    if command_permissions > execution_ctx.platform_ctx.get_permissions().await {
+                        return Err(CommandError::NoPermissions);
+                    }
                 }
+
+                let cooldown = builtin_command.get_cooldown();
+                let output = builtin_command
+                    .execute(&execution_ctx, command, args)
+                    .await?;
+
+                (output, cooldown)
             } else if let Some(command) = self
                 .db
                 .get_command(&execution_ctx.platform_ctx.get_channel(), command)?
