@@ -14,7 +14,6 @@ use twitch_irc::login::RefreshingLoginCredentials;
 
 type TwitchApi = super::twitch_api::TwitchApi<RefreshingLoginCredentials<Database>>;
 
-#[derive(Clone)]
 pub struct PlatformHandler {
     pub twitch_api: Option<TwitchApi>,
     pub discord_api: Option<DiscordApi>,

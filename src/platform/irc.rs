@@ -77,6 +77,7 @@ impl ChatPlatform for Irc {
         {
             let mut platform_handler = command_handler.platform_handler.write().await;
             platform_handler.irc_sender = Some(client.sender());
+            info!("Configured irc sender");
         }
 
         Ok(Box::new(Self {

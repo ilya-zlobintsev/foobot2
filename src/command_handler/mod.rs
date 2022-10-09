@@ -247,6 +247,8 @@ impl CommandHandler {
             }),
         );
 
+        let platform_handler = Arc::new(RwLock::new(platform_handler));
+
         template_registry.register_helper(
             "say",
             Box::new(inquiry_helper::SayHelper {
@@ -292,7 +294,7 @@ impl CommandHandler {
 
         Self {
             db,
-            platform_handler: Arc::new(RwLock::new(platform_handler)),
+            platform_handler,
             template_registry,
             cooldowns,
             mirror_connections: Arc::new(mirror_connections),

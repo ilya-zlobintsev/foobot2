@@ -15,6 +15,7 @@ use reqwest::Client;
 use serde::{Deserialize, Serialize};
 use serde_json::Value as Json;
 use tokio::runtime::Handle;
+use tokio::sync::RwLock;
 use tokio::time::sleep;
 use twitch_irc::login::{LoginCredentials, RefreshingLoginCredentials};
 
@@ -826,7 +827,7 @@ impl HelperDef for GetTempData {
 }
 
 pub struct SayHelper {
-    pub platform_handler: PlatformHandler,
+    pub platform_handler: Arc<RwLock<PlatformHandler>>,
 }
 
 impl HelperDef for SayHelper {
@@ -851,9 +852,10 @@ impl HelperDef for SayHelper {
         let runtime = tokio::runtime::Handle::current();
 
         let platform_handler = self.platform_handler.clone();
-
         runtime.spawn(async move {
-            if let Err(e) = platform_handler
+            let platform_handler_guard = platform_handler.read().await;
+
+            if let Err(e) = platform_handler_guard
                 .send_to_channel(context.channel, params)
                 .await
             {
