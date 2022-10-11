@@ -340,8 +340,11 @@ impl CommandHandler {
         )) {
             let platform_handler = self.platform_handler.clone();
             let mirror_channel = mirror_channel.clone();
-            let channel = platform_ctx.get_channel();
-            let display_name = platform_ctx.get_display_name().to_string();
+            let mut channel = platform_ctx.get_channel().to_string();
+            let mut display_name = platform_ctx.get_display_name().to_string();
+
+            unping(&mut channel);
+            unping(&mut display_name);
 
             let msg = format!("[{}] {}: {}", channel, display_name, message_text);
             tracing::info!(
@@ -817,4 +820,10 @@ pub fn get_admin_channel() -> Option<ChannelIdentifier> {
     } else {
         None
     }
+}
+
+fn unping(s: &mut String) {
+    let magic_char = char::from_u32(0x000E0000).unwrap();
+    let second = s.split_off(s.len() / 2);
+    *s = format!("{s}{magic_char}{second}")
 }
