@@ -371,6 +371,7 @@ dependencies = [
 [[package]]
 name = "connector-schema"
 version = "0.1.0"
+source = "git+https://git.hyron.dev/foobot/foobot-chat-connector#5b0d8fe90c40ab0d6842aa57b4f21ac06ecdf152"
 dependencies = [
  "bytes",
  "rocket_okapi",

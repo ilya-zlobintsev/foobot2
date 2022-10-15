@@ -88,7 +88,7 @@ enum_dispatch = "0.3.8"
 strum = { version = "0.24.1", features = ["derive"] }
 
 async-nats = "0.21.0"
-connector-schema = { path = "../foobot-chat-connector-v2/connector-schema", features = [
+connector-schema = { git = "https://git.hyron.dev/foobot/foobot-chat-connector", features = [
     "json_schema",
 ] }
 
