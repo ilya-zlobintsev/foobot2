@@ -25,6 +25,7 @@ pub struct User {
     pub irc_name: Option<String>,
     pub local_addr: Option<String>,
     pub telegram_id: Option<String>,
+    pub matrix_id: Option<String>,
 }
 
 impl User {
@@ -47,6 +48,7 @@ pub struct NewUser<'a> {
     pub irc_name: Option<&'a str>,
     pub local_addr: Option<String>,
     pub telegram_id: Option<String>,
+    pub matrix_id: Option<&'a str>,
 }
 
 #[derive(Queryable, Debug, PartialEq, Eq, Serialize, Clone, JsonSchema)]

@@ -1,3 +1,4 @@
+pub mod connector;
 pub mod discord;
 pub mod irc;
 pub mod local;
@@ -6,18 +7,16 @@ pub mod telegram;
 pub mod twitch;
 
 use crate::command_handler::CommandHandler;
-
 use anyhow::anyhow;
 use async_trait::async_trait;
-use rocket_okapi::okapi::schemars;
-use rocket_okapi::okapi::schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
-use std::cmp::Ordering;
 use std::env::{self, VarError};
 use std::fmt::{self, Display};
 use std::hash::{Hash, Hasher};
 use std::net::IpAddr;
 use std::str::FromStr;
+
+pub use connector_schema::Permissions;
 
 #[async_trait]
 pub trait ChatPlatform {
@@ -121,16 +120,18 @@ pub enum UserIdentifier {
     IrcName(String),
     TelegramId(u64),
     IpAddr(IpAddr),
+    MatrixId(String),
 }
 
 impl fmt::Display for UserIdentifier {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            UserIdentifier::TwitchID(id) => f.write_str(&format!("twitch:{}", id)),
-            UserIdentifier::DiscordID(id) => f.write_str(&format!("discord:{}", id)),
-            UserIdentifier::TelegramId(id) => f.write_str(&format!("telegram:{}", id)),
-            UserIdentifier::IrcName(name) => f.write_str(&format!("irc:{}", name)),
-            UserIdentifier::IpAddr(addr) => f.write_str(&format!("local:{}", addr)),
+            UserIdentifier::TwitchID(id) => write!(f, "twitch:{id}"),
+            UserIdentifier::DiscordID(id) => write!(f, "discord:{id}"),
+            UserIdentifier::TelegramId(id) => write!(f, "telegram:{id}"),
+            UserIdentifier::IrcName(name) => write!(f, "irc:{name}"),
+            UserIdentifier::IpAddr(addr) => write!(f, "local:{addr}"),
+            UserIdentifier::MatrixId(mxid) => write!(f, "matrix:{mxid}"),
         }
     }
 }
@@ -151,6 +152,7 @@ impl UserIdentifier {
             match platform {
                 "twitch" => Ok(Self::TwitchID(user_id.to_owned())),
                 "discord" => Ok(Self::DiscordID(user_id.to_owned())),
+                "matrix" => Ok(Self::MatrixId(user_id.to_owned())),
                 _ => Err(UserIdentifierError::InvalidPlatform),
             }
         }
@@ -170,6 +172,7 @@ pub enum ChannelIdentifier {
     DiscordChannel(String),
     IrcChannel(String),
     LocalAddress(String),
+    MatrixChannel(String),
     TelegramChat((String, Option<String>)), // Chat id, chat title
     Minecraft,                              // There is a single minecraft connection
     Anonymous,                              // Used for DMs and such
@@ -184,6 +187,7 @@ impl ChannelIdentifier {
             "irc" => Ok(Self::IrcChannel(id)),
             "telegram" => Ok(Self::TelegramChat((id, None))),
             "minecraft" => Ok(Self::Minecraft),
+            "matrix" => Ok(Self::MatrixChannel(id)),
             _ => Err(anyhow::anyhow!("invalid platform")),
         }
     }
@@ -197,6 +201,7 @@ impl ChannelIdentifier {
             ChannelIdentifier::LocalAddress(_) => Some("local"),
             ChannelIdentifier::Minecraft => Some("minecraft"),
             ChannelIdentifier::Anonymous => None,
+            ChannelIdentifier::MatrixChannel(_) => Some("matrix"),
         }
     }
 
@@ -209,6 +214,7 @@ impl ChannelIdentifier {
             ChannelIdentifier::LocalAddress(addr) => Some(addr),
             ChannelIdentifier::Minecraft => None,
             ChannelIdentifier::Anonymous => None,
+            ChannelIdentifier::MatrixChannel(id) => Some(id),
         }
     }
 
@@ -273,58 +279,7 @@ impl Hash for ChannelIdentifier {
             ChannelIdentifier::LocalAddress(addr) => addr.hash(state),
             ChannelIdentifier::Minecraft => (),
             ChannelIdentifier::Anonymous => (),
-        }
-    }
-}
-
-#[derive(Debug, PartialEq, Eq, Serialize, Deserialize, Clone, JsonSchema)]
-pub enum Permissions {
-    Default = 0,
-    ChannelMod = 5,
-    ChannelOwner = 10,
-    Admin = 15,
-}
-
-impl Display for Permissions {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(
-            f,
-            "{}",
-            match self {
-                Permissions::Default => "default",
-                Permissions::ChannelMod => "channel_mod",
-                Permissions::ChannelOwner => "channel_owner",
-                Permissions::Admin => "admin",
-            }
-        )
-    }
-}
-
-impl PartialOrd for Permissions {
-    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
-        match self {
-            Permissions::Admin => match other {
-                Permissions::Admin => Some(Ordering::Equal),
-                Permissions::ChannelOwner | Permissions::ChannelMod | Permissions::Default => {
-                    Some(Ordering::Greater)
-                }
-            },
-            Permissions::ChannelOwner => match other {
-                Permissions::Admin => Some(Ordering::Less),
-                Permissions::ChannelOwner => Some(Ordering::Equal),
-                Permissions::ChannelMod | Permissions::Default => Some(Ordering::Greater),
-            },
-            Permissions::ChannelMod => match other {
-                Permissions::Admin | Permissions::ChannelOwner => Some(Ordering::Less),
-                Permissions::ChannelMod => Some(Ordering::Equal),
-                Permissions::Default => Some(Ordering::Greater),
-            },
-            Permissions::Default => match other {
-                Permissions::ChannelMod | Permissions::ChannelOwner | Permissions::Admin => {
-                    Some(Ordering::Less)
-                }
-                Permissions::Default => Some(Ordering::Equal),
-            },
+            ChannelIdentifier::MatrixChannel(id) => id.hash(state),
         }
     }
 }

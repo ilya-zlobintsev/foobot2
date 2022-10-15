@@ -594,7 +594,8 @@ impl CommandHandler {
             ChannelIdentifier::Anonymous => Ok(Permissions::Default),
             ChannelIdentifier::LocalAddress(_) => Ok(Permissions::ChannelOwner), // on the local platform, each ip address is its own channel
             ChannelIdentifier::Minecraft => Ok(Permissions::Default),
-            ChannelIdentifier::TelegramChat(_) => Ok(Permissions::Default), // TODO
+            ChannelIdentifier::TelegramChat(_) => Ok(Permissions::Default),
+            ChannelIdentifier::MatrixChannel(_) => Ok(Permissions::Default), // TODO
         }
     }
 

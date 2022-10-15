@@ -405,6 +405,7 @@ impl Database {
                     UserIdentifier::IpAddr(addr) => {
                         query.filter(users::local_addr.eq(Some(addr.to_string())))
                     }
+                    UserIdentifier::MatrixId(mxid) => query.filter(users::matrix_id.eq(Some(mxid))),
                 };
 
                 Ok(query.first::<User>(&mut conn).optional()?.map(|user| {
@@ -468,6 +469,10 @@ impl Database {
                     },
                     UserIdentifier::TelegramId(id) => NewUser {
                         telegram_id: Some(id.to_string()),
+                        ..Default::default()
+                    },
+                    UserIdentifier::MatrixId(mxid) => NewUser {
+                        matrix_id: Some(mxid),
                         ..Default::default()
                     },
                 };

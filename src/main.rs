@@ -15,6 +15,7 @@ use dotenv::dotenv;
 use platform::local::Local;
 use std::env;
 
+use platform::connector::ConnectorPlatform;
 use platform::discord::Discord;
 use platform::irc::Irc;
 use platform::telegram::Telegram;
@@ -33,6 +34,13 @@ async fn main() {
     db.start_cron();
 
     let command_handler = CommandHandler::init(db).await;
+
+    match ConnectorPlatform::init(command_handler.clone()).await {
+        Ok(connector) => connector.run().await,
+        Err(err) => {
+            tracing::warn!("Could not initialize connector: {err:?}");
+        }
+    }
 
     match &command_handler.platform_handler.read().await.twitch_api {
         Some(_) => match Twitch::init(command_handler.clone()).await {
