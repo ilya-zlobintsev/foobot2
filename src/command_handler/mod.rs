@@ -10,7 +10,7 @@ pub mod platform_handler;
 pub mod spotify_api;
 pub mod twitch_api;
 
-use anyhow::anyhow;
+use anyhow::{anyhow, Context};
 use dashmap::DashMap;
 use discord_api::DiscordApi;
 use handlebars::Handlebars;
@@ -37,6 +37,7 @@ use self::platform_handler::PlatformHandler;
 use crate::command_handler::commands::{create_builtin_commands, ExecutableCommand};
 use crate::database::models::Filter;
 use crate::database::{models::User, Database};
+use crate::platform::connector::get_connector_permissions;
 use crate::platform::minecraft;
 use crate::platform::{ChannelIdentifier, Permissions, PlatformContext, ServerPlatformContext};
 
@@ -65,6 +66,7 @@ pub static COMMAND_PROCESSING_HISTOGRAM: Lazy<HistogramVec> = Lazy::new(|| {
 pub struct CommandHandler {
     pub db: Database,
     pub platform_handler: Arc<RwLock<PlatformHandler>>,
+    pub nats_client: async_nats::Client,
     template_registry: Arc<Handlebars<'static>>,
     builtin_commands: Arc<Vec<BuiltinCommand>>,
     cooldowns: Arc<RwLock<Vec<(u64, String)>>>, // User id and command
@@ -74,6 +76,11 @@ pub struct CommandHandler {
 
 impl CommandHandler {
     pub async fn init(db: Database) -> Self {
+        let nats_addr = env::var("NATS_ADDRESS").expect("NATS_ADDRESS not specified");
+        let nats_client = async_nats::connect(nats_addr)
+            .await
+            .expect("Could not connect to nats");
+
         let twitch_api = match TwitchApi::init_refreshing(db.clone()).await {
             Ok(api) => {
                 let active_triggers = api
@@ -300,6 +307,7 @@ impl CommandHandler {
             mirror_connections: Arc::new(mirror_connections),
             command_triggers: Arc::new(DashMap::new()),
             builtin_commands: Arc::new(builtin_commands),
+            nats_client,
         }
     }
 
@@ -595,7 +603,15 @@ impl CommandHandler {
             ChannelIdentifier::LocalAddress(_) => Ok(Permissions::ChannelOwner), // on the local platform, each ip address is its own channel
             ChannelIdentifier::Minecraft => Ok(Permissions::Default),
             ChannelIdentifier::TelegramChat(_) => Ok(Permissions::Default),
-            ChannelIdentifier::MatrixChannel(_) => Ok(Permissions::Default), // TODO
+            ChannelIdentifier::MatrixChannel(channel_id) => {
+                get_connector_permissions(
+                    &self.nats_client,
+                    "matrix",
+                    channel_id.clone(),
+                    user.matrix_id.context("User has no matrix id")?,
+                )
+                .await
+            }
         }
     }
 

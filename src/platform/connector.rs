@@ -1,37 +1,29 @@
 use super::*;
 use crate::command_handler::CommandHandler;
+use anyhow::{anyhow, Context};
 use async_nats::Client;
 use connector_schema::{
     IncomingMessage, OutgoingMessage, PermissionsRequest, PermissionsResponse,
     INCOMING_SUBJECT_PREFIX, OUTGOING_SUBJECT_PREFIX, PERMISSIONS_SUBJECT_PREFIX,
 };
 use futures::StreamExt;
-use std::env;
 use tracing::error;
 
 pub struct ConnectorPlatform {
-    client: Client,
     command_handler: CommandHandler,
 }
 
 #[async_trait]
 impl ChatPlatform for ConnectorPlatform {
     async fn init(command_handler: CommandHandler) -> Result<Box<Self>, ChatPlatformError> {
-        let nats_addr = env::var("NATS_ADDRESS")?;
-        let client = async_nats::connect(nats_addr).await.map_err(|err| {
-            ChatPlatformError::ServiceError(format!("Could not connect to nats: {err}"))
-        })?;
-
-        Ok(Box::new(Self {
-            client,
-            command_handler,
-        }))
+        Ok(Box::new(Self { command_handler }))
     }
 
     async fn run(self) {
         let incoming_subject = format!("{INCOMING_SUBJECT_PREFIX}*");
         let mut subscriber = self
-            .client
+            .command_handler
+            .nats_client
             .queue_subscribe(incoming_subject, "foobot_core".into())
             .await
             .expect("Failed to subscribe to incoming subject");
@@ -44,7 +36,7 @@ impl ChatPlatform for ConnectorPlatform {
                         debug!("Got message: {incoming_message:?}");
                         if let Some(platform) = msg.subject.strip_prefix(INCOMING_SUBJECT_PREFIX) {
                             let platform_ctx = ConnectorPlatformContext {
-                                nats_client: &self.client,
+                                nats_client: &self.command_handler.nats_client,
                                 platform,
                                 msg: &incoming_message,
                             };
@@ -63,14 +55,15 @@ impl ChatPlatform for ConnectorPlatform {
                                     format!("{OUTGOING_SUBJECT_PREFIX}{platform}");
 
                                 if let Err(err) = self
-                                    .client
+                                    .command_handler
+                                    .nats_client
                                     .publish(outgoing_subject, outgoing_message.into())
                                     .await
                                 {
                                     error!("Could not publish response: {err}");
                                 }
 
-                                let _ = self.client.flush().await;
+                                let _ = self.command_handler.nats_client.flush().await;
                             }
                         } else {
                             error!("Received incoming message on an unexpected subject: {msg:?}");
@@ -94,30 +87,14 @@ pub struct ConnectorPlatformContext<'a> {
 #[async_trait]
 impl PlatformContext for ConnectorPlatformContext<'_> {
     async fn get_permissions_internal(&self) -> Permissions {
-        let permissions_request = PermissionsRequest {
-            channel_id: self.msg.channel_id.to_owned(),
-            user_id: self.msg.sender.id.clone(),
-        };
-        let subject = format!(
-            "{PERMISSIONS_SUBJECT_PREFIX}{platform}",
-            platform = self.platform
-        );
-
-        // TODO error handling
-        let message = self
-            .nats_client
-            .request(subject, permissions_request.into())
-            .await
-            .expect("Failed to fetch permissions");
-
-        match PermissionsResponse::try_from(message.payload.as_ref())
-            .expect("Could not deserialize permissions response")
-        {
-            PermissionsResponse::Ok(permissions) => permissions,
-            PermissionsResponse::Error(err) => {
-                panic!("Permissions request error: {err}")
-            }
-        }
+        get_connector_permissions(
+            self.nats_client,
+            self.platform,
+            self.msg.channel_id.clone(),
+            self.msg.sender.id.clone(),
+        )
+        .await
+        .expect("Could not get permissions")
     }
 
     fn get_channel(&self) -> ChannelIdentifier {
@@ -137,4 +114,26 @@ impl PlatformContext for ConnectorPlatformContext<'_> {
     fn get_prefixes(&self) -> Vec<&str> {
         vec!["%"] // TODO
     }
+}
+
+pub async fn get_connector_permissions(
+    nats_client: &Client,
+    platform: &str,
+    channel_id: String,
+    user_id: String,
+) -> anyhow::Result<Permissions> {
+    let permissions_request = PermissionsRequest {
+        channel_id,
+        user_id,
+    };
+    let subject = format!("{PERMISSIONS_SUBJECT_PREFIX}{platform}");
+
+    let message = nats_client
+        .request(subject, permissions_request.into())
+        .await
+        .map_err(|err| anyhow!("NATS request error: {err}"))?;
+
+    let permissions_response: PermissionsResponse = serde_json::from_slice(&message.payload)
+        .context("Could not deserialize response payload")?;
+    permissions_response.map_err(|err| anyhow!("{err}"))
 }
