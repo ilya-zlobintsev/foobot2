@@ -33,16 +33,6 @@ pub trait ChatPlatform {
 pub trait PlatformContext {
     async fn get_permissions_internal(&self) -> Permissions;
 
-    async fn get_permissions(&self) -> Permissions {
-        if let Ok(admin_user) = env::var("ADMIN_USER") {
-            if admin_user == self.get_user_identifier().to_string() {
-                return Permissions::Admin;
-            }
-        }
-
-        self.get_permissions_internal().await
-    }
-
     fn get_channel(&self) -> ChannelIdentifier;
 
     fn get_user_identifier(&self) -> UserIdentifier;

@@ -28,7 +28,7 @@ impl ExecutableCommand for WhoAmI {
             ctx.user,
             ctx.platform_ctx.get_user_identifier(),
             ctx.platform_ctx.get_channel(),
-            ctx.platform_ctx.get_permissions().await,
+            ctx.get_permissions().await,
         )))
     }
 }

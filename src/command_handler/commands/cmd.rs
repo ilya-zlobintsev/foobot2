@@ -62,7 +62,7 @@ impl ExecutableCommand for Cmd {
                 get_base_url(),
                 channel.id,
             )))
-        } else if ctx.platform_ctx.get_permissions().await >= Permissions::ChannelMod {
+        } else if ctx.get_permissions().await >= Permissions::ChannelMod {
             match arguments.next().ok_or_else(|| {
                 CommandError::MissingArgument("must be either add or delete".to_string())
             })? {

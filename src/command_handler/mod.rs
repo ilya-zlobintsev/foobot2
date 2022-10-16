@@ -476,7 +476,7 @@ impl CommandHandler {
             {
                 let command_permissions = builtin_command.get_permissions();
                 if command_permissions > Permissions::Default {
-                    if command_permissions > execution_ctx.platform_ctx.get_permissions().await {
+                    if command_permissions > execution_ctx.get_permissions().await {
                         return Err(CommandError::NoPermissions);
                     }
                 }
@@ -756,6 +756,18 @@ pub struct ExecutionContext<'a, P: PlatformContext> {
     platform_handler: &'a PlatformHandler,
     platform_ctx: P,
     user: &'a User,
+}
+
+impl<P: PlatformContext> ExecutionContext<'_, P> {
+    async fn get_permissions(&self) -> Permissions {
+        if let Ok(Some(admin_user)) = self.db.get_admin_user() {
+            if admin_user.id == self.user.id {
+                return Permissions::Admin;
+            }
+        }
+
+        self.platform_ctx.get_permissions_internal().await
+    }
 }
 
 async fn start_supinic_heartbeat() {
