@@ -11,6 +11,7 @@ pub mod spotify_api;
 pub mod twitch_api;
 
 use anyhow::{anyhow, Context};
+use chrono::{DateTime, Utc};
 use dashmap::DashMap;
 use discord_api::DiscordApi;
 use handlebars::Handlebars;
@@ -451,6 +452,7 @@ impl CommandHandler {
         platform_ctx: P,
     ) -> Result<Option<String>, CommandError> {
         tracing::info!("Processing command {} with {:?}", command, args);
+        let processing_timestamp = Utc::now();
 
         let user_identifier = platform_ctx.get_user_identifier();
         let user = self.db.get_or_create_user(&user_identifier)?;
@@ -467,6 +469,7 @@ impl CommandHandler {
                 platform_handler: &*platform_handler,
                 platform_ctx,
                 user: &user,
+                processing_timestamp,
             };
 
             let (output, cooldown) = if let Some(builtin_command) = self
@@ -644,6 +647,7 @@ impl CommandHandler {
         platform_ctx: ServerPlatformContext,
         arguments: Vec<String>,
     ) -> anyhow::Result<()> {
+        let processing_timestamp = Utc::now();
         let user = self.db.get_or_create_user(&platform_ctx.executing_user)?;
 
         let platform_handler = self.platform_handler.read().await;
@@ -652,6 +656,7 @@ impl CommandHandler {
             platform_handler: &*platform_handler,
             platform_ctx,
             user: &user,
+            processing_timestamp,
         };
 
         let response = execute_command_action(
@@ -756,6 +761,7 @@ pub struct ExecutionContext<'a, P: PlatformContext> {
     platform_handler: &'a PlatformHandler,
     platform_ctx: P,
     user: &'a User,
+    processing_timestamp: DateTime<Utc>,
 }
 
 impl<P: PlatformContext> ExecutionContext<'_, P> {

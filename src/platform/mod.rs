@@ -9,6 +9,7 @@ pub mod twitch;
 use crate::command_handler::CommandHandler;
 use anyhow::anyhow;
 use async_trait::async_trait;
+use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use std::env::{self, VarError};
 use std::fmt::{self, Display};
@@ -40,6 +41,10 @@ pub trait PlatformContext {
     fn get_display_name(&self) -> &str;
 
     fn get_prefixes(&self) -> Vec<&str>;
+
+    fn get_server_timestamp(&self) -> Option<DateTime<Utc>> {
+        None
+    }
 }
 
 #[derive(Clone)]

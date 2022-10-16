@@ -1,5 +1,6 @@
 use super::*;
 use crate::get_version;
+use std::fmt::Write;
 use std::{sync::Arc, time::Instant};
 use tokio::fs;
 
@@ -24,7 +25,7 @@ impl ExecutableCommand for Ping {
 
     async fn execute<'a, P: PlatformContext + Send + Sync>(
         &self,
-        _: &ExecutionContext<'a, P>,
+        ctx: &ExecutionContext<'a, P>,
         _: &str,
         _: Vec<&str>,
     ) -> Result<Option<String>, CommandError> {
@@ -68,12 +69,19 @@ impl ExecutableCommand for Ping {
             }
         }
 
-        Ok(Some(format!(
+        let mut output = format!(
             "Pong! Version: {}, Uptime {}, RAM usage: {} MiB",
             get_version(),
             uptime,
             mem_usage / 1024,
-        )))
+        );
+
+        if let Some(server_timestamp) = ctx.platform_ctx.get_server_timestamp() {
+            let latency = ctx.processing_timestamp - server_timestamp;
+            write!(output, ", chat latency: {}ms", latency.num_milliseconds()).unwrap();
+        }
+
+        Ok(Some(output))
     }
 }
 

@@ -114,6 +114,10 @@ impl PlatformContext for ConnectorPlatformContext<'_> {
     fn get_prefixes(&self) -> Vec<&str> {
         vec!["%"] // TODO
     }
+
+    fn get_server_timestamp(&self) -> Option<DateTime<Utc>> {
+        self.msg.server_timestamp
+    }
 }
 
 pub async fn get_connector_permissions(

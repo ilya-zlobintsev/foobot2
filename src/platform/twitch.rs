@@ -2,6 +2,7 @@ use std::collections::HashSet;
 use std::sync::Arc;
 
 use async_trait::async_trait;
+use chrono::{DateTime, Utc};
 use dashmap::DashMap;
 use std::time::{Duration, Instant};
 use tokio::sync::mpsc::{self, UnboundedSender};
@@ -157,6 +158,8 @@ pub trait TwitchMessage {
     fn get_content(&self) -> &str;
 
     fn get_privmsg(&self) -> Option<&PrivmsgMessage>;
+
+    fn get_server_timestamp(&self) -> Option<DateTime<Utc>>;
 }
 
 impl TwitchMessage for PrivmsgMessage {
@@ -179,6 +182,10 @@ impl TwitchMessage for PrivmsgMessage {
     fn get_privmsg(&self) -> Option<&PrivmsgMessage> {
         Some(self)
     }
+
+    fn get_server_timestamp(&self) -> Option<DateTime<Utc>> {
+        Some(self.server_timestamp)
+    }
 }
 
 impl TwitchMessage for WhisperMessage {
@@ -199,6 +206,10 @@ impl TwitchMessage for WhisperMessage {
     }
 
     fn get_privmsg(&self) -> Option<&PrivmsgMessage> {
+        None
+    }
+
+    fn get_server_timestamp(&self) -> Option<DateTime<Utc>> {
         None
     }
 }
@@ -242,6 +253,10 @@ impl<T: TwitchMessage + std::marker::Sync + Clone> PlatformContext for TwitchExe
 
     fn get_prefixes(&self) -> Vec<&str> {
         self.prefixes.iter().map(|s| s.as_str()).collect()
+    }
+
+    fn get_server_timestamp(&self) -> Option<DateTime<Utc>> {
+        self.msg.get_server_timestamp()
     }
 }
 
