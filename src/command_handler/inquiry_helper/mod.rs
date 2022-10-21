@@ -28,6 +28,7 @@ use super::lingva_api::LingvaApi;
 use super::platform_handler::PlatformHandler;
 use super::twitch_api::helix::HelixApi;
 use super::twitch_api::{get_client_id, get_client_secret, TwitchApi};
+use super::ukraine_alert::UkraineAlertClient;
 use super::{owm_api::OwmApi, spotify_api::SpotifyApi};
 
 #[derive(Serialize, Deserialize)]
@@ -569,6 +570,43 @@ impl HelperDef for FinnhubApi {
                     quote.percent_change.unwrap_or(0.0)
                 ))?;
 
+                Ok(())
+            }
+            Err(e) => Err(RenderError::new(e.to_string())),
+        }
+    }
+}
+
+impl HelperDef for UkraineAlertClient {
+    fn call<'reg: 'rc, 'rc>(
+        &self,
+        _: &Helper,
+        _: &Handlebars,
+        _: &Context,
+        _: &mut RenderContext,
+        out: &mut dyn Output,
+    ) -> HelperResult {
+        let rt = Handle::current();
+
+        match rt.block_on(self.get_alerts()) {
+            Ok(regions) => {
+                let text = regions
+                    .into_iter()
+                    .map(|region| {
+                        let name = region.region_name;
+                        let alerts = region
+                            .active_alerts
+                            .iter()
+                            .map(|alert| alert.r#type.as_ref())
+                            .collect::<Vec<_>>()
+                            .join(",");
+
+                        format!("{name}: {alerts}")
+                    })
+                    .collect::<Vec<_>>()
+                    .join(";");
+
+                out.write(&text)?;
                 Ok(())
             }
             Err(e) => Err(RenderError::new(e.to_string())),

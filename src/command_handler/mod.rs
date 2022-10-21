@@ -9,6 +9,7 @@ pub mod owm_api;
 pub mod platform_handler;
 pub mod spotify_api;
 pub mod twitch_api;
+mod ukraine_alert;
 
 use anyhow::{anyhow, Context};
 use chrono::{DateTime, Utc};
@@ -36,6 +37,7 @@ use self::error::CommandError;
 use self::finnhub_api::FinnhubApi;
 use self::platform_handler::PlatformHandler;
 use crate::command_handler::commands::{create_builtin_commands, ExecutableCommand};
+use crate::command_handler::ukraine_alert::UkraineAlertClient;
 use crate::database::models::Filter;
 use crate::database::{models::User, Database};
 use crate::platform::connector::get_connector_permissions;
@@ -177,10 +179,12 @@ impl CommandHandler {
         };
 
         let lingva_api = LingvaApi::init(lingva_url);
+        let ukraine_alert_client = UkraineAlertClient::default();
 
         let mut template_registry = Handlebars::new();
 
         template_registry.register_helper("translate", Box::new(lingva_api));
+        template_registry.register_helper("ukraine_alerts", Box::new(ukraine_alert_client));
         template_registry.register_helper("args", Box::new(inquiry_helper::args_helper));
         template_registry.register_helper("spotify", Box::new(SpotifyHelper { db: db.clone() }));
         template_registry.register_helper(
