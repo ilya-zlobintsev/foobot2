@@ -157,6 +157,22 @@ pub struct Filter {
     pub replacement: Option<String>,
 }
 
+#[derive(Debug)]
+pub enum EventTriggerCondition {
+    UkraineAlarm(UkraineAlarmCondition),
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct UkraineAlarmCondition {
+    pub region: UkraineAlarmRegion,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub enum UkraineAlarmRegion {
+    RegionId(String),
+    RegionName(String),
+}
+
 #[cfg(test)]
 mod tests {
     use crate::platform::ChannelIdentifier;
