@@ -9,11 +9,11 @@ pipeline:
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
         
-  deploy-swarm:
-    image: docker:latest
-    volumes:
-      - /run/docker.sock:/run/docker.sock
-    commands:
-      - docker service update --image git.hyron.dev/foobot/foobot2 foobot_foobot
+  #deploy-swarm:
+  #  image: docker:latest
+  #  volumes:
+  #    - /run/docker.sock:/run/docker.sock
+  #  commands:
+  #    - docker service update --image git.hyron.dev/foobot/foobot2 foobot_foobot
 
 branches: master

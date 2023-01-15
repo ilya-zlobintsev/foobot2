@@ -285,7 +285,7 @@ impl HelperDef for SpotifyHelper {
 
         match runtime
             .block_on(spotify_api.get_current_song())
-            .map_err(|e| RenderError::new(format!("Spotify API Error: {}", e)))?
+            .map_err(|e| RenderError::new(format!("Spotify API Error: {e:#}")))?
         {
             Some(playback) => {
                 let position = playback.progress_ms / 1000;
@@ -335,7 +335,7 @@ impl HelperDef for SpotifyPlaylistHelper {
 
         match runtime
             .block_on(spotify_api.get_current_song())
-            .map_err(|e| RenderError::new(format!("Spotify API Error: {}", e)))?
+            .map_err(|e| RenderError::new(format!("Spotify API Error: {e:#}")))?
         {
             Some(playback) => {
                 let response = match playback.context {

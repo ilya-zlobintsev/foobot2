@@ -1,5 +1,6 @@
 use std::collections::HashMap;
 
+use anyhow::anyhow;
 use reqwest::{header::HeaderMap, Client, StatusCode};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
@@ -24,7 +25,7 @@ impl SpotifyApi {
             headers,
         }
     }
-    pub async fn get_current_song(&self) -> Result<Option<CurrentPlayback>, reqwest::Error> {
+    pub async fn get_current_song(&self) -> anyhow::Result<Option<CurrentPlayback>> {
         tracing::info!("Getting current song");
 
         let response = self
@@ -39,7 +40,10 @@ impl SpotifyApi {
         match response.status() {
             StatusCode::OK => Ok(response.json().await?),
             StatusCode::NO_CONTENT => Ok(None),
-            _ => unimplemented!(),
+            code => {
+                tracing::error!("{}", response.text().await?);
+                Err(anyhow!("Could not fetch spotify song, status code {code}"))
+            }
         }
     }
 
