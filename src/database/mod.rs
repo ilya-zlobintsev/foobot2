@@ -144,19 +144,15 @@ impl Database {
                                         }
                                     }
                                     Err(e) => {
-                                        tracing::warn!(
-                                            "Error refreshing Spotify token: {}",
-                                            e.to_string()
-                                        )
+                                        tracing::warn!("Error refreshing Spotify token: {e:#}");
                                     }
                                 }
                             }
 
-                            if refresh_in == None {
-                                refresh_in = Some(3600);
-                            }
-
-                            time::sleep(Duration::from_secs(refresh_in.unwrap())).await;
+                            time::sleep(Duration::from_secs(
+                                refresh_in.unwrap_or(3600).try_into().unwrap(),
+                            ))
+                            .await;
                         }
                     });
                 }

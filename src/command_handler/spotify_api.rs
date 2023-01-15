@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use anyhow::anyhow;
+use anyhow::{anyhow, Context as AnyhowContext};
 use reqwest::{header::HeaderMap, Client, StatusCode};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
@@ -75,7 +75,7 @@ impl SpotifyApi {
         client_id: &str,
         client_secret: &str,
         refresh_token: &str,
-    ) -> Result<(String, u64), reqwest::Error> {
+    ) -> anyhow::Result<(String, i64)> {
         let mut payload: HashMap<&str, &str> = HashMap::new();
         payload.insert("grant_type", "refresh_token");
         payload.insert("refresh_token", refresh_token);
@@ -87,17 +87,30 @@ impl SpotifyApi {
             .post("https://accounts.spotify.com/api/token")
             .form(&payload)
             .send()
-            .await?
-            .json::<Value>()
             .await?;
 
-        Ok((
-            response["access_token"].as_str().unwrap().to_string(),
-            response["expires_in"].as_u64().unwrap(),
-        ))
+        if response.status().is_success() {
+            let value = response.json::<Value>().await?;
+            let access_token = value
+                .get("access_token")
+                .and_then(Value::as_str)
+                .context("Auth response has no access_token field")?
+                .to_owned();
+            let expires_in = value
+                .get("expires_in")
+                .and_then(Value::as_i64)
+                .context("Auth response has no expires_In field")?;
+            Ok((access_token, expires_in))
+        } else {
+            Err(anyhow!(
+                "Status code {}: {}",
+                response.status(),
+                response.text().await?
+            ))
+        }
     }
 
-    /// Returns access and refresh tokens
+    /// Returns access and  tokens
     pub async fn get_tokens(
         code: &str,
         client_id: &str,
