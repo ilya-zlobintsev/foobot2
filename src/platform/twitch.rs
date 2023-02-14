@@ -223,15 +223,17 @@ pub struct TwitchExecutionContext<M: TwitchMessage + std::marker::Sync + Clone> 
 #[async_trait]
 impl<T: TwitchMessage + std::marker::Sync + Clone> PlatformContext for TwitchExecutionContext<T> {
     async fn get_permissions_internal(&self) -> Permissions {
-        let mut badges_iter = self.msg.get_badges().iter();
+        let mut permissions = Permissions::Default;
 
-        if badges_iter.any(|badge| (badge.name) == "broadcaster") {
-            Permissions::ChannelOwner
-        } else if badges_iter.any(|badge| badge.name == "moderator") {
-            Permissions::ChannelMod
-        } else {
-            Permissions::Default
+        for badge in self.msg.get_badges() {
+            match badge.name.as_str() {
+                "broadcaster" => permissions = Permissions::ChannelOwner,
+                "moderator" => permissions = Permissions::ChannelMod,
+                _ => (),
+            }
         }
+
+        permissions
     }
 
     fn get_channel(&self) -> ChannelIdentifier {
@@ -417,4 +419,27 @@ pub struct Privmsg {
     pub channel_login: String,
     pub message: String,
     pub reply_to_id: Option<String>,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::TwitchExecutionContext;
+    use crate::platform::PlatformContext;
+    use connector_schema::Permissions;
+    use pretty_assertions::assert_eq;
+    use twitch_irc::message::{IRCMessage, PrivmsgMessage};
+
+    #[tokio::test]
+    async fn mod_message_permissions() {
+        let raw = "@badge-info=subscriber/53;badges=moderator/1,subscriber/12;color=#1E90FF;display-name=Supibot;emotes=;first-msg=0;flags=;id=473c54c7-7bad-4b8a-aa32-d526a1bebbf4;mod=1;returning-chatter=0;room-id=31400525;subscriber=1;tmi-sent-ts=1676400113453;turbo=0;user-id=68136884;user-type=mod :supibot!supibot@supibot.tmi.twitch.tv PRIVMSG #supinic :%whoami";
+        let irc_message = IRCMessage::parse(raw).unwrap();
+        let privmsg = PrivmsgMessage::try_from(irc_message).unwrap();
+
+        let twitch_context = TwitchExecutionContext {
+            msg: privmsg,
+            prefixes: vec!["%".to_owned()],
+        };
+        let permissions = twitch_context.get_permissions_internal().await;
+        assert_eq!(permissions, Permissions::ChannelMod);
+    }
 }
