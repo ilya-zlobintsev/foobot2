@@ -91,6 +91,12 @@ connector-schema = { git = "https://git.hyron.dev/foobot/foobot-chat-connector",
     "json_schema",
 ] }
 
+mu_syntax = { git = "https://github.com/jprochazk/mu" }
+mu_emit = { git = "https://github.com/jprochazk/mu" }
+mu_runtime = { git = "https://github.com/jprochazk/mu" }
+mu_diag = { git = "https://github.com/jprochazk/mu" }
+mu_op = { git = "https://github.com/jprochazk/mu" }
+
 [build-dependencies]
 tonic-build = { version = "0.8.2", features = ["prost"] }
 

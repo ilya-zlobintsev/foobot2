@@ -262,6 +262,12 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e6b4d9b1225d28d360ec6a231d65af1fd99a2a095154c8040689617290569c5c"
 
 [[package]]
+name = "beef"
+version = "0.5.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "3a8241f3ebb85c056b509d4327ad0358fbbba6ffb340bf388f26350aeda225b1"
+
+[[package]]
 name = "binascii"
 version = "0.1.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -831,6 +837,11 @@ dependencies = [
  "http",
  "irc",
  "minecraft-client-rs",
+ "mu_diag",
+ "mu_emit",
+ "mu_op",
+ "mu_runtime",
+ "mu_syntax",
  "once_cell",
  "passwords",
  "pretty_assertions",
@@ -1223,9 +1234,9 @@ dependencies = [
 
 [[package]]
 name = "indexmap"
-version = "1.9.1"
+version = "1.9.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "10a35a97730320ffe8e2d410b5d3b69279b98d2c14bdb8b70ea89ecf7888d41e"
+checksum = "1885e79c1fc4b10f0e172c475f458b7f7b93061064d98c3293e98c5ba0c8b399"
 dependencies = [
  "autocfg",
  "hashbrown",
@@ -1375,6 +1386,29 @@ dependencies = [
 ]
 
 [[package]]
+name = "logos"
+version = "0.12.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "bf8b031682c67a8e3d5446840f9573eb7fe26efe7ec8d195c9ac4c0647c502f1"
+dependencies = [
+ "logos-derive",
+]
+
+[[package]]
+name = "logos-derive"
+version = "0.12.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a1d849148dbaf9661a6151d1ca82b13bb4c4c128146a88d05253b38d4e2f496c"
+dependencies = [
+ "beef",
+ "fnv",
+ "proc-macro2",
+ "quote",
+ "regex-syntax",
+ "syn",
+]
+
+[[package]]
 name = "loom"
 version = "0.5.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1470,6 +1504,82 @@ dependencies = [
  "log",
  "wasi 0.11.0+wasi-snapshot-preview1",
  "windows-sys",
+]
+
+[[package]]
+name = "mu_derive"
+version = "0.0.0"
+source = "git+https://github.com/jprochazk/mu#1c14fce942117a9e603a00bcd20fef00d677ca88"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn",
+]
+
+[[package]]
+name = "mu_diag"
+version = "0.0.1"
+source = "git+https://github.com/jprochazk/mu#1c14fce942117a9e603a00bcd20fef00d677ca88"
+dependencies = [
+ "beef",
+ "mu_span",
+ "owo-colors",
+ "thiserror",
+]
+
+[[package]]
+name = "mu_emit"
+version = "0.0.0"
+source = "git+https://github.com/jprochazk/mu#1c14fce942117a9e603a00bcd20fef00d677ca88"
+dependencies = [
+ "beef",
+ "indexmap",
+ "mu_diag",
+ "mu_op",
+ "mu_runtime",
+ "mu_span",
+ "mu_syntax",
+]
+
+[[package]]
+name = "mu_op"
+version = "0.0.0"
+source = "git+https://github.com/jprochazk/mu#1c14fce942117a9e603a00bcd20fef00d677ca88"
+dependencies = [
+ "beef",
+ "indexmap",
+ "paste",
+]
+
+[[package]]
+name = "mu_runtime"
+version = "0.0.0"
+source = "git+https://github.com/jprochazk/mu#1c14fce942117a9e603a00bcd20fef00d677ca88"
+dependencies = [
+ "beef",
+ "indexmap",
+ "mu_derive",
+ "mu_diag",
+ "mu_op",
+ "mu_span",
+ "paste",
+]
+
+[[package]]
+name = "mu_span"
+version = "0.0.1"
+source = "git+https://github.com/jprochazk/mu#1c14fce942117a9e603a00bcd20fef00d677ca88"
+
+[[package]]
+name = "mu_syntax"
+version = "0.0.1"
+source = "git+https://github.com/jprochazk/mu#1c14fce942117a9e603a00bcd20fef00d677ca88"
+dependencies = [
+ "beef",
+ "logos",
+ "mu_diag",
+ "mu_span",
+ "stacker",
 ]
 
 [[package]]
@@ -1619,6 +1729,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "owo-colors"
+version = "3.5.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "c1b04fb49957986fdce4d6ee7a65027d55d4b6d2265e5848bbb507b58ccfdb6f"
+
+[[package]]
 name = "parking_lot"
 version = "0.11.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1674,6 +1790,12 @@ checksum = "b5dee744d341c868910c3f97727c610c9ef781fde5a5621f238163dccb7dee5c"
 dependencies = [
  "random-pick",
 ]
+
+[[package]]
+name = "paste"
+version = "1.0.11"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d01a5bd0424d00070b0098dd17ebca6f961a959dead1dbcbbbc1d1cd8d3deeba"
 
 [[package]]
 name = "pear"
@@ -1997,6 +2119,15 @@ name = "protobuf"
 version = "2.28.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "106dd99e98437432fed6519dedecfade6a06a73bb7b2a1e019fdd2bee5778d94"
+
+[[package]]
+name = "psm"
+version = "0.1.21"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "5787f7cda34e3033a72192c018bc5883100330f362ef279a8cbccfce8bb4e874"
+dependencies = [
+ "cc",
+]
 
 [[package]]
 name = "quote"
@@ -2751,6 +2882,19 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "4564168c00635f88eaed410d5efa8131afa8d8699a612c80c455a0ba05c21045"
 dependencies = [
  "memchr",
+]
+
+[[package]]
+name = "stacker"
+version = "0.1.15"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "c886bd4480155fd3ef527d45e9ac8dd7118a898a46530b7b94c3e21866259fce"
+dependencies = [
+ "cc",
+ "cfg-if",
+ "libc",
+ "psm",
+ "winapi",
 ]
 
 [[package]]
