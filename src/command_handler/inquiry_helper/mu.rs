@@ -1,7 +1,7 @@
 use handlebars::{
     Context, Handlebars, Helper, HelperDef, HelperResult, Output, RenderContext, RenderError,
 };
-use mu::{EvalError, Mu};
+use mu::{EvalError, Mu, Value};
 
 #[derive(Default)]
 pub struct MuHandler;
@@ -24,7 +24,7 @@ impl HelperDef for MuHandler {
             .collect::<Vec<String>>()
             .join(" ");
 
-        match mu.eval::<String>(&input) {
+        match mu.eval::<Value>(&input) {
             Ok(value) => {
                 write!(out, "{value}")?;
                 Ok(())
