@@ -1,7 +1,7 @@
 use handlebars::{
     Context, Handlebars, Helper, HelperDef, HelperResult, Output, RenderContext, RenderError,
 };
-use mu::Mu;
+use mu::{EvalError, Mu};
 
 #[derive(Default)]
 pub struct MuHandler;
@@ -29,9 +29,15 @@ impl HelperDef for MuHandler {
                 write!(out, "{value}")?;
                 Ok(())
             }
-            Err(_) => Err(RenderError::new(format!(
-                "Failed to eval mu script (cannot give an error right now due to mu changes)",
-            ))),
+            Err(err) => {
+                let err_text = match err {
+                    EvalError::Parse(err) => format!("{err:?}"),
+                    EvalError::Runtime(err) => format!("{err:?}"),
+                };
+                Err(RenderError::new(format!(
+                    "Failed to eval mu script {err_text}"
+                )))
+            }
         }
     }
 }
