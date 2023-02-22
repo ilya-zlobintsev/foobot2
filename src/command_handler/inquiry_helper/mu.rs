@@ -1,7 +1,7 @@
 use handlebars::{
     Context, Handlebars, Helper, HelperDef, HelperResult, Output, RenderContext, RenderError,
 };
-use mu_runtime::{value::object::Registry, Handle, Isolate, Value};
+use mu::Mu;
 
 #[derive(Default)]
 pub struct MuHandler;
@@ -15,8 +15,7 @@ impl HelperDef for MuHandler {
         _: &mut RenderContext<'reg, 'rc>,
         out: &mut dyn Output,
     ) -> HelperResult {
-        let emit_ctx = mu_emit::Context::new();
-        let mut vm = Isolate::new(Handle::alloc(Registry::new()));
+        let mu = Mu::new();
 
         let input = h
             .params()
@@ -25,19 +24,14 @@ impl HelperDef for MuHandler {
             .collect::<Vec<String>>()
             .join(" ");
 
-        let module = mu_syntax::parse(&input).unwrap();
-        let module = mu_emit::emit(&emit_ctx, "code", &module).unwrap();
-        let main = module.main();
-        let result = vm.call(Value::object(main), &[], Value::none());
-
-        match result {
+        match mu.eval::<String>(&input) {
             Ok(value) => {
                 write!(out, "{value}")?;
                 Ok(())
             }
-            Err(err) => Err(RenderError::new(
-                format!("Failed to eval mu script: {err}",),
-            )),
+            Err(_) => Err(RenderError::new(format!(
+                "Failed to eval mu script (cannot give an error right now due to mu changes)",
+            ))),
         }
     }
 }

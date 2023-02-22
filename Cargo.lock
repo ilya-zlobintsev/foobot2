@@ -837,11 +837,7 @@ dependencies = [
  "http",
  "irc",
  "minecraft-client-rs",
- "mu_diag",
- "mu_emit",
- "mu_op",
- "mu_runtime",
- "mu_syntax",
+ "mu",
  "once_cell",
  "passwords",
  "pretty_assertions",
@@ -1507,9 +1503,23 @@ dependencies = [
 ]
 
 [[package]]
+name = "mu"
+version = "0.0.0"
+source = "git+https://github.com/jprochazk/mu#151c380095b3b796fd657a2db4c4179030623d76"
+dependencies = [
+ "beef",
+ "indexmap",
+ "mu_derive",
+ "mu_diag",
+ "mu_span",
+ "mu_syntax",
+ "paste",
+]
+
+[[package]]
 name = "mu_derive"
 version = "0.0.0"
-source = "git+https://github.com/jprochazk/mu#1c14fce942117a9e603a00bcd20fef00d677ca88"
+source = "git+https://github.com/jprochazk/mu#151c380095b3b796fd657a2db4c4179030623d76"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -1519,7 +1529,7 @@ dependencies = [
 [[package]]
 name = "mu_diag"
 version = "0.0.1"
-source = "git+https://github.com/jprochazk/mu#1c14fce942117a9e603a00bcd20fef00d677ca88"
+source = "git+https://github.com/jprochazk/mu#151c380095b3b796fd657a2db4c4179030623d76"
 dependencies = [
  "beef",
  "mu_span",
@@ -1528,52 +1538,14 @@ dependencies = [
 ]
 
 [[package]]
-name = "mu_emit"
-version = "0.0.0"
-source = "git+https://github.com/jprochazk/mu#1c14fce942117a9e603a00bcd20fef00d677ca88"
-dependencies = [
- "beef",
- "indexmap",
- "mu_diag",
- "mu_op",
- "mu_runtime",
- "mu_span",
- "mu_syntax",
-]
-
-[[package]]
-name = "mu_op"
-version = "0.0.0"
-source = "git+https://github.com/jprochazk/mu#1c14fce942117a9e603a00bcd20fef00d677ca88"
-dependencies = [
- "beef",
- "indexmap",
- "paste",
-]
-
-[[package]]
-name = "mu_runtime"
-version = "0.0.0"
-source = "git+https://github.com/jprochazk/mu#1c14fce942117a9e603a00bcd20fef00d677ca88"
-dependencies = [
- "beef",
- "indexmap",
- "mu_derive",
- "mu_diag",
- "mu_op",
- "mu_span",
- "paste",
-]
-
-[[package]]
 name = "mu_span"
 version = "0.0.1"
-source = "git+https://github.com/jprochazk/mu#1c14fce942117a9e603a00bcd20fef00d677ca88"
+source = "git+https://github.com/jprochazk/mu#151c380095b3b796fd657a2db4c4179030623d76"
 
 [[package]]
 name = "mu_syntax"
 version = "0.0.1"
-source = "git+https://github.com/jprochazk/mu#1c14fce942117a9e603a00bcd20fef00d677ca88"
+source = "git+https://github.com/jprochazk/mu#151c380095b3b796fd657a2db4c4179030623d76"
 dependencies = [
  "beef",
  "logos",
