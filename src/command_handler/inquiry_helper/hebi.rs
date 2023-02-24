@@ -1,12 +1,12 @@
 use handlebars::{
     Context, Handlebars, Helper, HelperDef, HelperResult, Output, RenderContext, RenderError,
 };
-use mu::{EvalError, Mu, Value};
+use hebi::{Hebi, Value};
 
 #[derive(Default)]
-pub struct MuHandler;
+pub struct HebiHandler;
 
-impl HelperDef for MuHandler {
+impl HelperDef for HebiHandler {
     fn call<'reg: 'rc, 'rc>(
         &self,
         h: &Helper<'reg, 'rc>,
@@ -15,7 +15,7 @@ impl HelperDef for MuHandler {
         _: &mut RenderContext<'reg, 'rc>,
         out: &mut dyn Output,
     ) -> HelperResult {
-        let mu = Mu::new();
+        let hebi = Hebi::new();
 
         let input = h
             .params()
@@ -24,20 +24,12 @@ impl HelperDef for MuHandler {
             .collect::<Vec<String>>()
             .join(" ");
 
-        match mu.eval::<Value>(&input) {
+        match hebi.eval::<Value>(&input) {
             Ok(value) => {
                 write!(out, "{value}")?;
                 Ok(())
             }
-            Err(err) => {
-                let err_text = match err {
-                    EvalError::Parse(err) => format!("{err:?}"),
-                    EvalError::Runtime(err) => format!("{err:?}"),
-                };
-                Err(RenderError::new(format!(
-                    "Failed to eval mu script {err_text}"
-                )))
-            }
+            Err(err) => Err(RenderError::new(format!("Failed to eval mu script {err}"))),
         }
     }
 }

@@ -832,12 +832,12 @@ dependencies = [
  "frankenstein",
  "futures",
  "handlebars",
+ "hebi",
  "hex",
  "hmac",
  "http",
  "irc",
  "minecraft-client-rs",
- "mu",
  "once_cell",
  "passwords",
  "pretty_assertions",
@@ -1069,6 +1069,63 @@ name = "hashbrown"
 version = "0.12.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "8a9ee70c43aaf417c914396645a0fa852624801b24ebb7ae78fe8272889ac888"
+
+[[package]]
+name = "hebi"
+version = "0.0.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b662de5f39948c9e7c7f7ae4a404260bb653f1417771506af47f438cf2ad70b6"
+dependencies = [
+ "beef",
+ "hebi_derive",
+ "hebi_diag",
+ "hebi_span",
+ "hebi_syntax",
+ "indexmap",
+ "paste",
+]
+
+[[package]]
+name = "hebi_derive"
+version = "0.0.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a5c51ea945c713f18d7ec236909e106360671191882d9c0ff32d584f56902da3"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn",
+]
+
+[[package]]
+name = "hebi_diag"
+version = "0.0.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "2985eb186d6c6bdc03aa6eba7b9fe2eef75bb3d8a49f9d1e85e2d87108bd9cbc"
+dependencies = [
+ "beef",
+ "hebi_span",
+ "owo-colors",
+ "thiserror",
+]
+
+[[package]]
+name = "hebi_span"
+version = "0.0.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "6255d07b3e10c8517df11a89fedfedec13ef9be26d781c35569da4eaffe3e2cd"
+
+[[package]]
+name = "hebi_syntax"
+version = "0.0.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a774d51cce1764c7cb9dad35bf6ea2345c80f98d2a6dc2bf802b1c738f9ff02a"
+dependencies = [
+ "beef",
+ "hebi_diag",
+ "hebi_span",
+ "logos",
+ "stacker",
+]
 
 [[package]]
 name = "heck"
@@ -1500,58 +1557,6 @@ dependencies = [
  "log",
  "wasi 0.11.0+wasi-snapshot-preview1",
  "windows-sys",
-]
-
-[[package]]
-name = "mu"
-version = "0.0.0"
-source = "git+https://github.com/jprochazk/mu#151c380095b3b796fd657a2db4c4179030623d76"
-dependencies = [
- "beef",
- "indexmap",
- "mu_derive",
- "mu_diag",
- "mu_span",
- "mu_syntax",
- "paste",
-]
-
-[[package]]
-name = "mu_derive"
-version = "0.0.0"
-source = "git+https://github.com/jprochazk/mu#151c380095b3b796fd657a2db4c4179030623d76"
-dependencies = [
- "proc-macro2",
- "quote",
- "syn",
-]
-
-[[package]]
-name = "mu_diag"
-version = "0.0.1"
-source = "git+https://github.com/jprochazk/mu#151c380095b3b796fd657a2db4c4179030623d76"
-dependencies = [
- "beef",
- "mu_span",
- "owo-colors",
- "thiserror",
-]
-
-[[package]]
-name = "mu_span"
-version = "0.0.1"
-source = "git+https://github.com/jprochazk/mu#151c380095b3b796fd657a2db4c4179030623d76"
-
-[[package]]
-name = "mu_syntax"
-version = "0.0.1"
-source = "git+https://github.com/jprochazk/mu#151c380095b3b796fd657a2db4c4179030623d76"
-dependencies = [
- "beef",
- "logos",
- "mu_diag",
- "mu_span",
- "stacker",
 ]
 
 [[package]]

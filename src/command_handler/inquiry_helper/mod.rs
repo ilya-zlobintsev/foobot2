@@ -1,5 +1,5 @@
 mod forsencode;
-pub mod mu;
+pub mod hebi;
 pub mod script;
 
 use std::env;
