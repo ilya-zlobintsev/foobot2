@@ -127,3 +127,12 @@ pub struct StartCommercialInfo {
     pub message: String,
     pub retry_after: i32,
 }
+
+#[derive(Default, Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct UserBanInfo {
+    pub broadcaster_id: String,
+    pub moderator_id: String,
+    pub user_id: String,
+    pub created_at: String,
+    pub end_time: String,
+}

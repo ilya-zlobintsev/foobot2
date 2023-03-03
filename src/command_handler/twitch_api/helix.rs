@@ -93,8 +93,8 @@ impl<C: LoginCredentials> HelixApi<C> {
 
     pub async fn get_users(
         &self,
-        logins: Option<&Vec<&str>>,
-        ids: Option<&Vec<&str>>,
+        logins: Option<&[&str]>,
+        ids: Option<&[&str]>,
     ) -> anyhow::Result<Vec<User>> {
         let mut results = Vec::new();
 
@@ -275,6 +275,51 @@ impl<C: LoginCredentials> HelixApi<C> {
         assert_eq!(info.length, length);
 
         Ok(info)
+    }
+
+    pub async fn ban_user(
+        &self,
+        broadcaster_id: &str,
+        user_id: &str,
+        duration: Option<i32>,
+    ) -> anyhow::Result<()> {
+        let self_id = self.get_self_user().await?.id;
+        debug!("Self id: {self_id}");
+
+        let payload = json!({
+            "data": {
+                "user_id": user_id,
+                "duration": duration,
+            }
+        });
+        debug!("Timeout payload: {payload}");
+
+        let response = self
+            .post("/moderation/bans")
+            .await?
+            .query(&[
+                ("broadcaster_id", broadcaster_id),
+                ("moderator_id", &self_id),
+            ])
+            .json(&payload)
+            .send()
+            .await?;
+
+        response_ok(&response)?;
+
+        Ok(())
+    }
+
+    pub async fn ban_user_by_name(
+        &self,
+        broadcaster_id: &str,
+        user_name: &str,
+        duration: Option<i32>,
+    ) -> anyhow::Result<()> {
+        let users = self.get_users(Some(&[user_name]), None).await?;
+        debug!("Fetched user info");
+        let user = users.first().context("Empty users response")?;
+        self.ban_user(broadcaster_id, &user.id, duration).await
     }
 }
 

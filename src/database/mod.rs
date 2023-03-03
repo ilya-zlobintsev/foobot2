@@ -854,7 +854,8 @@ impl From<diesel::result::Error> for DatabaseError {
 }
 
 impl From<UserIdentifierError> for DatabaseError {
-    fn from(_: UserIdentifierError) -> Self {
+    fn from(e: UserIdentifierError) -> Self {
+        error!("Invalid user identifier: {e:?}");
         Self::InvalidValue
     }
 }

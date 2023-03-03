@@ -209,13 +209,8 @@ async fn get_friendly_names(
 
         let results = results.clone();
         handles.push(tokio::spawn(async move {
-            match helix
-                .get_users(
-                    None,
-                    Some(&twitch_channels.keys().map(|s| s.as_str()).collect()),
-                )
-                .await
-            {
+            let channels: Vec<_> = twitch_channels.keys().map(|s| s.as_str()).collect();
+            match helix.get_users(None, Some(&channels)).await {
                 Ok(users) => {
                     let mut results = results.lock().await;
 

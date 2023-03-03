@@ -148,7 +148,11 @@ impl UserIdentifier {
                 "twitch" => Ok(Self::TwitchID(user_id.to_owned())),
                 "discord" => Ok(Self::DiscordID(user_id.to_owned())),
                 "matrix" => Ok(Self::MatrixId(user_id.to_owned())),
-                _ => Err(UserIdentifierError::InvalidPlatform),
+                "irc" => Ok(Self::IrcName(user_id.to_owned())),
+                _ => {
+                    error!("Unrecognized platform {platform}");
+                    Err(UserIdentifierError::InvalidPlatform)
+                }
             }
         }
     }

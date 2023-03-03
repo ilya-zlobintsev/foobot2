@@ -38,6 +38,7 @@ const TWITCH_BOT_SCOPES: &[&str] = &[
     "whispers:read",
     "whispers:edit",
     "channel:moderate",
+    "moderator:manage:banned_users",
 ];
 
 type StateStorage = State<DashMap<String, String>>;

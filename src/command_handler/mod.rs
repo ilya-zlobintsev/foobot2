@@ -248,6 +248,12 @@ impl CommandHandler {
                 "twitch_commercial",
                 Box::new(CommercialHelper { db: db.clone() }),
             );
+            template_registry.register_helper(
+                "twitch_timeout",
+                Box::new(TwitchTimeoutHelper {
+                    twitch_api: twitch_api.clone(),
+                }),
+            );
         }
 
         template_registry.register_helper("get", Box::new(HttpHelper::init()));
@@ -306,11 +312,14 @@ impl CommandHandler {
         }
         tracing::info!("Mirroring channels: {:?}", mirror_connections);
 
-        let blocked_users_var = env::var("BLOCKED_USERS").unwrap_or_default();
-        let blocked_users = blocked_users_var
-            .split(',')
-            .map(|raw_identifier| UserIdentifier::from_string(raw_identifier).unwrap())
-            .collect();
+        let blocked_users = env::var("BLOCKED_USERS")
+            .map(|blocked_users| {
+                blocked_users
+                    .split(',')
+                    .map(|raw_identifier| UserIdentifier::from_string(raw_identifier).unwrap())
+                    .collect()
+            })
+            .unwrap_or_default();
 
         start_supinic_heartbeat().await;
 
@@ -578,7 +587,7 @@ impl CommandHandler {
 
                 let users_response = twitch_api
                     .helix_api
-                    .get_users(None, Some(&vec![channel_id]))
+                    .get_users(None, Some(&[channel_id]))
                     .await?;
 
                 let channel_login = &users_response.first().expect("User not found").login;
@@ -586,7 +595,7 @@ impl CommandHandler {
                 match twitch_api.get_channel_mods(channel_login).await?.contains(
                     &twitch_api
                         .helix_api
-                        .get_users(None, Some(&vec![&twitch_id]))
+                        .get_users(None, Some(&[&twitch_id]))
                         .await?
                         .first()
                         .unwrap()

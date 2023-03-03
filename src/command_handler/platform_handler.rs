@@ -12,7 +12,7 @@ use std::{collections::HashMap, fmt::Display};
 use tokio::sync::Mutex;
 use twitch_irc::login::RefreshingLoginCredentials;
 
-type TwitchApi = super::twitch_api::TwitchApi<RefreshingLoginCredentials<Database>>;
+pub type TwitchApi = super::twitch_api::TwitchApi<RefreshingLoginCredentials<Database>>;
 
 pub struct PlatformHandler {
     pub twitch_api: Option<TwitchApi>,
