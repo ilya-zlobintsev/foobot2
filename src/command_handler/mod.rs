@@ -42,7 +42,7 @@ use crate::command_handler::ukraine_alert::UkraineAlertClient;
 use crate::database::models::Filter;
 use crate::database::{models::User, Database};
 use crate::platform::connector::get_connector_permissions;
-use crate::platform::minecraft;
+use crate::platform::{minecraft, UserIdentifier};
 use crate::platform::{ChannelIdentifier, Permissions, PlatformContext, ServerPlatformContext};
 
 const DEFAULT_COOLDOWN: u64 = 5;
@@ -76,6 +76,7 @@ pub struct CommandHandler {
     cooldowns: Arc<RwLock<Vec<(u64, String)>>>, // User id and command
     command_triggers: Arc<DashMap<u64, Arc<DashMap<String, String>>>>, // Channel id, trigger phrase and command name
     mirror_connections: Arc<HashMap<String, ChannelIdentifier>>,       // from and to channel
+    blocked_users: Arc<Vec<UserIdentifier>>,
 }
 
 impl CommandHandler {
@@ -305,6 +306,12 @@ impl CommandHandler {
         }
         tracing::info!("Mirroring channels: {:?}", mirror_connections);
 
+        let blocked_users_var = env::var("BLOCKED_USERS").unwrap_or_default();
+        let blocked_users = blocked_users_var
+            .split(',')
+            .map(|raw_identifier| UserIdentifier::from_string(raw_identifier).unwrap())
+            .collect();
+
         start_supinic_heartbeat().await;
 
         Self {
@@ -316,6 +323,7 @@ impl CommandHandler {
             command_triggers: Arc::new(DashMap::new()),
             builtin_commands: Arc::new(builtin_commands),
             nats_client,
+            blocked_users: Arc::new(blocked_users),
         }
     }
 
@@ -477,6 +485,7 @@ impl CommandHandler {
                 platform_ctx,
                 user: &user,
                 processing_timestamp,
+                blocked_users: &self.blocked_users,
             };
 
             let (output, cooldown) = if let Some(builtin_command) = self
@@ -485,10 +494,9 @@ impl CommandHandler {
                 .find(|cmd| cmd.get_names().contains(&command))
             {
                 let command_permissions = builtin_command.get_permissions();
-                if command_permissions > Permissions::Default {
-                    if command_permissions > execution_ctx.get_permissions().await {
-                        return Err(CommandError::NoPermissions);
-                    }
+                let user_permissions = execution_ctx.get_permissions().await?;
+                if command_permissions > user_permissions {
+                    return Err(CommandError::NoPermissions);
                 }
 
                 let cooldown = builtin_command.get_cooldown();
@@ -664,6 +672,7 @@ impl CommandHandler {
             platform_ctx,
             user: &user,
             processing_timestamp,
+            blocked_users: &self.blocked_users,
         };
 
         let response = execute_command_action(
@@ -769,17 +778,23 @@ pub struct ExecutionContext<'a, P: PlatformContext> {
     platform_ctx: P,
     user: &'a User,
     processing_timestamp: DateTime<Utc>,
+    blocked_users: &'a [UserIdentifier],
 }
 
 impl<P: PlatformContext> ExecutionContext<'_, P> {
-    async fn get_permissions(&self) -> Permissions {
+    async fn get_permissions(&self) -> Result<Permissions, CommandError> {
         if let Ok(Some(admin_user)) = self.db.get_admin_user() {
             if admin_user.id == self.user.id {
-                return Permissions::Admin;
+                return Ok(Permissions::Admin);
             }
         }
 
-        self.platform_ctx.get_permissions_internal().await
+        let identifier = self.platform_ctx.get_user_identifier();
+        if self.blocked_users.contains(&identifier) {
+            return Err(CommandError::NoPermissions);
+        };
+
+        Ok(self.platform_ctx.get_permissions_internal().await)
     }
 }
 
