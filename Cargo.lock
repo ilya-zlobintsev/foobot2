@@ -1072,9 +1072,9 @@ checksum = "8a9ee70c43aaf417c914396645a0fa852624801b24ebb7ae78fe8272889ac888"
 
 [[package]]
 name = "hebi"
-version = "0.0.1"
+version = "0.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b662de5f39948c9e7c7f7ae4a404260bb653f1417771506af47f438cf2ad70b6"
+checksum = "4813c197039849c6a03e7b9c32affd04128ce60da43d1debb30af2867d4fe173"
 dependencies = [
  "beef",
  "hebi_derive",
@@ -1087,10 +1087,11 @@ dependencies = [
 
 [[package]]
 name = "hebi_derive"
-version = "0.0.1"
+version = "0.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a5c51ea945c713f18d7ec236909e106360671191882d9c0ff32d584f56902da3"
+checksum = "718a9db55cabdf1dbfc1cb5ae8f661c27506a475279d79255471a5a0df646e7c"
 dependencies = [
+ "proc-macro-crate",
  "proc-macro2",
  "quote",
  "syn",
@@ -1098,9 +1099,9 @@ dependencies = [
 
 [[package]]
 name = "hebi_diag"
-version = "0.0.1"
+version = "0.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2985eb186d6c6bdc03aa6eba7b9fe2eef75bb3d8a49f9d1e85e2d87108bd9cbc"
+checksum = "86db97202b23a9526ec4488e23d70c6d4abdfba23b73223d379185ff74ae53a0"
 dependencies = [
  "beef",
  "hebi_span",
@@ -1116,9 +1117,9 @@ checksum = "6255d07b3e10c8517df11a89fedfedec13ef9be26d781c35569da4eaffe3e2cd"
 
 [[package]]
 name = "hebi_syntax"
-version = "0.0.1"
+version = "0.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a774d51cce1764c7cb9dad35bf6ea2345c80f98d2a6dc2bf802b1c738f9ff02a"
+checksum = "d3ed6945c9b22d2cc27ff963b8125068ee1acd51e78b4bdab64c520c9266da5d"
 dependencies = [
  "beef",
  "hebi_diag",
@@ -1954,6 +1955,16 @@ checksum = "a49e86d2c26a24059894a3afa13fd17d063419b05dfb83f06d9c3566060c3f5a"
 dependencies = [
  "proc-macro2",
  "syn",
+]
+
+[[package]]
+name = "proc-macro-crate"
+version = "1.3.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "7f4c021e1093a56626774e81216a4ce732a735e5bad4868a03f3ed65ca0c3919"
+dependencies = [
+ "once_cell",
+ "toml_edit",
 ]
 
 [[package]]
@@ -3177,6 +3188,23 @@ dependencies = [
 ]
 
 [[package]]
+name = "toml_datetime"
+version = "0.6.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "3ab8ed2edee10b50132aed5f331333428b011c99402b5a534154ed15746f9622"
+
+[[package]]
+name = "toml_edit"
+version = "0.19.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "9a1eb0622d28f4b9c90adc4ea4b2b46b47663fde9ac5fafcb14a1369d5508825"
+dependencies = [
+ "indexmap",
+ "toml_datetime",
+ "winnow",
+]
+
+[[package]]
 name = "tonic"
 version = "0.8.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3891,6 +3919,15 @@ name = "windows_x86_64_msvc"
 version = "0.36.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c811ca4a8c853ef420abd8592ba53ddbbac90410fab6903b3e79972a631f7680"
+
+[[package]]
+name = "winnow"
+version = "0.3.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "c95fb4ff192527911dd18eb138ac30908e7165b8944e528b6af93aa4c842d345"
+dependencies = [
+ "memchr",
+]
 
 [[package]]
 name = "winreg"

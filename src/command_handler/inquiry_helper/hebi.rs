@@ -15,7 +15,7 @@ impl HelperDef for HebiHandler {
         _: &mut RenderContext<'reg, 'rc>,
         out: &mut dyn Output,
     ) -> HelperResult {
-        let hebi = Hebi::new();
+        let hebi = Hebi::default();
 
         let input = h
             .params()
