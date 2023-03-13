@@ -91,7 +91,7 @@ connector-schema = { git = "https://git.hyron.dev/foobot/foobot-chat-connector",
     "json_schema",
 ] }
 
-hebi = "0.2.0"
+hebi = "0.3.0"
 
 
 [build-dependencies]

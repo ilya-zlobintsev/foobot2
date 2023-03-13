@@ -653,9 +653,9 @@ checksum = "77c90badedccf4105eca100756a0b1289e191f6fcbdadd3cee1d2f614f97da8f"
 
 [[package]]
 name = "dyn-clone"
-version = "1.0.9"
+version = "1.0.11"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4f94fa09c2aeea5b8839e414b7b841bf429fd25b9c522116ac97ee87856d88b2"
+checksum = "68b0cf012f1230e43cd00ebb729c6bb58707ecfa8ad08b52ef3a4ccd2697fc30"
 
 [[package]]
 name = "ed25519"
@@ -1072,11 +1072,12 @@ checksum = "8a9ee70c43aaf417c914396645a0fa852624801b24ebb7ae78fe8272889ac888"
 
 [[package]]
 name = "hebi"
-version = "0.2.0"
+version = "0.3.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4813c197039849c6a03e7b9c32affd04128ce60da43d1debb30af2867d4fe173"
+checksum = "93ddd7465eaef848c613a26054063473a740a5fd89f9e8e0126c847c4f41bafb"
 dependencies = [
  "beef",
+ "dyn-clone",
  "hebi_derive",
  "hebi_diag",
  "hebi_span",
@@ -1087,9 +1088,9 @@ dependencies = [
 
 [[package]]
 name = "hebi_derive"
-version = "0.2.0"
+version = "0.3.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "718a9db55cabdf1dbfc1cb5ae8f661c27506a475279d79255471a5a0df646e7c"
+checksum = "e6f3723e6fadeb610aa71ae0fdde43e9e9e22fd0d13a71936c9185486afcc383"
 dependencies = [
  "proc-macro-crate",
  "proc-macro2",
@@ -1117,9 +1118,9 @@ checksum = "6255d07b3e10c8517df11a89fedfedec13ef9be26d781c35569da4eaffe3e2cd"
 
 [[package]]
 name = "hebi_syntax"
-version = "0.2.0"
+version = "0.3.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d3ed6945c9b22d2cc27ff963b8125068ee1acd51e78b4bdab64c520c9266da5d"
+checksum = "303e373d28b8c27354058f3a6f20405b153fa34975da5dee12a4e27d0ada8244"
 dependencies = [
  "beef",
  "hebi_diag",

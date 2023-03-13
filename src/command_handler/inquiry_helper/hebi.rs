@@ -29,7 +29,9 @@ impl HelperDef for HebiHandler {
                 write!(out, "{value}")?;
                 Ok(())
             }
-            Err(err) => Err(RenderError::new(format!("Failed to eval mu script {err}"))),
+            Err(err) => Err(RenderError::new(format!(
+                "Failed to eval hebi script {err}"
+            ))),
         }
     }
 }
