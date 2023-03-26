@@ -3,9 +3,11 @@ use std::str::FromStr;
 use crate::platform::ChannelIdentifier;
 
 use super::schema::*;
+use diesel::Queryable;
 use rocket_okapi::okapi::schemars::JsonSchema;
 use rocket_okapi::{okapi::schemars, OpenApiFromRequest};
 use serde::{Deserialize, Serialize};
+use strum::EnumString;
 
 #[derive(
     Queryable,
@@ -30,11 +32,11 @@ pub struct User {
 
 impl User {
     pub fn merge(&mut self, other: User) {
-        if self.twitch_id == None && other.twitch_id != None {
+        if self.twitch_id.is_none() && other.twitch_id.is_some() {
             self.twitch_id = other.twitch_id;
         }
 
-        if self.discord_id == None && other.discord_id != None {
+        if self.discord_id.is_none() && other.discord_id.is_some() {
             self.discord_id = other.discord_id;
         }
     }
@@ -79,6 +81,23 @@ pub struct Command {
     pub channel_id: u64,
     pub cooldown: Option<u64>,
     pub triggers: Option<String>,
+    #[diesel(deserialize_as = String)]
+    pub mode: CommandMode,
+}
+
+#[derive(Debug, PartialEq, Eq, Serialize, JsonSchema, EnumString, strum::Display)]
+#[strum(serialize_all = "lowercase")]
+pub enum CommandMode {
+    Template,
+    Hebi,
+}
+
+impl TryFrom<String> for CommandMode {
+    type Error = strum::ParseError;
+
+    fn try_from(value: String) -> Result<Self, Self::Error> {
+        Self::from_str(&value)
+    }
 }
 
 #[derive(Insertable, Debug, PartialEq, Eq)]

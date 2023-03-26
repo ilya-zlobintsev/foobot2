@@ -1,5 +1,5 @@
 use super::*;
-use crate::command_handler::execute_command_action;
+use crate::command_handler::execute_template_command;
 use handlebars::Handlebars;
 use std::sync::Arc;
 
@@ -28,7 +28,7 @@ impl ExecutableCommand for Debug {
         args: Vec<&str>,
     ) -> Result<Option<String>, CommandError> {
         let action = args.join(" ");
-        execute_command_action(self.template_registry.clone(), action, ctx, vec![]).await
+        execute_template_command(self.template_registry.clone(), action, ctx, vec![]).await
     }
 }
 

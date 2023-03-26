@@ -1,5 +1,10 @@
+use std::str::FromStr;
+
 use super::*;
-use crate::{api::get_base_url, database::DatabaseError};
+use crate::{
+    api::get_base_url,
+    database::{models::CommandMode, DatabaseError},
+};
 
 pub struct Cmd;
 
@@ -186,6 +191,22 @@ impl ExecutableCommand for Cmd {
                         }
                     }
                     Ok(Some(String::from("Command not found")))
+                }
+                "set_mode" => {
+                    let command_name = arguments
+                        .next()
+                        .ok_or_else(|| CommandError::MissingArgument("command name".to_string()))?;
+                    let raw_mode = arguments
+                        .next()
+                        .ok_or_else(|| CommandError::MissingArgument("command mode".to_string()))?;
+                    let mode = CommandMode::from_str(raw_mode).map_err(|_| {
+                        CommandError::InvalidArgument(format!("invalid command mode {raw_mode}"))
+                    })?;
+
+                    ctx.db
+                        .set_command_mode(&channel_identifier, command_name, mode)?;
+
+                    Ok(Some("Updated command mode".to_owned()))
                 }
                 _ => Err(CommandError::InvalidArgument(trigger_name.to_owned())),
             }

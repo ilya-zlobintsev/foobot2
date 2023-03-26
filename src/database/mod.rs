@@ -48,7 +48,7 @@ pub struct Database {
 
 impl Database {
     pub fn connect(database_url: String) -> Result<Self, ConnectionError> {
-        let manager = ConnectionManager::<MysqlConnection>::new(&database_url);
+        let manager = ConnectionManager::<MysqlConnection>::new(database_url);
         let conn_pool = r2d2::Pool::new(manager).expect("Failed to set up DB connection pool");
 
         conn_pool
@@ -139,7 +139,7 @@ impl Database {
                                         .execute(&mut conn)
                                         .expect("DB Error");
 
-                                        if refresh_in == None {
+                                        if refresh_in.is_none() {
                                             refresh_in = Some(expiration_time);
                                         }
                                     }
@@ -345,6 +345,28 @@ impl Database {
                 .filter(commands::name.eq(command_name)),
         )
         .set(commands::action.eq_all(new_action))
+        .execute(&mut conn)?;
+
+        Ok(())
+    }
+
+    pub fn set_command_mode(
+        &self,
+        channel_identifier: &ChannelIdentifier,
+        command_name: &str,
+        mode: CommandMode,
+    ) -> Result<(), DatabaseError> {
+        let mut conn = self.conn_pool.get().unwrap();
+        let channel = self
+            .get_channel(channel_identifier)?
+            .ok_or(DatabaseError::InvalidValue)?;
+
+        diesel::update(
+            commands::table
+                .filter(commands::channel_id.eq(channel.id))
+                .filter(commands::name.eq(command_name)),
+        )
+        .set(commands::mode.eq_all(mode.to_string()))
         .execute(&mut conn)?;
 
         Ok(())

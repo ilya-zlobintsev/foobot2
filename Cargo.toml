@@ -8,12 +8,8 @@ edition = "2021"
 [dependencies]
 dotenv = "0.15.0"
 
-diesel = { git = "https://github.com/diesel-rs/diesel.git", features = [
-    "mysql",
-    "r2d2",
-    "serde_json",
-] }
-diesel_migrations = { git = "https://github.com/diesel-rs/diesel.git" }
+diesel = { version = "2.0", features = ["mysql", "r2d2", "serde_json"] }
+diesel_migrations = "2.0"
 
 tokio = { version = "1.21.2", features = ["full"] }
 futures = "0.3.24"

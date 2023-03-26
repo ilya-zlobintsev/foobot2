@@ -23,6 +23,7 @@ diesel::table! {
         channel_id -> Unsigned<Bigint>,
         cooldown -> Nullable<Unsigned<Bigint>>,
         triggers -> Nullable<Text>,
+        mode -> Varchar,
     }
 }
 

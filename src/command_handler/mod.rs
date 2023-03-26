@@ -11,6 +11,7 @@ pub mod spotify_api;
 pub mod twitch_api;
 mod ukraine_alert;
 
+use ::hebi::Hebi;
 use anyhow::{anyhow, Context};
 use chrono::{DateTime, Utc};
 use dashmap::DashMap;
@@ -39,7 +40,7 @@ use self::platform_handler::PlatformHandler;
 use crate::command_handler::commands::{create_builtin_commands, ExecutableCommand};
 use crate::command_handler::inquiry_helper::hebi::HebiHandler;
 use crate::command_handler::ukraine_alert::UkraineAlertClient;
-use crate::database::models::Filter;
+use crate::database::models::{Command, CommandMode, Filter};
 use crate::database::{models::User, Database};
 use crate::platform::connector::get_connector_permissions;
 use crate::platform::{minecraft, UserIdentifier};
@@ -490,7 +491,7 @@ impl CommandHandler {
             let platform_handler = self.platform_handler.read().await;
             let execution_ctx = ExecutionContext {
                 db: &self.db,
-                platform_handler: &*platform_handler,
+                platform_handler: &platform_handler,
                 platform_ctx,
                 user: &user,
                 processing_timestamp,
@@ -520,15 +521,17 @@ impl CommandHandler {
             {
                 // TODO custom permissions
 
-                let output = execute_command_action(
+                let cooldown = command.cooldown.unwrap_or(DEFAULT_COOLDOWN);
+
+                let output = execute_command(
+                    command,
                     self.template_registry.clone(),
-                    command.action,
                     &execution_ctx,
                     args.into_iter().map(|a| a.to_owned()).collect(),
                 )
                 .await?;
 
-                (output, command.cooldown.unwrap_or(DEFAULT_COOLDOWN))
+                (output, cooldown)
             } else {
                 (None, 0)
             };
@@ -677,14 +680,14 @@ impl CommandHandler {
         let platform_handler = self.platform_handler.read().await;
         let execution_ctx = ExecutionContext {
             db: &self.db,
-            platform_handler: &*platform_handler,
+            platform_handler: &platform_handler,
             platform_ctx,
             user: &user,
             processing_timestamp,
             blocked_users: &self.blocked_users,
         };
 
-        let response = execute_command_action(
+        let response = execute_template_command(
             self.template_registry.clone(),
             action,
             &execution_ctx,
@@ -837,7 +840,21 @@ async fn start_supinic_heartbeat() {
     });
 }
 
-async fn execute_command_action<P: PlatformContext>(
+async fn execute_command<P: PlatformContext>(
+    command: Command,
+    template_registry: Arc<Handlebars<'static>>,
+    ctx: &ExecutionContext<'_, P>,
+    args: Vec<String>,
+) -> Result<Option<String>, CommandError> {
+    match command.mode {
+        CommandMode::Template => {
+            execute_template_command(template_registry, command.action, ctx, args).await
+        }
+        CommandMode::Hebi => eval_hebi(&command.action),
+    }
+}
+
+async fn execute_template_command<P: PlatformContext>(
     template_registry: Arc<Handlebars<'static>>,
     action: String,
     ctx: &ExecutionContext<'_, P>,
@@ -871,6 +888,15 @@ async fn execute_command_action<P: PlatformContext>(
         Ok(Some(response))
     } else {
         Ok(None)
+    }
+}
+
+fn eval_hebi(source: &str) -> Result<Option<String>, CommandError> {
+    let hebi = Hebi::new();
+
+    match hebi.eval::<::hebi::Value>(source) {
+        Ok(value) => Ok(Some(value.to_string())),
+        Err(err) => Err(CommandError::GenericError(err.to_string())),
     }
 }
 

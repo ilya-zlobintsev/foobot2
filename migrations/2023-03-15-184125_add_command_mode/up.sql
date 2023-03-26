@@ -1,0 +1,1 @@
+ALTER TABLE commands ADD mode VARCHAR(127) DEFAULT 'template' NOT NULL

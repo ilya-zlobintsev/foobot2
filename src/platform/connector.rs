@@ -108,7 +108,7 @@ impl PlatformContext for ConnectorPlatformContext<'_> {
     }
 
     fn get_display_name(&self) -> &str {
-        &self.msg.sender.display_name.as_deref().unwrap_or_default()
+        self.msg.sender.display_name.as_deref().unwrap_or_default()
     }
 
     fn get_prefixes(&self) -> Vec<&str> {
