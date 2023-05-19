@@ -1,7 +1,7 @@
 use handlebars::{
     Context, Handlebars, Helper, HelperDef, HelperResult, Output, RenderContext, RenderError,
 };
-use hebi::{Hebi, Value};
+use hebi::Hebi;
 
 #[derive(Default)]
 pub struct HebiHandler;
@@ -15,7 +15,7 @@ impl HelperDef for HebiHandler {
         _: &mut RenderContext<'reg, 'rc>,
         out: &mut dyn Output,
     ) -> HelperResult {
-        let hebi = Hebi::default();
+        let mut hebi = Hebi::new();
 
         let input = h
             .params()
@@ -24,7 +24,7 @@ impl HelperDef for HebiHandler {
             .collect::<Vec<String>>()
             .join(" ");
 
-        match hebi.eval::<Value>(&input) {
+        match hebi.eval(&input) {
             Ok(value) => {
                 write!(out, "{value}")?;
                 Ok(())
