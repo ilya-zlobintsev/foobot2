@@ -40,7 +40,6 @@ use self::eval::{create_native_modules, eval_hebi};
 use self::finnhub_api::FinnhubApi;
 use self::platform_handler::PlatformHandler;
 use crate::command_handler::commands::{create_builtin_commands, ExecutableCommand};
-use crate::command_handler::inquiry_helper::hebi::HebiHandler;
 use crate::command_handler::ukraine_alert::UkraineAlertClient;
 use crate::database::models::{Command, CommandMode, Filter};
 use crate::database::{models::User, Database};
@@ -186,7 +185,6 @@ impl CommandHandler {
 
         let lingva_api = LingvaApi::init(lingva_url);
         let ukraine_alert_client = UkraineAlertClient::default();
-        let hebi_handler = HebiHandler;
 
         let mut template_registry = Handlebars::new();
 
@@ -215,7 +213,6 @@ impl CommandHandler {
             "forsencode_decode",
             Box::new(inquiry_helper::forsencode_decode_helper),
         );
-        template_registry.register_helper("hebi", Box::new(hebi_handler));
 
         if let Ok(api_key) = env::var("FINNHUB_API_KEY") {
             template_registry.register_helper("stock", Box::new(FinnhubApi::init(api_key)));
