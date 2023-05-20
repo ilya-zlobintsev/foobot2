@@ -1,4 +1,4 @@
-use crate::database::DatabaseError;
+use crate::{command_handler::error::CommandError, database::DatabaseError};
 use rocket::{
     http::Status,
     response::{self, Responder},
@@ -20,6 +20,7 @@ pub enum ApiError {
     Unauthorized(String),
     DatabaseError(DatabaseError),
     RequestError(reqwest::Error),
+    CommandErorr(CommandError),
     GenericError(String),
 }
 
@@ -47,6 +48,12 @@ impl From<anyhow::Error> for ApiError {
     }
 }
 
+impl From<CommandError> for ApiError {
+    fn from(value: CommandError) -> Self {
+        Self::CommandErorr(value)
+    }
+}
+
 impl<'a> Responder<'a, 'a> for ApiError {
     fn respond_to(self, _: &'a rocket::Request<'_>) -> response::Result<'static> {
         let mut response = Response::build();
@@ -58,6 +65,12 @@ impl<'a> Responder<'a, 'a> for ApiError {
                 .sized_body(msg.len(), Cursor::new(msg)),
             ApiError::NotFound => response.status(Status::NotFound),
             ApiError::InvalidUser => response.status(Status::NotFound),
+            ApiError::CommandErorr(err) => {
+                let error_text = err.to_string();
+                response
+                    .status(Status::UnprocessableEntity)
+                    .sized_body(error_text.len(), Cursor::new(error_text))
+            }
             ApiError::Unauthorized(msg) => response
                 .status(Status::Unauthorized)
                 .sized_body(msg.len(), Cursor::new(msg)),

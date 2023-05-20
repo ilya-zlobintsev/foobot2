@@ -99,6 +99,7 @@ pub async fn run(command_handler: CommandHandler) {
             channels::get_channel_commands,
             channels::get_channel_eventsub_triggers,
             channels::get_filters,
+            channels::eval,
         ],
         "/hooks" => openapi_get_routes_spec![webhooks::eventsub_callback],
     };

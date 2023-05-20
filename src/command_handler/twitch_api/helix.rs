@@ -76,7 +76,7 @@ impl<C: LoginCredentials> HelixApi<C> {
             .client
             .request(method, format!("{}{}", HELIX_URL, path))
             .headers(self.headers.clone())
-            .bearer_auth(&credentials.token.context("Token missing")?))
+            .bearer_auth(credentials.token.context("Token missing")?))
     }
 
     async fn get(&self, path: &str) -> anyhow::Result<RequestBuilder> {

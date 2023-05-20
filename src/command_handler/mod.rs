@@ -1,6 +1,6 @@
 mod commands;
 pub mod discord_api;
-mod error;
+pub mod error;
 mod eval;
 pub mod finnhub_api;
 pub mod inquiry_helper;
@@ -79,7 +79,7 @@ pub struct CommandHandler {
     cooldowns: Arc<RwLock<Vec<(u64, String)>>>, // User id and command
     command_triggers: Arc<DashMap<u64, Arc<DashMap<String, String>>>>, // Channel id, trigger phrase and command name
     mirror_connections: Arc<HashMap<String, ChannelIdentifier>>,       // from and to channel
-    blocked_users: Arc<Vec<UserIdentifier>>,
+    pub blocked_users: Arc<Vec<UserIdentifier>>,
     hebi_native_modules: Arc<Vec<NativeModule>>,
 }
 
@@ -186,7 +186,7 @@ impl CommandHandler {
 
         let lingva_api = LingvaApi::init(lingva_url);
         let ukraine_alert_client = UkraineAlertClient::default();
-        let hebi_handler = HebiHandler::default();
+        let hebi_handler = HebiHandler;
 
         let mut template_registry = Handlebars::new();
 
@@ -284,7 +284,7 @@ impl CommandHandler {
 
         template_registry.register_helper("data_set", Box::new(SetTempData { data: temp_data }));
         template_registry.register_decorator("set", Box::new(set_decorator));
-        template_registry.register_helper("rhai", Box::new(script::RhaiHelper::default()));
+        template_registry.register_helper("rhai", Box::<script::RhaiHelper>::default());
 
         template_registry.set_strict_mode(true);
 
@@ -529,14 +529,13 @@ impl CommandHandler {
 
                 let cooldown = command.cooldown.unwrap_or(DEFAULT_COOLDOWN);
 
-                let output = execute_command(
-                    command,
-                    self.template_registry.clone(),
-                    &self.hebi_native_modules,
-                    &execution_ctx,
-                    args.into_iter().map(|a| a.to_owned()).collect(),
-                )
-                .await?;
+                let output = self
+                    .execute_command(
+                        command,
+                        &execution_ctx,
+                        args.into_iter().map(|a| a.to_owned()).collect(),
+                    )
+                    .await?;
 
                 (output, cooldown)
             } else {
@@ -552,6 +551,21 @@ impl CommandHandler {
         } else {
             tracing::debug!("Ignoring command, on cooldown");
             Ok(None)
+        }
+    }
+
+    pub async fn execute_command<P: PlatformContext>(
+        &self,
+        command: Command,
+        ctx: &ExecutionContext<'_, P>,
+        args: Vec<String>,
+    ) -> Result<Option<String>, CommandError> {
+        match command.mode {
+            CommandMode::Template => {
+                execute_template_command(self.template_registry.clone(), command.action, ctx, args)
+                    .await
+            }
+            CommandMode::Hebi => eval_hebi(command.action, &self.hebi_native_modules).await,
         }
     }
 
@@ -792,12 +806,12 @@ impl CommandHandler {
 }
 
 pub struct ExecutionContext<'a, P: PlatformContext> {
-    db: &'a Database,
-    platform_handler: &'a PlatformHandler,
-    platform_ctx: P,
-    user: &'a User,
-    processing_timestamp: DateTime<Utc>,
-    blocked_users: &'a [UserIdentifier],
+    pub db: &'a Database,
+    pub platform_handler: &'a PlatformHandler,
+    pub platform_ctx: P,
+    pub user: &'a User,
+    pub processing_timestamp: DateTime<Utc>,
+    pub blocked_users: &'a [UserIdentifier],
 }
 
 impl<P: PlatformContext> ExecutionContext<'_, P> {
@@ -845,21 +859,6 @@ async fn start_supinic_heartbeat() {
             tokio::time::sleep(Duration::from_secs(3600)).await;
         }
     });
-}
-
-async fn execute_command<P: PlatformContext>(
-    command: Command,
-    template_registry: Arc<Handlebars<'static>>,
-    native_modules: &[NativeModule],
-    ctx: &ExecutionContext<'_, P>,
-    args: Vec<String>,
-) -> Result<Option<String>, CommandError> {
-    match command.mode {
-        CommandMode::Template => {
-            execute_template_command(template_registry, command.action, ctx, args).await
-        }
-        CommandMode::Hebi => eval_hebi(command.action, native_modules).await,
-    }
 }
 
 async fn execute_template_command<P: PlatformContext>(

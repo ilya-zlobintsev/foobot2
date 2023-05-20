@@ -1,3 +1,4 @@
+use chrono::Utc;
 use futures::future::join_all;
 use rocket::serde::json::Json;
 use rocket::State;
@@ -7,15 +8,16 @@ use rocket_okapi::openapi;
 use serde::Serialize;
 use serde_json::{json, Value};
 use std::collections::HashMap;
+use std::str::FromStr;
 use std::sync::Arc;
 use tokio::sync::Mutex;
 
 use super::Result;
 use crate::api::error::ApiError;
-use crate::command_handler::CommandHandler;
+use crate::command_handler::{CommandHandler, ExecutionContext};
 use crate::database;
-use crate::database::models::{Command, Filter, User, WebSession};
-use crate::platform::{ChannelIdentifier, Permissions};
+use crate::database::models::{Command, CommandMode, Filter, User, WebSession};
+use crate::platform::{ChannelIdentifier, Permissions, ServerPlatformContext, UserIdentifier};
 
 #[openapi(tag = "Channels")]
 #[get("/")]
@@ -65,7 +67,7 @@ pub async fn get_channel_info(
                     Permissions::Default
                 });
             Some(PermissionsInfo {
-                name: permissions.clone(),
+                name: permissions,
                 value: permissions as usize,
             })
         }
@@ -298,5 +300,75 @@ async fn get_channel_display_name(
             Ok(Some(guild_name))
         }
         _ => Ok(None),
+    }
+}
+
+#[openapi(tag = "Channels")]
+#[post("/<channel_id>/eval?<mode>&<args>", data = "<payload>")]
+pub async fn eval(
+    channel_id: u64,
+    user: User,
+    mode: &str,
+    args: Vec<String>,
+    cmd: &State<CommandHandler>,
+    payload: String,
+) -> Result<String> {
+    let channel = cmd
+        .db
+        .get_channel_by_id(channel_id)?
+        .ok_or(ApiError::NotFound)?;
+
+    if cmd
+        .get_permissions_in_channel(user.clone(), &channel.get_identifier())
+        .await?
+        >= Permissions::ChannelMod
+    {
+        let command_mode = CommandMode::from_str(mode)
+            .map_err(|_| ApiError::BadRequest(format!("Invalid command mode {mode}")))?;
+
+        let executing_user = if let Some(twitch_id) = user.twitch_id.clone() {
+            UserIdentifier::TwitchID(twitch_id)
+        } else if let Some(local_ip) = &user.local_addr {
+            UserIdentifier::IpAddr(local_ip.parse().unwrap())
+        } else {
+            todo!()
+        };
+
+        let platform_ctx = ServerPlatformContext {
+            target_channel: channel.get_identifier(),
+            executing_user,
+            cmd: cmd.inner().clone(),
+            display_name: "Tester via API".to_owned(),
+        };
+
+        let processing_timestamp = Utc::now();
+        let platform_handler = cmd.platform_handler.read().await;
+        let execution_ctx = ExecutionContext {
+            db: &cmd.db,
+            platform_handler: &platform_handler,
+            platform_ctx,
+            user: &user,
+            processing_timestamp,
+            blocked_users: &cmd.blocked_users,
+        };
+
+        let command = Command {
+            name: "EVAL testing".to_owned(),
+            action: payload,
+            permissions: None,
+            channel_id: channel.id,
+            triggers: None,
+            cooldown: Some(0),
+            mode: command_mode,
+        };
+        let response = cmd
+            .execute_command(command, &execution_ctx, args)
+            .await?
+            .unwrap_or_else(|| "<empty response>".to_owned());
+        Ok(response)
+    } else {
+        Err(ApiError::Unauthorized(
+            "Not a moderator in this channel".to_owned(),
+        ))
     }
 }
