@@ -5,6 +5,7 @@ RUN npm install
 RUN npm run build
 
 FROM docker.io/rust:slim-bullseye as builder
+RUN rustup toolchain add nightly
 
 RUN apt-get update
 RUN apt-get install --assume-yes libmariadb-dev-compat pkg-config git protobuf-compiler
