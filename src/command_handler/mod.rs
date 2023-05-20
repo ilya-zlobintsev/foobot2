@@ -12,6 +12,7 @@ pub mod spotify_api;
 pub mod twitch_api;
 mod ukraine_alert;
 
+use ::hebi::NativeModule;
 use anyhow::{anyhow, Context};
 use chrono::{DateTime, Utc};
 use dashmap::DashMap;
@@ -31,12 +32,11 @@ use std::sync::Arc;
 use std::time::Duration;
 use tokio::sync::{Mutex, RwLock};
 use tokio::task;
-use tokio_util::task::LocalPoolHandle;
 use twitch_api::TwitchApi;
 
 use self::commands::BuiltinCommand;
 use self::error::CommandError;
-use self::eval::eval_hebi;
+use self::eval::{create_native_modules, eval_hebi};
 use self::finnhub_api::FinnhubApi;
 use self::platform_handler::PlatformHandler;
 use crate::command_handler::commands::{create_builtin_commands, ExecutableCommand};
@@ -80,8 +80,7 @@ pub struct CommandHandler {
     command_triggers: Arc<DashMap<u64, Arc<DashMap<String, String>>>>, // Channel id, trigger phrase and command name
     mirror_connections: Arc<HashMap<String, ChannelIdentifier>>,       // from and to channel
     blocked_users: Arc<Vec<UserIdentifier>>,
-    local_pool: LocalPoolHandle,
-    // hebi_native_modules: Arc<Vec<NativeModule>>,
+    hebi_native_modules: Arc<Vec<NativeModule>>,
 }
 
 impl CommandHandler {
@@ -328,9 +327,7 @@ impl CommandHandler {
 
         start_supinic_heartbeat().await;
 
-        let local_pool = LocalPoolHandle::new(5);
-
-        // let hebi_native_modules = Arc::new(create_native_modules());
+        let hebi_native_modules = Arc::new(create_native_modules());
 
         Self {
             db,
@@ -342,8 +339,7 @@ impl CommandHandler {
             builtin_commands: Arc::new(builtin_commands),
             nats_client,
             blocked_users: Arc::new(blocked_users),
-            local_pool,
-            // hebi_native_modules,
+            hebi_native_modules,
         }
     }
 
@@ -536,8 +532,7 @@ impl CommandHandler {
                 let output = execute_command(
                     command,
                     self.template_registry.clone(),
-                    &self.local_pool,
-                    // &self.hebi_native_modules,
+                    &self.hebi_native_modules,
                     &execution_ctx,
                     args.into_iter().map(|a| a.to_owned()).collect(),
                 )
@@ -855,8 +850,7 @@ async fn start_supinic_heartbeat() {
 async fn execute_command<P: PlatformContext>(
     command: Command,
     template_registry: Arc<Handlebars<'static>>,
-    local_pool: &LocalPoolHandle,
-    // native_modules: &[NativeModule],
+    native_modules: &[NativeModule],
     ctx: &ExecutionContext<'_, P>,
     args: Vec<String>,
 ) -> Result<Option<String>, CommandError> {
@@ -864,7 +858,7 @@ async fn execute_command<P: PlatformContext>(
         CommandMode::Template => {
             execute_template_command(template_registry, command.action, ctx, args).await
         }
-        CommandMode::Hebi => eval_hebi(command.action, local_pool).await,
+        CommandMode::Hebi => eval_hebi(command.action, native_modules).await,
     }
 }
 

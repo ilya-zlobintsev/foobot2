@@ -12,6 +12,10 @@ services:
       - db:/var/lib/mysql
     ports:
       - 3306:3306
+  nats:
+    image: nats
+    ports:
+      - 4222:4222 
 
 volumes:
   db:

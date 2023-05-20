@@ -12,7 +12,6 @@ diesel = { version = "2.0", features = ["mysql", "r2d2", "serde_json"] }
 diesel_migrations = "2.0"
 
 tokio = { version = "1.21.2", features = ["full"] }
-tokio-util = { version = "0.7.8", features = ["rt"] }
 futures = "0.3.24"
 async-trait = "0.1.57"
 
@@ -88,7 +87,9 @@ connector-schema = { git = "https://git.hyron.dev/foobot/foobot-chat-connector",
     "json_schema",
 ] }
 
-hebi = { git = "https://github.com/jprochazk/hebi", branch = "v2" }
+hebi = { git = "https://github.com/jprochazk/hebi", features = [
+    "serde",
+], branch = "v2" }
 
 
 [build-dependencies]
