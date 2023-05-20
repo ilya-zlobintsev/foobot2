@@ -25,7 +25,7 @@
             input: user.lastfm_name,
             onAccept: async (name) => {
                 if (name) {
-                    await fetch("/api/session/lastfm", {
+                    await fetch(BASE_URL + "/api/session/lastfm", {
                         method: "POST",
                         body: name,
                     });
@@ -40,7 +40,7 @@
     }
 
     async function disconectSpotify() {
-        await fetch("/api/session/spotify", {
+        await fetch(BASE_URL + "/api/session/spotify", {
             method: "DELETE",
         });
 

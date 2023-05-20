@@ -1,7 +1,8 @@
 async function getJson(path: string) {
-    const response = await fetch(path);
+    const fullPath = BASE_URL + path;
+    const response = await fetch(fullPath);
     if (response.ok) {
-        return await response.json() 
+        return await response.json()
     } else {
         return {};
     }

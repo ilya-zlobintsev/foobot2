@@ -44,7 +44,7 @@ pub async fn run(command_handler: CommandHandler) {
         .manage(Client::new())
         .manage(command_handler.clone())
         .manage(state_storage)
-        .mount("/", FileServer::from("web/public"))
+        .mount("/", FileServer::from("web/dist"))
         .mount("/", routes![get_index])
         .mount(
             "/authenticate",
@@ -150,6 +150,6 @@ async fn get_index(
     if path.to_str().map_or(false, |s| s.starts_with("api")) {
         Err(status::NotFound("API endpoint not found"))
     } else {
-        Ok(NamedFile::open("web/public/index.html").await.unwrap())
+        Ok(NamedFile::open("web/dist/index.html").await.unwrap())
     }
 }

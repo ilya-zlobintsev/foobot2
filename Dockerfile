@@ -34,7 +34,7 @@ RUN apt-get install --assume-yes libmariadb-dev-compat ca-certificates openssl
 WORKDIR /app
 
 COPY --from=builder /build/target/release/foobot2 .
-COPY --from=frontend /web/public ./web/public
+COPY --from=frontend /web/dist ./web/dist
 COPY Rocket.toml .
 
 STOPSIGNAL SIGINT

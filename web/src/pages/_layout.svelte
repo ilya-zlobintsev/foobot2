@@ -10,7 +10,7 @@
     }
 
     async function logout() {
-        const response = await fetch("/api/session/logout", {
+        const response = await fetch(BASE_URL + "/api/session/logout", {
             method: "POST",
         });
         if (response.ok) {
