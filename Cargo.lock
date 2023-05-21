@@ -1063,13 +1063,14 @@ checksum = "8a9ee70c43aaf417c914396645a0fa852624801b24ebb7ae78fe8272889ac888"
 [[package]]
 name = "hebi"
 version = "0.3.1"
-source = "git+https://github.com/jprochazk/hebi?branch=v2#89c2cb22dc91836a640808e6cdfec40d181974bc"
+source = "git+https://github.com/jprochazk/hebi?branch=v2#471fca5343ffc48d1041173ebf1bf084c294abc2"
 dependencies = [
  "beef",
  "futures-util",
  "indexmap",
  "logos",
  "paste",
+ "pollster",
  "serde",
  "stacker",
 ]
@@ -1867,6 +1868,26 @@ name = "pkg-config"
 version = "0.3.25"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "1df8c4ec4b0627e53bdf214615ad287367e482558cf84b109250b37464dc03ae"
+
+[[package]]
+name = "pollster"
+version = "0.3.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "22686f4785f02a4fcc856d3b3bb19bf6c8160d103f7a99cc258bddd0251dc7f2"
+dependencies = [
+ "pollster-macro",
+]
+
+[[package]]
+name = "pollster-macro"
+version = "0.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ea78f0ef4193055a4b09814ce6bcb572ad1174d6023e2f00a9ea1a798d18d301"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn 1.0.101",
+]
 
 [[package]]
 name = "polyval"
