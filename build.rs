@@ -7,7 +7,7 @@ fn main() {
     println!("cargo:rerun-if-changed=.git/");
 
     let commit_output = Command::new("git")
-        .args(&["rev-parse", "--short", "HEAD"])
+        .args(["rev-parse", "--short", "HEAD"])
         .output()
         .unwrap();
 

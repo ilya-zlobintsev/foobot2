@@ -281,7 +281,6 @@ impl CommandHandler {
 
         template_registry.register_helper("data_set", Box::new(SetTempData { data: temp_data }));
         template_registry.register_decorator("set", Box::new(set_decorator));
-        template_registry.register_helper("rhai", Box::<script::RhaiHelper>::default());
 
         template_registry.set_strict_mode(true);
 

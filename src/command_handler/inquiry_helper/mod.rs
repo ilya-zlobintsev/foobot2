@@ -1,5 +1,4 @@
 mod forsencode;
-pub mod script;
 mod twitch_timeout;
 
 use std::env;
