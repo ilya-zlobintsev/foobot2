@@ -44,6 +44,9 @@ pub fn create_native_modules() -> Vec<NativeModule> {
 
     let utils = NativeModule::builder("utils")
         .function("get_element", utils::get_list_element)
+        .function("len", utils::list_len)
+        .function("push", utils::list_push)
+        .function("join", utils::join)
         .function("format", utils::format_string)
         .finish();
     modules.push(utils);
