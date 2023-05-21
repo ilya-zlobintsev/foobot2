@@ -570,15 +570,14 @@ impl Database {
             .optional()
     }
 
-    pub fn get_eventsub_redeem_action(
+    pub fn get_eventsub_redeem(
         &self,
         id: &str,
-    ) -> Result<Option<String>, diesel::result::Error> {
+    ) -> Result<Option<EventSubTrigger>, diesel::result::Error> {
         let mut conn = self.conn_pool.get().unwrap();
 
         eventsub_triggers::table
             .filter(eventsub_triggers::id.eq_all(id))
-            .select(eventsub_triggers::action)
             .first(&mut conn)
             .optional()
     }

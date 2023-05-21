@@ -119,6 +119,7 @@ pub async fn get_channel_eventsub_triggers(
                        "event_type": trigger.event_type,
                        "condition": trigger.creation_payload,
                        "action": trigger.action,
+                       "mode": trigger.mode,
                     })
                 })
                 .collect();

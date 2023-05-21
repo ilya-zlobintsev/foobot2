@@ -689,6 +689,7 @@ impl CommandHandler {
     pub async fn handle_server_message(
         &self,
         action: String,
+        mode: CommandMode,
         platform_ctx: ServerPlatformContext,
         arguments: Vec<String>,
     ) -> anyhow::Result<()> {
@@ -705,13 +706,18 @@ impl CommandHandler {
             blocked_users: &self.blocked_users,
         };
 
-        let response = execute_template_command(
-            self.template_registry.clone(),
-            action,
-            &execution_ctx,
-            arguments,
-        ) // TODO
-        .await?
+        let response = match mode {
+            CommandMode::Template => {
+                execute_template_command(
+                    self.template_registry.clone(),
+                    action,
+                    &execution_ctx,
+                    arguments,
+                ) // TODO
+                .await?
+            }
+            CommandMode::Hebi => eval_hebi(action, &self.hebi_native_modules).await?,
+        }
         .unwrap_or_else(|| "Event triggered with no action".to_string());
 
         Ok(self

@@ -20,11 +20,12 @@
     Loading commands...
 {:then commands}
     {#if commands.length > 0}
-        <table id="commands_table" border="1">
+        <table id="commands_table">
             <col style="width:15%" />
             <col style="width:45%" />
             <col style="width:5%" />
-            <col style="width:15%" />
+            <col style="width:5%" />
+            <col style="width:10%" />
             <col style="width:10%" />
             {#if mod}
                 <col style="width:10%" />
@@ -33,6 +34,7 @@
             <thead>
                 <th>Name</th>
                 <th>Action</th>
+                <th>Mode</th>
                 <th>Cooldown</th>
                 <th>Permissions</th>
                 <th>Triggers</th>
@@ -46,6 +48,7 @@
                     <tr>
                         <td>{command.name}</td>
                         <td>{command.action}</td>
+                        <td>{command.mode}</td>
                         <td>{command.cooldown || 0}s</td>
                         <td>{command.permissions || "Everyone"}</td>
                         <td>{command.triggers || ""}</td>

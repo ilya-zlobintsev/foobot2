@@ -34,6 +34,7 @@ diesel::table! {
         action -> Mediumtext,
         creation_payload -> Longtext,
         id -> Varchar,
+        execution_mode -> Varchar,
     }
 }
 

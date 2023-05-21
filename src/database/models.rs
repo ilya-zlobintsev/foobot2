@@ -75,6 +75,7 @@ pub struct Command {
 
 #[derive(Debug, PartialEq, Eq, Serialize, EnumString, strum::Display)]
 #[strum(serialize_all = "lowercase")]
+#[serde(rename_all = "lowercase")]
 pub enum CommandMode {
     Template,
     Hebi,
@@ -139,6 +140,8 @@ pub struct EventSubTrigger {
     pub action: String,
     pub creation_payload: String,
     pub id: String,
+    #[diesel(deserialize_as = String)]
+    pub mode: CommandMode,
 }
 
 #[derive(Queryable)]

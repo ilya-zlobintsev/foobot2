@@ -53,9 +53,9 @@ pub async fn eventsub_callback(
                         let platform_handler = cmd.platform_handler.read().await;
                         let twitch_api = &platform_handler.twitch_api.as_ref().unwrap().helix_api;
 
-                        if let Some(action) = cmd
+                        if let Some(redeem) = cmd
                             .db
-                            .get_eventsub_redeem_action(&notification.subscription.id)
+                            .get_eventsub_redeem(&notification.subscription.id)
                             .expect("DB error")
                         {
                             let event = notification
@@ -92,7 +92,8 @@ pub async fn eventsub_callback(
                             };
 
                             cmd.handle_server_message(
-                                action,
+                                redeem.action,
+                                redeem.mode,
                                 context,
                                 arguments
                                     .split_whitespace()

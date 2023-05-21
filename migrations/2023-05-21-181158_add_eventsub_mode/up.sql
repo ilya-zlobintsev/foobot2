@@ -1,0 +1,1 @@
+ALTER TABLE eventsub_triggers ADD execution_mode VARCHAR(127) DEFAULT 'template' NOT NULL

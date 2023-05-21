@@ -12,7 +12,7 @@ use reqwest::{Client, Response};
 use std::{env, sync::Arc};
 use tower_http::{
     services::{ServeDir, ServeFile},
-    trace::{self, DefaultOnRequest, DefaultOnResponse, TraceLayer},
+    trace::{self, DefaultOnResponse, TraceLayer},
 };
 use tracing::{info, Level};
 

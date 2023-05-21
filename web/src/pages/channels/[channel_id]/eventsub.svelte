@@ -18,10 +18,11 @@
     Loading commands...
 {:then triggers}
     {#if triggers.length > 0}
-        <table border="1">
+        <table>
+            <col style="width:10%" />
             <col style="width:30%" />
-            <col style="width:30%" />
-            <col style="width:30%" />
+            <col style="width:40%" />
+            <col style="width:10%" />
             {#if mod}
                 <col style="width:10%" />
             {/if}
@@ -30,6 +31,7 @@
                 <th>Event type</th>
                 <th>Condition</th>
                 <th>Action</th>
+                <th>Mode</th>
                 {#if mod}
                     <th>Mod</th>
                 {/if}
@@ -41,6 +43,7 @@
                         <td>{trigger.event_type}</td>
                         <td>{trigger.condition}</td>
                         <td>{trigger.action || 0}s</td>
+                        <td>{trigger.mode}</td>
                         {#if mod}
                             <td> Mod actions </td>
                         {/if}
