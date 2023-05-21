@@ -6,10 +6,15 @@ mod webhooks;
 
 use anyhow::anyhow;
 use axum::Router;
+use axum_extra::extract::cookie::Key;
 use dashmap::DashMap;
 use reqwest::{Client, Response};
-use std::env;
-use tower_http::services::{ServeDir, ServeFile};
+use std::{env, sync::Arc};
+use tower_http::{
+    services::{ServeDir, ServeFile},
+    trace::{self, DefaultOnRequest, DefaultOnResponse, TraceLayer},
+};
+use tracing::{info, Level};
 
 use self::error::ApiError;
 use crate::{api::state::AppState, command_handler::CommandHandler};
@@ -17,13 +22,15 @@ use crate::{api::state::AppState, command_handler::CommandHandler};
 type Result<T> = std::result::Result<T, ApiError>;
 
 pub async fn run(command_handler: CommandHandler) {
-    let state_storage: DashMap<String, String> = DashMap::new();
-    let secret_key = env::var("EVENTSUB_SECRET_KEY").expect("Could not read EVENTSUB_SECRET_KEY");
+    let state_storage = Arc::new(DashMap::new());
+    let raw_secret_key = env::var("SECRET_KEY").expect("Could not read SECRET_KEY");
+    let secret_key = Key::from(raw_secret_key.as_bytes());
 
     let state = AppState {
         cmd: command_handler,
         state_storage,
         http_client: Client::new(),
+        raw_secret_key,
         secret_key,
     };
 
@@ -35,15 +42,23 @@ pub async fn run(command_handler: CommandHandler) {
         .nest("/hooks", webhooks::create_router());
 
     let frontend_service =
-        ServeDir::new("web/dist").not_found_service(ServeFile::new("web/dist/index.html"));
+        ServeDir::new("web/dist").fallback(ServeFile::new("web/dist/index.html"));
 
     let app = Router::new()
         .nest_service("/", frontend_service)
         .nest("/api", api_routes)
         .nest("/authenticate", authentication_routes)
-        .with_state(state);
+        .with_state(state)
+        .layer(
+            TraceLayer::new_for_http()
+                .make_span_with(trace::DefaultMakeSpan::new().level(Level::INFO))
+                .on_response(DefaultOnResponse::new().level(Level::INFO)),
+        );
 
-    axum::Server::bind(&"0.0.0.0:8000".parse().unwrap())
+    let server_url = "0.0.0.0:8000";
+    info!("Starting web server at {server_url}");
+
+    axum::Server::bind(&server_url.parse().unwrap())
         .serve(app.into_make_service())
         .await
         .unwrap()

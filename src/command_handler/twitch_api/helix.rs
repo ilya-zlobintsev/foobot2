@@ -148,7 +148,7 @@ impl<C: LoginCredentials> HelixApi<C> {
     }
 
     pub async fn get_user_by_id(&self, id: &str) -> anyhow::Result<User> {
-        let users = self.get_users(None, Some(&vec![id])).await?;
+        let users = self.get_users(None, Some(&[id])).await?;
 
         users
             .into_iter()

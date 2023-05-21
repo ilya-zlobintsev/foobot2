@@ -1,9 +1,9 @@
-use axum::extract::State;
+use axum::extract::{Path, Query, State};
 use axum::routing::{get, post};
 use axum::{Json, Router};
 use chrono::Utc;
 use futures::future::join_all;
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 use std::collections::HashMap;
 use std::str::FromStr;
@@ -35,7 +35,7 @@ pub async fn get_channels(cmd: State<CommandHandler>) -> Result<Json<Vec<Channel
 }
 
 pub async fn get_channel_info(
-    channel_id: u64,
+    Path(channel_id): Path<u64>,
     cmd: State<CommandHandler>,
     user: Option<User>,
 ) -> Result<Json<ChannelInfo>> {
@@ -84,14 +84,14 @@ pub async fn get_channel_info(
 }
 
 pub async fn get_channel_commands(
-    channel_id: u64,
+    Path(channel_id): Path<u64>,
     cmd: State<CommandHandler>,
 ) -> Result<Json<Vec<Command>>> {
     Ok(Json(cmd.db.get_commands(channel_id)?))
 }
 
 pub async fn get_channel_eventsub_triggers(
-    channel_id: u64,
+    Path(channel_id): Path<u64>,
     cmd: State<CommandHandler>,
 ) -> Result<Json<Vec<Value>>> {
     let channel = cmd
@@ -130,8 +130,8 @@ pub async fn get_channel_eventsub_triggers(
 }
 
 pub async fn get_filters(
-    channel_id: u64,
     session: WebSession,
+    Path(channel_id): Path<u64>,
     cmd: State<CommandHandler>,
 ) -> Result<Json<Vec<Filter>>> {
     if cmd
@@ -289,13 +289,16 @@ async fn get_channel_display_name(
     }
 }
 
-// #[openapi(tag = "Channels")]
-// #[post("/<channel_id>/eval?<mode>&<args>", data = "<payload>")]
+#[derive(Deserialize)]
+pub struct EvalParams {
+    pub mode: String,
+    pub args: Vec<String>,
+}
+
 pub async fn eval(
-    channel_id: u64,
+    Path(channel_id): Path<u64>,
     user: User,
-    mode: &str,
-    args: Vec<String>,
+    Query(EvalParams { mode, args }): Query<EvalParams>,
     cmd: State<CommandHandler>,
     payload: String,
 ) -> Result<String> {
@@ -309,7 +312,7 @@ pub async fn eval(
         .await?
         >= Permissions::ChannelMod
     {
-        let command_mode = CommandMode::from_str(mode)
+        let command_mode = CommandMode::from_str(&mode)
             .map_err(|_| ApiError::BadRequest(format!("Invalid command mode {mode}")))?;
 
         let executing_user = if let Some(twitch_id) = user.twitch_id.clone() {
@@ -323,7 +326,7 @@ pub async fn eval(
         let platform_ctx = ServerPlatformContext {
             target_channel: channel.get_identifier(),
             executing_user,
-            cmd: cmd.inner().clone(),
+            cmd: cmd.0.clone(),
             display_name: "Tester via API".to_owned(),
         };
 

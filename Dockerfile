@@ -34,7 +34,6 @@ WORKDIR /app
 
 COPY --from=builder /build/target/release/foobot2 .
 COPY --from=frontend /web/dist ./web/dist
-COPY Rocket.toml .
 
 STOPSIGNAL SIGINT
 

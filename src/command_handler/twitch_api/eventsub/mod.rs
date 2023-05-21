@@ -5,6 +5,7 @@ use anyhow::anyhow;
 use serde::Deserialize;
 use serde::Serialize;
 use serde_json::{json, Value};
+use std::env;
 use std::str::FromStr;
 
 use self::conditions::*;
@@ -41,13 +42,13 @@ impl EventSubSubscriptionType {
     }
 
     fn get_transport() -> Value {
+        let key = env::var("SECRET_KEY").expect("Could not read SECRET_KEY");
         let callback_url = format!("{}/api/hooks/twitch/eventsub", api::get_base_url());
 
         json!({
            "method": "webhook",
            "callback": callback_url,
-           "secret": todo!(),
-        //    "secret": rocket::Config::SECRET_KEY,
+           "secret": key,
         })
     }
 
