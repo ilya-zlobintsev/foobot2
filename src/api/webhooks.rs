@@ -1,35 +1,34 @@
+use async_trait::async_trait;
+use axum::{
+    body::Bytes,
+    extract::{FromRequestParts, State},
+    routing::post,
+    Router,
+};
 use hmac::{Hmac, Mac};
-use rocket::{data::ToByteUnit, http::Status, outcome::Outcome, request::FromRequest, Data, State};
-use rocket_okapi::openapi;
-use serde_json::Value;
+use http::{request::Parts, StatusCode};
 use sha2::Sha256;
 use std::str::FromStr;
 use tokio::task;
 
 use crate::{
-    command_handler::{
-        twitch_api::eventsub::{events::*, *},
-        CommandHandler,
-    },
+    command_handler::twitch_api::eventsub::{events::*, *},
     platform::{ChannelIdentifier, ServerPlatformContext, UserIdentifier},
 };
 
-#[openapi(skip)]
-#[post("/twitch/eventsub", data = "<body>")]
+use super::state::AppState;
+
 pub async fn eventsub_callback(
     properties: TwitchEventsubCallbackProperties,
-    cmd: &State<CommandHandler>,
-    body: Data<'_>,
-) -> Result<String, Status> {
+    state: State<AppState>,
+    body: Bytes,
+) -> Result<String, StatusCode> {
     tracing::info!("Handling eventsub callback {:?}", properties.message_type);
 
-    let body_stream = body.open(32i32.mebibytes());
+    let message = serde_json::from_slice(&body).unwrap();
 
-    let body = body_stream.into_bytes().await.unwrap();
-
-    let message: Value = serde_json::from_slice(&body).expect("Parse error");
-
-    let secret_key = rocket::Config::SECRET_KEY;
+    let cmd = state.cmd;
+    let secret_key = &state.secret_key;
 
     if properties.message_retry > 1 {
         tracing::warn!("Received EventSub message retry");
@@ -121,7 +120,7 @@ pub async fn eventsub_callback(
         }),
         false => {
             tracing::warn!("REQUEST FORGERY DETECTED");
-            Err(Status::Unauthorized)
+            Err(StatusCode::Unauthorized)
         }
     }
 }
@@ -167,16 +166,17 @@ pub struct TwitchEventsubCallbackProperties {
     subscription_type: String,
 }
 
-#[rocket::async_trait]
-impl<'r> FromRequest<'r> for TwitchEventsubCallbackProperties {
-    type Error = ();
+#[async_trait]
+impl FromRequestParts<AppState> for TwitchEventsubCallbackProperties {
+    type Rejection = ();
 
-    async fn from_request(
-        request: &'r rocket::Request<'_>,
-    ) -> rocket::request::Outcome<Self, Self::Error> {
-        let headers = request.headers();
+    async fn from_request_parts(
+        parts: &mut Parts,
+        state: &AppState,
+    ) -> Result<Self, Self::Rejection> {
+        let headers = &parts.headers;
 
-        Outcome::Success(Self {
+        Ok(Self {
             message_id: headers
                 .get("Twitch-Eventsub-Message-Id")
                 .next()
@@ -209,4 +209,8 @@ impl<'r> FromRequest<'r> for TwitchEventsubCallbackProperties {
                 .to_string(),
         })
     }
+}
+
+pub fn create_router() -> Router<AppState> {
+    Router::new().router("/twitch/eventsub", post(eventsub_callback))
 }

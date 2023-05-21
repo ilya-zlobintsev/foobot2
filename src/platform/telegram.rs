@@ -3,6 +3,7 @@ use super::{
     UserIdentifier,
 };
 use crate::command_handler::CommandHandler;
+use async_trait::async_trait;
 use frankenstein::{
     AllowedUpdate, AsyncApi, AsyncTelegramApi, GetUpdatesParams, Message, SendMessageParams,
     UpdateContent,

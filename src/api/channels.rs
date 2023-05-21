@@ -1,10 +1,8 @@
+use axum::extract::State;
+use axum::routing::{get, post};
+use axum::{Json, Router};
 use chrono::Utc;
 use futures::future::join_all;
-use rocket::serde::json::Json;
-use rocket::State;
-use rocket_okapi::okapi::schemars;
-use rocket_okapi::okapi::schemars::JsonSchema;
-use rocket_okapi::openapi;
 use serde::Serialize;
 use serde_json::{json, Value};
 use std::collections::HashMap;
@@ -12,6 +10,7 @@ use std::str::FromStr;
 use std::sync::Arc;
 use tokio::sync::Mutex;
 
+use super::state::AppState;
 use super::Result;
 use crate::api::error::ApiError;
 use crate::command_handler::{CommandHandler, ExecutionContext};
@@ -19,12 +18,10 @@ use crate::database;
 use crate::database::models::{Command, CommandMode, Filter, User, WebSession};
 use crate::platform::{ChannelIdentifier, Permissions, ServerPlatformContext, UserIdentifier};
 
-#[openapi(tag = "Channels")]
-#[get("/")]
-pub async fn get_channels(cmd: &State<CommandHandler>) -> Result<Json<Vec<Channel>>> {
+pub async fn get_channels(cmd: State<CommandHandler>) -> Result<Json<Vec<Channel>>> {
     let base_channels = cmd.db.get_channels().expect("DB error");
     let mut friendly_names =
-        get_friendly_names(base_channels.iter().map(|ch| ch.id).collect(), cmd).await?;
+        get_friendly_names(base_channels.iter().map(|ch| ch.id).collect(), &cmd).await?;
 
     let channels = base_channels
         .into_iter()
@@ -37,11 +34,9 @@ pub async fn get_channels(cmd: &State<CommandHandler>) -> Result<Json<Vec<Channe
     Ok(Json(channels))
 }
 
-#[openapi(tag = "Channels")]
-#[get("/<channel_id>/info")]
 pub async fn get_channel_info(
     channel_id: u64,
-    cmd: &State<CommandHandler>,
+    cmd: State<CommandHandler>,
     user: Option<User>,
 ) -> Result<Json<ChannelInfo>> {
     let channel = cmd
@@ -49,7 +44,7 @@ pub async fn get_channel_info(
         .get_channel_by_id(channel_id)?
         .ok_or(ApiError::NotFound)?;
 
-    let display_name = match get_channel_display_name(&channel, cmd).await {
+    let display_name = match get_channel_display_name(&channel, &cmd).await {
         Ok(name) => name,
         Err(error) => {
             tracing::error!("Failed to query the display name: {error:?}");
@@ -88,20 +83,16 @@ pub async fn get_channel_info(
     }))
 }
 
-#[openapi(tag = "Channels")]
-#[get("/<channel_id>/commands")]
 pub async fn get_channel_commands(
     channel_id: u64,
-    cmd: &State<CommandHandler>,
+    cmd: State<CommandHandler>,
 ) -> Result<Json<Vec<Command>>> {
     Ok(Json(cmd.db.get_commands(channel_id)?))
 }
 
-#[openapi(tag = "Channels")]
-#[get("/<channel_id>/eventsub")]
 pub async fn get_channel_eventsub_triggers(
     channel_id: u64,
-    cmd: &State<CommandHandler>,
+    cmd: State<CommandHandler>,
 ) -> Result<Json<Vec<Value>>> {
     let channel = cmd
         .db
@@ -138,12 +129,10 @@ pub async fn get_channel_eventsub_triggers(
     }
 }
 
-#[openapi(tag = "Channels")]
-#[get("/<channel_id>/filters")]
 pub async fn get_filters(
     channel_id: u64,
     session: WebSession,
-    cmd: &State<CommandHandler>,
+    cmd: State<CommandHandler>,
 ) -> Result<Json<Vec<Filter>>> {
     if cmd
         .get_permissions_in_channel_by_id(session.user_id, channel_id)
@@ -158,13 +147,11 @@ pub async fn get_filters(
     }
 }
 
-#[openapi(tag = "Channels")]
-#[get("/count")]
-pub async fn get_channel_count(cmd: &State<CommandHandler>) -> Result<Json<i64>> {
+pub async fn get_channel_count(cmd: State<CommandHandler>) -> Result<Json<i64>> {
     Ok(Json(cmd.db.get_channels_amount()?))
 }
 
-#[derive(Serialize, JsonSchema)]
+#[derive(Serialize)]
 pub struct Channel {
     #[serde(flatten)]
     pub channel: crate::database::models::Channel,
@@ -252,16 +239,15 @@ async fn get_friendly_names(
     Ok(results)
 }
 
-#[derive(Serialize, JsonSchema)]
+#[derive(Serialize)]
 pub struct ChannelInfo {
     pub id: u64,
     pub display_name: Option<String>,
     pub permissions: Option<PermissionsInfo>,
-    #[schemars(skip)]
     pub extra_sections: Vec<(&'static str, &'static str)>,
 }
 
-#[derive(Serialize, JsonSchema)]
+#[derive(Serialize)]
 pub struct PermissionsInfo {
     pub name: Permissions,
     pub value: usize,
@@ -303,14 +289,14 @@ async fn get_channel_display_name(
     }
 }
 
-#[openapi(tag = "Channels")]
-#[post("/<channel_id>/eval?<mode>&<args>", data = "<payload>")]
+// #[openapi(tag = "Channels")]
+// #[post("/<channel_id>/eval?<mode>&<args>", data = "<payload>")]
 pub async fn eval(
     channel_id: u64,
     user: User,
     mode: &str,
     args: Vec<String>,
-    cmd: &State<CommandHandler>,
+    cmd: State<CommandHandler>,
     payload: String,
 ) -> Result<String> {
     let channel = cmd
@@ -371,4 +357,15 @@ pub async fn eval(
             "Not a moderator in this channel".to_owned(),
         ))
     }
+}
+
+pub fn create_router() -> Router<AppState> {
+    Router::new()
+        .route("/", get(get_channels))
+        .route("/count", get(get_channel_count))
+        .route("/:id/info", get(get_channel_info))
+        .route("/:id/filters", get(get_filters))
+        .route("/:id/eventsub", get(get_channel_eventsub_triggers))
+        .route("/:id/commands", get(get_channel_commands))
+        .route("/:id/eval", post(eval))
 }

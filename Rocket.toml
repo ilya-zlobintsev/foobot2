@@ -1,8 +1,0 @@
-[default]
-address = "0.0.0.0"
-
-[default.shutdown]
-ctrlc = true
-signals = []
-grace = 10
-mercy = 5

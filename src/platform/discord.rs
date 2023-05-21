@@ -1,5 +1,6 @@
 use std::{env, sync::Arc};
 
+use async_trait::async_trait;
 use futures::StreamExt;
 use twilight_gateway::{Cluster, Event, Intents};
 use twilight_http::Client;

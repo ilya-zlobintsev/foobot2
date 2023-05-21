@@ -1,12 +1,11 @@
+use axum::extract::{Query, State};
+use axum::response::Redirect;
 use chrono::{Duration, Utc};
 use dashmap::DashMap;
+use http::StatusCode;
 use passwords::PasswordGenerator;
 use reqwest::Client;
-use rocket::get;
-use rocket::http::{Cookie, CookieJar, SameSite, Status};
-use rocket::request::{FromRequest, Outcome};
-use rocket::response::{status, Redirect};
-use rocket::State;
+use serde::Deserialize;
 use std::{collections::HashMap, env};
 use twitch_irc::login::{TokenStorage, UserAccessToken};
 
@@ -43,10 +42,20 @@ const TWITCH_BOT_SCOPES: &[&str] = &[
 
 type StateStorage = State<DashMap<String, String>>;
 
-#[get("/twitch?<redirect_to>")]
+#[derive(Deserialize)]
+struct Authenticateparams {
+    pub redirect_to: Option<String>,
+}
+
+#[derive(Deserialize)]
+pub struct RedirectParams {
+    pub code: String,
+    pub state: Option<String>,
+}
+
 pub async fn authenticate_twitch(
-    state_storage: &StateStorage,
-    redirect_to: Option<String>,
+    state_storage: StateStorage,
+    Authenticateparams { redirect_to }: Query<Authenticateparams>,
 ) -> Redirect {
     tracing::info!("Authenticating with Twitch...");
 
@@ -64,17 +73,15 @@ pub async fn authenticate_twitch(
 
     state_storage.insert(token, redirect_to.unwrap_or_else(|| "/profile".to_string()));
 
-    Redirect::to(redirect_uri)
+    Redirect::to(&redirect_uri)
 }
 
-#[get("/twitch/bot?<redirect_to>")]
-
 pub async fn admin_authenticate_twitch_bot(
-    cmd: &State<CommandHandler>,
+    cmd: State<CommandHandler>,
     current_session: WebSession,
-    state_storage: &StateStorage,
-    redirect_to: Option<String>,
-) -> Result<Redirect, status::Unauthorized<&'static str>> {
+    state_storage: StateStorage,
+    Authenticateparams { redirect_to }: Query<Authenticateparams>,
+) -> Result<Redirect, (StatusCode, &'static str)> {
     if let Ok(Some(admin_user)) = cmd.db.get_admin_user() {
         if admin_user.id == current_session.user_id {
             tracing::info!("Authenticating the bot (Twitch):");
@@ -95,19 +102,18 @@ pub async fn admin_authenticate_twitch_bot(
 
             tracing::info!("{}", uri);
 
-            Ok(Redirect::to(uri))
+            Ok(Redirect::to(&uri))
         } else {
-            Err(status::Unauthorized(Some("Not admin user!")))
+            Err((StatusCode::UNAUTHORIZED, "Not admin user!"))
         }
     } else {
-        Err(status::Unauthorized(Some("Admin user not configured!")))
+        Err((StatusCode::UNAUTHORIZED, "Admin user not configured!"))
     }
 }
 
-#[get("/twitch/manage?<redirect_to>")]
 pub async fn authenticate_twitch_manage(
-    state_storage: &StateStorage,
-    redirect_to: Option<String>,
+    state_storage: StateStorage,
+    Authenticateparams { redirect_to }: Query<Authenticateparams>,
 ) -> Redirect {
     let client_id = twitch_api::get_client_id().expect("Twitch client ID not specified");
 
@@ -125,21 +131,20 @@ pub async fn authenticate_twitch_manage(
 
     tracing::info!("{}", uri);
 
-    Redirect::to(uri)
+    Redirect::to(&uri)
 }
 
-#[get("/twitch/redirect/manage?<code>")]
 pub async fn twitch_manage_redirect(
-    cmd: &State<CommandHandler>,
-    code: &str,
-    client: &State<Client>,
+    cmd: State<CommandHandler>,
+    RedirectParams { code, state }: Query<RedirectParams>,
+    client: State<Client>,
     user: User,
 ) -> Result<Redirect, ApiError> {
     let twitch_user_id = user.twitch_id.ok_or(ApiError::InvalidUser)?;
 
     let mut user_credentials = cmd.db.make_twitch_credentials(twitch_user_id);
 
-    let auth_response = trade_twitch_code(client, code).await?;
+    let auth_response = trade_twitch_code(&client, &code).await?;
 
     let current = Utc::now();
 
@@ -157,13 +162,12 @@ pub async fn twitch_manage_redirect(
 
 #[get("/twitch/redirect?<code>&<state>")]
 pub async fn twitch_redirect(
-    cmd: &State<CommandHandler>,
-    client: &State<Client>,
-    code: &str,
+    cmd: State<CommandHandler>,
+    client: State<Client>,
     jar: &CookieJar<'_>,
     current_session: Option<WebSession>,
-    state_storage: &StateStorage,
-    state: Option<&str>,
+    state_storage: StateStorage,
+    RedirectParams { code, state }: Query<RedirectParams>,
 ) -> Result<Redirect, status::Unauthorized<&'static str>> {
     let redirect_to = if let Some(state) = state {
         consume_state(state, state_storage)?
@@ -210,7 +214,7 @@ pub async fn twitch_redirect(
 
 #[get("/twitch/redirect/bot?<code>")]
 pub async fn admin_twitch_bot_redirect(
-    cmd: &State<CommandHandler>,
+    cmd: State<CommandHandler>,
     client: &State<Client>,
     code: &str,
     current_session: WebSession,
@@ -307,7 +311,7 @@ pub fn authenticate_discord(state_storage: &StateStorage, redirect_to: Option<St
 #[get("/discord/redirect?<code>&<state>")]
 pub async fn discord_redirect(
     client: &State<Client>,
-    cmd: &State<CommandHandler>,
+    cmd: State<CommandHandler>,
     code: String,
     jar: &CookieJar<'_>,
     current_session: Option<WebSession>,
@@ -406,7 +410,7 @@ pub fn authenticate_spotify(_session: WebSession) -> Redirect {
 #[get("/spotify/redirect?<code>")]
 pub async fn spotify_redirect(
     code: &str,
-    cmd: &State<CommandHandler>,
+    cmd: State<CommandHandler>,
     session: WebSession,
 ) -> Redirect {
     let db = &cmd.db;

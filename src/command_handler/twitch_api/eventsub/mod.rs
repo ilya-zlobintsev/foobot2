@@ -46,7 +46,8 @@ impl EventSubSubscriptionType {
         json!({
            "method": "webhook",
            "callback": callback_url,
-           "secret": rocket::Config::SECRET_KEY,
+           "secret": todo!(),
+        //    "secret": rocket::Config::SECRET_KEY,
         })
     }
 

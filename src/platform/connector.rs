@@ -7,7 +7,7 @@ use connector_schema::{
     INCOMING_SUBJECT_PREFIX, OUTGOING_SUBJECT_PREFIX, PERMISSIONS_SUBJECT_PREFIX,
 };
 use futures::StreamExt;
-use tracing::error;
+use tracing::{debug, error, info};
 
 pub struct ConnectorPlatform {
     command_handler: CommandHandler,

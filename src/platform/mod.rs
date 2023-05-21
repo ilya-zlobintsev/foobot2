@@ -16,6 +16,7 @@ use std::fmt::{self, Display};
 use std::hash::{Hash, Hasher};
 use std::net::IpAddr;
 use std::str::FromStr;
+use tracing::error;
 
 pub use connector_schema::Permissions;
 

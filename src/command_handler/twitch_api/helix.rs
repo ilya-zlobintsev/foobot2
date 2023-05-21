@@ -8,6 +8,7 @@ use http::{HeaderMap, Method};
 use reqwest::{Client, RequestBuilder};
 use serde_json::{json, Value};
 use tokio::task;
+use tracing::debug;
 use twitch_irc::login::{LoginCredentials, StaticLoginCredentials};
 
 use crate::{api::response_ok, command_handler::twitch_api::model::UsersResponse};
