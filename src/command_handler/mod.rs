@@ -562,7 +562,7 @@ impl CommandHandler {
                 execute_template_command(self.template_registry.clone(), command.action, ctx, args)
                     .await
             }
-            CommandMode::Hebi => eval_hebi(command.action, &self.hebi_native_modules).await,
+            CommandMode::Hebi => eval_hebi(command.action, &self.hebi_native_modules, &args).await,
         }
     }
 
@@ -716,7 +716,7 @@ impl CommandHandler {
                 ) // TODO
                 .await?
             }
-            CommandMode::Hebi => eval_hebi(action, &self.hebi_native_modules).await?,
+            CommandMode::Hebi => eval_hebi(action, &self.hebi_native_modules, &[]).await?,
         }
         .unwrap_or_else(|| "Event triggered with no action".to_string());
 

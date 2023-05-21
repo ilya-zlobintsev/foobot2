@@ -2,7 +2,7 @@ mod http;
 mod utils;
 
 use super::error::CommandError;
-use hebi::{Hebi, NativeModule};
+use hebi::{Hebi, IntoValue, NativeModule};
 use reqwest::Client;
 use std::time::Duration;
 use tokio::time::timeout;
@@ -14,8 +14,21 @@ const TIMEOUT_SECS: u64 = 10;
 pub async fn eval_hebi(
     source: String,
     native_modules: &[NativeModule],
+    args: &[String],
 ) -> Result<Option<String>, CommandError> {
     let mut hebi = Hebi::new();
+
+    {
+        let args_list = hebi.new_list(args.len());
+
+        for arg in args {
+            let arg_value = hebi.new_string(arg).into_value(hebi.global()).unwrap();
+            args_list.push(arg_value);
+        }
+        let args_value = args_list.into_value(hebi.global()).unwrap();
+
+        hebi.globals().set(hebi.new_string("args"), args_value);
+    }
 
     for module in native_modules {
         hebi.register(module);

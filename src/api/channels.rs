@@ -293,7 +293,8 @@ async fn get_channel_display_name(
 #[derive(Deserialize)]
 pub struct EvalParams {
     pub mode: String,
-    pub args: Vec<String>,
+    #[serde(default)]
+    pub args: String,
 }
 
 pub async fn eval(
@@ -303,6 +304,8 @@ pub async fn eval(
     cmd: State<CommandHandler>,
     payload: String,
 ) -> Result<String> {
+    let args = args.split(',').map(str::to_owned).collect();
+
     let channel = cmd
         .db
         .get_channel_by_id(channel_id)?
