@@ -6,9 +6,11 @@ use crate::command_handler::CommandHandler;
 use crate::platform::{PlatformContext, UserIdentifier};
 
 use super::{ChannelIdentifier, ChatPlatform, ChatPlatformError, Permissions};
+use async_trait::async_trait;
 use futures::StreamExt;
 use irc::client::{prelude::*, Client};
 use tokio::task;
+use tracing::info;
 
 #[derive(Clone)]
 pub struct Irc {

@@ -8,6 +8,7 @@ use http::{HeaderMap, Method};
 use reqwest::{Client, RequestBuilder};
 use serde_json::{json, Value};
 use tokio::task;
+use tracing::debug;
 use twitch_irc::login::{LoginCredentials, StaticLoginCredentials};
 
 use crate::{api::response_ok, command_handler::twitch_api::model::UsersResponse};
@@ -147,7 +148,7 @@ impl<C: LoginCredentials> HelixApi<C> {
     }
 
     pub async fn get_user_by_id(&self, id: &str) -> anyhow::Result<User> {
-        let users = self.get_users(None, Some(&vec![id])).await?;
+        let users = self.get_users(None, Some(&[id])).await?;
 
         users
             .into_iter()

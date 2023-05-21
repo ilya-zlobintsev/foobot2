@@ -13,6 +13,7 @@ use crate::command_handler::spotify_api::SpotifyApi;
 use crate::database::schema::*;
 use crate::platform::{ChannelIdentifier, UserIdentifier, UserIdentifierError};
 
+use async_trait::async_trait;
 use chrono::{DateTime, Utc};
 use dashmap::DashMap;
 use diesel::mysql::MysqlConnection;
@@ -27,6 +28,7 @@ use reqwest::Client;
 use tokio::time;
 
 use diesel_migrations::{embed_migrations, EmbeddedMigrations, MigrationHarness};
+use tracing::error;
 use twitch_irc::login::{TokenStorage, UserAccessToken};
 pub const MIGRATIONS: EmbeddedMigrations = embed_migrations!();
 

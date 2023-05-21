@@ -1,16 +1,21 @@
+use async_trait::async_trait;
+use axum::extract::{FromRequestParts, Query, State};
+use axum::response::Redirect;
+use axum_extra::extract::cookie::{Cookie, Key, SameSite};
+use axum_extra::extract::PrivateCookieJar;
 use chrono::{Duration, Utc};
 use dashmap::DashMap;
+use http::request::Parts;
+use http::StatusCode;
 use passwords::PasswordGenerator;
 use reqwest::Client;
-use rocket::get;
-use rocket::http::{Cookie, CookieJar, SameSite, Status};
-use rocket::request::{FromRequest, Outcome};
-use rocket::response::{status, Redirect};
-use rocket::State;
+use serde::Deserialize;
+use std::sync::Arc;
 use std::{collections::HashMap, env};
 use twitch_irc::login::{TokenStorage, UserAccessToken};
 
 use crate::api::error::ApiError;
+use crate::api::state::AppState;
 use crate::command_handler::twitch_api;
 use crate::command_handler::twitch_api::helix::HelixApi;
 use crate::database::models::User;
@@ -41,12 +46,22 @@ const TWITCH_BOT_SCOPES: &[&str] = &[
     "moderator:manage:banned_users",
 ];
 
-type StateStorage = State<DashMap<String, String>>;
+type StateStorage = State<Arc<DashMap<String, String>>>;
 
-#[get("/twitch?<redirect_to>")]
+#[derive(Deserialize)]
+pub struct Authenticateparams {
+    pub redirect_to: Option<String>,
+}
+
+#[derive(Deserialize)]
+pub struct RedirectParams {
+    pub code: String,
+    pub state: Option<String>,
+}
+
 pub async fn authenticate_twitch(
-    state_storage: &StateStorage,
-    redirect_to: Option<String>,
+    state_storage: StateStorage,
+    Query(Authenticateparams { redirect_to }): Query<Authenticateparams>,
 ) -> Redirect {
     tracing::info!("Authenticating with Twitch...");
 
@@ -64,17 +79,15 @@ pub async fn authenticate_twitch(
 
     state_storage.insert(token, redirect_to.unwrap_or_else(|| "/profile".to_string()));
 
-    Redirect::to(redirect_uri)
+    Redirect::to(&redirect_uri)
 }
 
-#[get("/twitch/bot?<redirect_to>")]
-
 pub async fn admin_authenticate_twitch_bot(
-    cmd: &State<CommandHandler>,
+    cmd: State<CommandHandler>,
     current_session: WebSession,
-    state_storage: &StateStorage,
-    redirect_to: Option<String>,
-) -> Result<Redirect, status::Unauthorized<&'static str>> {
+    state_storage: StateStorage,
+    Query(Authenticateparams { redirect_to }): Query<Authenticateparams>,
+) -> Result<Redirect, (StatusCode, &'static str)> {
     if let Ok(Some(admin_user)) = cmd.db.get_admin_user() {
         if admin_user.id == current_session.user_id {
             tracing::info!("Authenticating the bot (Twitch):");
@@ -95,19 +108,18 @@ pub async fn admin_authenticate_twitch_bot(
 
             tracing::info!("{}", uri);
 
-            Ok(Redirect::to(uri))
+            Ok(Redirect::to(&uri))
         } else {
-            Err(status::Unauthorized(Some("Not admin user!")))
+            Err((StatusCode::UNAUTHORIZED, "Not admin user!"))
         }
     } else {
-        Err(status::Unauthorized(Some("Admin user not configured!")))
+        Err((StatusCode::UNAUTHORIZED, "Admin user not configured!"))
     }
 }
 
-#[get("/twitch/manage?<redirect_to>")]
 pub async fn authenticate_twitch_manage(
-    state_storage: &StateStorage,
-    redirect_to: Option<String>,
+    state_storage: StateStorage,
+    Query(Authenticateparams { redirect_to }): Query<Authenticateparams>,
 ) -> Redirect {
     let client_id = twitch_api::get_client_id().expect("Twitch client ID not specified");
 
@@ -125,21 +137,20 @@ pub async fn authenticate_twitch_manage(
 
     tracing::info!("{}", uri);
 
-    Redirect::to(uri)
+    Redirect::to(&uri)
 }
 
-#[get("/twitch/redirect/manage?<code>")]
 pub async fn twitch_manage_redirect(
-    cmd: &State<CommandHandler>,
-    code: &str,
-    client: &State<Client>,
+    cmd: State<CommandHandler>,
+    Query(RedirectParams { code, state: _ }): Query<RedirectParams>,
+    client: State<Client>,
     user: User,
 ) -> Result<Redirect, ApiError> {
     let twitch_user_id = user.twitch_id.ok_or(ApiError::InvalidUser)?;
 
     let mut user_credentials = cmd.db.make_twitch_credentials(twitch_user_id);
 
-    let auth_response = trade_twitch_code(client, code).await?;
+    let auth_response = trade_twitch_code(&client, &code).await?;
 
     let current = Utc::now();
 
@@ -155,23 +166,21 @@ pub async fn twitch_manage_redirect(
     Ok(Redirect::to("/profile"))
 }
 
-#[get("/twitch/redirect?<code>&<state>")]
 pub async fn twitch_redirect(
-    cmd: &State<CommandHandler>,
-    client: &State<Client>,
-    code: &str,
-    jar: &CookieJar<'_>,
+    cmd: State<CommandHandler>,
+    client: State<Client>,
+    mut jar: PrivateCookieJar,
     current_session: Option<WebSession>,
-    state_storage: &StateStorage,
-    state: Option<&str>,
-) -> Result<Redirect, status::Unauthorized<&'static str>> {
+    state_storage: StateStorage,
+    Query(RedirectParams { code, state }): Query<RedirectParams>,
+) -> Result<(PrivateCookieJar, Redirect), (StatusCode, &'static str)> {
     let redirect_to = if let Some(state) = state {
-        consume_state(state, state_storage)?
+        consume_state(&state, &state_storage)?
     } else {
         "/profile".to_string()
     };
 
-    let auth_info = trade_twitch_code(client, code)
+    let auth_info = trade_twitch_code(&client, &code)
         .await
         .expect("Failed to get tokens");
 
@@ -202,22 +211,21 @@ pub async fn twitch_redirect(
     } else {
         let cookie = create_user_session(&cmd.db, user.id, twitch_user.display_name);
 
-        jar.add_private(cookie);
+        jar = jar.add(cookie);
     }
 
-    Ok(Redirect::found(redirect_to))
+    Ok((jar, Redirect::to(&redirect_to)))
 }
 
-#[get("/twitch/redirect/bot?<code>")]
 pub async fn admin_twitch_bot_redirect(
-    cmd: &State<CommandHandler>,
-    client: &State<Client>,
-    code: &str,
+    cmd: State<CommandHandler>,
+    client: State<Client>,
+    Query(RedirectParams { code, state: _ }): Query<RedirectParams>,
     current_session: WebSession,
-) -> Result<Redirect, status::Unauthorized<&'static str>> {
+) -> Result<Redirect, (StatusCode, &'static str)> {
     if let Ok(Some(admin_user)) = cmd.db.get_admin_user() {
         if admin_user.id == current_session.user_id {
-            let auth_response = trade_twitch_code(client, code)
+            let auth_response = trade_twitch_code(&client, &code)
                 .await
                 .expect("Failed to get Twitch auth response");
 
@@ -242,12 +250,12 @@ pub async fn admin_twitch_bot_redirect(
 
             tracing::info!("Successfully authenticated the bot and saved the token!");
 
-            Ok(Redirect::found("/profile"))
+            Ok(Redirect::to("/profile"))
         } else {
-            Err(status::Unauthorized(Some("Not admin user!")))
+            Err((StatusCode::UNAUTHORIZED, "Not admin user!"))
         }
     } else {
-        Err(status::Unauthorized(Some("Admin user not configured!")))
+        Err((StatusCode::UNAUTHORIZED, "Admin user not configured!"))
     }
 }
 
@@ -288,8 +296,10 @@ async fn trade_twitch_code(
     Ok(response.json::<TwitchAuthenticationResponse>().await?)
 }
 
-#[get("/discord?<redirect_to>")]
-pub fn authenticate_discord(state_storage: &StateStorage, redirect_to: Option<String>) -> Redirect {
+pub async fn authenticate_discord(
+    state_storage: StateStorage,
+    Query(Authenticateparams { redirect_to }): Query<Authenticateparams>,
+) -> Redirect {
     tracing::info!("Authenticating with Discord...");
 
     let client_id = env::var("DISCORD_CLIENT_ID").expect("DISCORD_CLIENT_ID missing");
@@ -301,21 +311,19 @@ pub fn authenticate_discord(state_storage: &StateStorage, redirect_to: Option<St
 
     state_storage.insert(token, redirect_to.unwrap_or_else(|| "/profile".to_string()));
 
-    Redirect::to(redirect_uri)
+    Redirect::to(&redirect_uri)
 }
 
-#[get("/discord/redirect?<code>&<state>")]
 pub async fn discord_redirect(
-    client: &State<Client>,
-    cmd: &State<CommandHandler>,
-    code: String,
-    jar: &CookieJar<'_>,
+    client: State<Client>,
+    cmd: State<CommandHandler>,
+    mut jar: PrivateCookieJar,
     current_session: Option<WebSession>,
-    state_storage: &StateStorage,
-    state: Option<&str>,
-) -> Result<Redirect, status::Unauthorized<&'static str>> {
+    state_storage: StateStorage,
+    Query(RedirectParams { code, state }): Query<RedirectParams>,
+) -> Result<(PrivateCookieJar, Redirect), (StatusCode, &'static str)> {
     let redirect_to = if let Some(state) = state {
-        consume_state(state, state_storage)?
+        consume_state(&state, &state_storage)?
     } else {
         "/profile".to_string()
     };
@@ -384,17 +392,16 @@ pub async fn discord_redirect(
     } else {
         let cookie = create_user_session(db, user.id, discord_user.name);
 
-        jar.add_private(cookie);
+        jar = jar.add(cookie);
     }
 
-    Ok(Redirect::to(redirect_to))
+    Ok((jar, Redirect::to(&redirect_to)))
 }
 
-#[get("/spotify")]
-pub fn authenticate_spotify(_session: WebSession) -> Redirect {
+pub async fn authenticate_spotify(_session: WebSession) -> Redirect {
     let client_id = env::var("SPOTIFY_CLIENT_ID").expect("SPOTIFY_CLIENT_ID missing");
 
-    Redirect::to(AuthPlatform::Spotify.construct_uri(
+    Redirect::to(&AuthPlatform::Spotify.construct_uri(
         &client_id,
         &SPOTIFY_SCOPES.join("%20"),
         false,
@@ -403,10 +410,9 @@ pub fn authenticate_spotify(_session: WebSession) -> Redirect {
     ))
 }
 
-#[get("/spotify/redirect?<code>")]
 pub async fn spotify_redirect(
-    code: &str,
-    cmd: &State<CommandHandler>,
+    Query(RedirectParams { code, state: _ }): Query<RedirectParams>,
+    cmd: State<CommandHandler>,
     session: WebSession,
 ) -> Redirect {
     let db = &cmd.db;
@@ -419,7 +425,7 @@ pub async fn spotify_redirect(
         env::var("BASE_URL").expect("BASE_URL missing")
     );
 
-    let auth = SpotifyApi::get_tokens(code, &client_id, &client_secret, &redirect_uri)
+    let auth = SpotifyApi::get_tokens(&code, &client_id, &client_secret, &redirect_uri)
         .await
         .expect("Spotify API Error");
 
@@ -480,11 +486,11 @@ fn generate_state_token() -> String {
 fn consume_state(
     state: &str,
     state_storage: &StateStorage,
-) -> Result<String, status::Unauthorized<&'static str>> {
+) -> Result<String, (StatusCode, &'static str)> {
     if let Some((_, redirect_to)) = state_storage.remove(state) {
         Ok(redirect_to)
     } else {
-        Err(status::Unauthorized(Some("State token not found")))
+        Err((StatusCode::UNAUTHORIZED, "State token not found"))
     }
 }
 
@@ -562,45 +568,48 @@ impl AuthPlatform {
 }
 
 #[async_trait]
-impl<'r> FromRequest<'r> for WebSession {
-    type Error = ();
+impl FromRequestParts<AppState> for WebSession {
+    type Rejection = StatusCode;
 
-    async fn from_request(
-        request: &'r rocket::Request<'_>,
-    ) -> rocket::request::Outcome<Self, Self::Error> {
-        let db = &request
-            .rocket()
-            .state::<CommandHandler>()
-            .expect("Missing state")
-            .db;
+    async fn from_request_parts(
+        parts: &mut Parts,
+        state: &AppState,
+    ) -> Result<Self, Self::Rejection> {
+        let cookie_jar = PrivateCookieJar::<Key>::from_request_parts(parts, &state.secret_key)
+            .await
+            .unwrap();
 
-        match request.cookies().get_private("session_id") {
-            Some(session_id) => match db.get_web_session(session_id.value()).expect("DB Error") {
-                Some(web_session) => Outcome::Success(web_session),
-                None => Outcome::Failure((Status::Unauthorized, ())),
+        match cookie_jar.get("session_id") {
+            Some(session_id) => match state
+                .cmd
+                .db
+                .get_web_session(session_id.value())
+                .expect("DB Error")
+            {
+                Some(web_session) => Ok(web_session),
+                None => Err(StatusCode::UNAUTHORIZED),
             },
-            None => Outcome::Failure((Status::Unauthorized, ())),
+            None => Err(StatusCode::UNAUTHORIZED),
         }
     }
 }
 
 #[async_trait]
-impl<'r> FromRequest<'r> for User {
-    type Error = ();
+impl FromRequestParts<AppState> for User {
+    type Rejection = StatusCode;
 
-    async fn from_request(
-        request: &'r rocket::Request<'_>,
-    ) -> rocket::request::Outcome<Self, Self::Error> {
-        WebSession::from_request(request).await.map(|session| {
-            let db = &request
-                .rocket()
-                .state::<CommandHandler>()
-                .expect("Missing state")
-                .db;
+    async fn from_request_parts(
+        parts: &mut Parts,
+        state: &AppState,
+    ) -> Result<Self, Self::Rejection> {
+        let session = WebSession::from_request_parts(parts, state).await?;
 
-            db.get_user_by_id(session.user_id)
-                .expect("DB error")
-                .expect("Invalid web session") // TODO handle this
-        })
+        // TODO handle this
+        Ok(state
+            .cmd
+            .db
+            .get_user_by_id(session.user_id)
+            .expect("DB error")
+            .expect("Invalid web session"))
     }
 }

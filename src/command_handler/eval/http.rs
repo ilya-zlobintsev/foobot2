@@ -3,6 +3,7 @@ use http::Method;
 use reqwest::Client;
 use serde::de::DeserializeSeed;
 use std::str::FromStr;
+use tracing::debug;
 
 pub async fn request(scope: Scope<'_>, client: Client) -> hebi::Result<hebi::Value<'_>> {
     let url = scope.param::<Str>(0)?;

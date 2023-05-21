@@ -2,6 +2,7 @@ use crate::{command_handler::platform_handler::TwitchApi, platform::ChannelIdent
 use handlebars::{
     Context, Handlebars, Helper, HelperDef, HelperResult, Output, RenderContext, RenderError,
 };
+use tracing::debug;
 
 use super::InquiryContext;
 

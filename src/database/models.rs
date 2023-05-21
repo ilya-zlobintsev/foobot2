@@ -4,22 +4,10 @@ use crate::platform::ChannelIdentifier;
 
 use super::schema::*;
 use diesel::Queryable;
-use rocket_okapi::okapi::schemars::JsonSchema;
-use rocket_okapi::{okapi::schemars, OpenApiFromRequest};
 use serde::{Deserialize, Serialize};
 use strum::EnumString;
 
-#[derive(
-    Queryable,
-    Identifiable,
-    AsChangeset,
-    Debug,
-    Serialize,
-    Deserialize,
-    Clone,
-    JsonSchema,
-    OpenApiFromRequest,
-)]
+#[derive(Queryable, Identifiable, AsChangeset, Debug, Serialize, Deserialize, Clone)]
 pub struct User {
     pub id: u64,
     pub twitch_id: Option<String>,
@@ -53,7 +41,7 @@ pub struct NewUser<'a> {
     pub matrix_id: Option<&'a str>,
 }
 
-#[derive(Queryable, Debug, PartialEq, Eq, Serialize, Clone, JsonSchema)]
+#[derive(Queryable, Debug, PartialEq, Eq, Serialize, Clone)]
 pub struct Channel {
     pub id: u64,
     pub platform: String,
@@ -73,7 +61,7 @@ pub struct NewChannel<'a> {
     pub channel: &'a str,
 }
 
-#[derive(Queryable, Debug, PartialEq, Eq, Serialize, JsonSchema)]
+#[derive(Queryable, Debug, PartialEq, Eq, Serialize)]
 pub struct Command {
     pub name: String,
     pub action: String,
@@ -85,7 +73,7 @@ pub struct Command {
     pub mode: CommandMode,
 }
 
-#[derive(Debug, PartialEq, Eq, Serialize, JsonSchema, EnumString, strum::Display)]
+#[derive(Debug, PartialEq, Eq, Serialize, EnumString, strum::Display)]
 #[strum(serialize_all = "lowercase")]
 pub enum CommandMode {
     Template,
@@ -125,7 +113,7 @@ pub struct UserDataUserId {
     pub user_id: u64,
 }
 
-#[derive(Queryable, Insertable, Clone, Serialize, Debug, JsonSchema, OpenApiFromRequest)]
+#[derive(Queryable, Insertable, Clone, Serialize, Debug)]
 #[diesel(table_name = web_sessions)]
 pub struct WebSession {
     #[serde(skip)]
@@ -166,7 +154,7 @@ pub struct MirrorConnection {
     pub to_channel_id: u64,
 }
 
-#[derive(Queryable, Insertable, Debug, Serialize, JsonSchema)]
+#[derive(Queryable, Insertable, Debug, Serialize)]
 #[diesel(table_name = filters)]
 pub struct Filter {
     #[serde(skip)]

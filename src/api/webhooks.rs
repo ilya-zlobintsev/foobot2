@@ -1,41 +1,39 @@
+use async_trait::async_trait;
+use axum::{
+    body::Bytes,
+    extract::{FromRequestParts, State},
+    routing::post,
+    Router,
+};
 use hmac::{Hmac, Mac};
-use rocket::{data::ToByteUnit, http::Status, outcome::Outcome, request::FromRequest, Data, State};
-use rocket_okapi::openapi;
-use serde_json::Value;
+use http::{request::Parts, StatusCode};
 use sha2::Sha256;
 use std::str::FromStr;
 use tokio::task;
 
 use crate::{
-    command_handler::{
-        twitch_api::eventsub::{events::*, *},
-        CommandHandler,
-    },
+    command_handler::twitch_api::eventsub::{events::*, *},
     platform::{ChannelIdentifier, ServerPlatformContext, UserIdentifier},
 };
 
-#[openapi(skip)]
-#[post("/twitch/eventsub", data = "<body>")]
+use super::state::AppState;
+
 pub async fn eventsub_callback(
     properties: TwitchEventsubCallbackProperties,
-    cmd: &State<CommandHandler>,
-    body: Data<'_>,
-) -> Result<String, Status> {
+    state: State<AppState>,
+    body: Bytes,
+) -> Result<String, StatusCode> {
     tracing::info!("Handling eventsub callback {:?}", properties.message_type);
 
-    let body_stream = body.open(32i32.mebibytes());
+    let message = serde_json::from_slice(&body).unwrap();
 
-    let body = body_stream.into_bytes().await.unwrap();
-
-    let message: Value = serde_json::from_slice(&body).expect("Parse error");
-
-    let secret_key = rocket::Config::SECRET_KEY;
+    let secret_key = &state.raw_secret_key;
 
     if properties.message_retry > 1 {
         tracing::warn!("Received EventSub message retry");
     }
 
-    match verify_twitch_signature(&properties, &body, secret_key).await {
+    match verify_twitch_signature(&properties, &body, secret_key.as_bytes()).await {
         true => Ok({
             tracing::info!("Request signature verified");
 
@@ -49,7 +47,7 @@ pub async fn eventsub_callback(
                     let notification: EventSubNotification =
                         serde_json::from_value(message).expect("Invalid message format");
 
-                    let cmd = (*cmd).clone();
+                    let cmd = state.cmd.clone();
 
                     task::spawn(async move {
                         let platform_handler = cmd.platform_handler.read().await;
@@ -121,7 +119,7 @@ pub async fn eventsub_callback(
         }),
         false => {
             tracing::warn!("REQUEST FORGERY DETECTED");
-            Err(Status::Unauthorized)
+            Err(StatusCode::UNAUTHORIZED)
         }
     }
 }
@@ -129,7 +127,7 @@ pub async fn eventsub_callback(
 async fn verify_twitch_signature(
     properties: &TwitchEventsubCallbackProperties,
     body: &[u8],
-    secret_key: &str,
+    secret_key: &[u8],
 ) -> bool {
     let mut hmac_message = Vec::new();
 
@@ -139,7 +137,7 @@ async fn verify_twitch_signature(
 
     type HmacSha256 = Hmac<Sha256>;
 
-    let mut mac = HmacSha256::new_from_slice(secret_key.as_bytes()).unwrap();
+    let mut mac = HmacSha256::new_from_slice(secret_key).unwrap();
 
     mac.update(&hmac_message);
 
@@ -167,46 +165,57 @@ pub struct TwitchEventsubCallbackProperties {
     subscription_type: String,
 }
 
-#[rocket::async_trait]
-impl<'r> FromRequest<'r> for TwitchEventsubCallbackProperties {
-    type Error = ();
+#[async_trait]
+impl FromRequestParts<AppState> for TwitchEventsubCallbackProperties {
+    type Rejection = ();
 
-    async fn from_request(
-        request: &'r rocket::Request<'_>,
-    ) -> rocket::request::Outcome<Self, Self::Error> {
-        let headers = request.headers();
+    async fn from_request_parts(parts: &mut Parts, _: &AppState) -> Result<Self, Self::Rejection> {
+        let headers = &parts.headers;
 
-        Outcome::Success(Self {
+        Ok(Self {
             message_id: headers
                 .get("Twitch-Eventsub-Message-Id")
-                .next()
                 .unwrap()
-                .to_string(),
+                .to_str()
+                .unwrap()
+                .to_owned(),
             message_retry: headers
                 .get("Twitch-Eventsub-Message-Retry")
-                .next()
+                .unwrap()
+                .to_str()
                 .unwrap()
                 .parse()
                 .unwrap(),
             message_type: EventSubNotificationType::from_str(
-                headers.get("Twitch-Eventsub-Message-Type").next().unwrap(),
+                headers
+                    .get("Twitch-Eventsub-Message-Type")
+                    .unwrap()
+                    .to_str()
+                    .unwrap(),
             )
             .expect("Invalid message type!"),
             message_signature: headers
                 .get("Twitch-Eventsub-Message-Signature")
-                .next()
                 .unwrap()
-                .to_string(),
+                .to_str()
+                .unwrap()
+                .to_owned(),
             message_timestamp: headers
                 .get("Twitch-Eventsub-Message-Timestamp")
-                .next()
                 .unwrap()
-                .to_string(),
+                .to_str()
+                .unwrap()
+                .to_owned(),
             subscription_type: headers
                 .get("Twitch-Eventsub-Subscription-Type")
-                .next()
                 .unwrap()
-                .to_string(),
+                .to_str()
+                .unwrap()
+                .to_owned(),
         })
     }
+}
+
+pub fn create_router() -> Router<AppState> {
+    Router::new().route("/twitch/eventsub", post(eventsub_callback))
 }
