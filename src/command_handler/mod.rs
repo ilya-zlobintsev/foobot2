@@ -716,7 +716,7 @@ impl CommandHandler {
                 ) // TODO
                 .await?
             }
-            CommandMode::Hebi => eval_hebi(action, &self.hebi_native_modules, &[]).await?,
+            CommandMode::Hebi => eval_hebi(action, &self.hebi_native_modules, &arguments).await?,
         }
         .unwrap_or_else(|| "Event triggered with no action".to_string());
 
