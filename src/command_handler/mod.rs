@@ -269,7 +269,10 @@ impl CommandHandler {
 
         let template_registry = Arc::new(template_registry);
 
-        let builtin_commands = create_builtin_commands(template_registry.clone());
+        let hebi_native_modules = Arc::new(create_native_modules());
+
+        let builtin_commands =
+            create_builtin_commands(template_registry.clone(), hebi_native_modules.clone());
         info!("Loaded builtin commands: {builtin_commands:?}");
 
         let cooldowns = Arc::new(RwLock::new(Vec::new()));
@@ -305,8 +308,6 @@ impl CommandHandler {
             .unwrap_or_default();
 
         start_supinic_heartbeat().await;
-
-        let hebi_native_modules = Arc::new(create_native_modules());
 
         Self {
             db,

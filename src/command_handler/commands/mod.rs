@@ -1,16 +1,18 @@
 mod cmd;
 mod debug;
+mod hebi;
 mod ping;
 mod shell;
 mod twitch_eventsub;
 mod whoami;
 
 use self::{
-    cmd::Cmd, debug::Debug, ping::Ping, shell::Shell, twitch_eventsub::TwitchEventSub,
-    whoami::WhoAmI,
+    cmd::Cmd, debug::Debug, hebi::DebugHebi, ping::Ping, shell::Shell,
+    twitch_eventsub::TwitchEventSub, whoami::WhoAmI,
 };
 use super::{CommandError, ExecutionContext};
 use crate::platform::{Permissions, PlatformContext};
+use ::hebi::NativeModule;
 use async_trait::async_trait;
 use enum_dispatch::enum_dispatch;
 use handlebars::Handlebars;
@@ -42,6 +44,7 @@ pub enum BuiltinCommand {
     WhoAmI(WhoAmI),
     Shell(Shell),
     TwitchEventSub(TwitchEventSub),
+    DebugHebi(DebugHebi),
 }
 
 impl std::fmt::Debug for BuiltinCommand {
@@ -50,7 +53,10 @@ impl std::fmt::Debug for BuiltinCommand {
     }
 }
 
-pub fn create_builtin_commands(template_registry: Arc<Handlebars<'static>>) -> Vec<BuiltinCommand> {
+pub fn create_builtin_commands(
+    template_registry: Arc<Handlebars<'static>>,
+    native_modules: Arc<Vec<NativeModule>>,
+) -> Vec<BuiltinCommand> {
     vec![
         Ping::default().into(),
         Debug::new(template_registry).into(),
@@ -58,5 +64,6 @@ pub fn create_builtin_commands(template_registry: Arc<Handlebars<'static>>) -> V
         WhoAmI.into(),
         Shell.into(),
         TwitchEventSub.into(),
+        DebugHebi::new(native_modules).into(),
     ]
 }
