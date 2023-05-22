@@ -78,6 +78,7 @@ impl ChatPlatform for ConnectorPlatform {
     }
 }
 
+#[derive(Debug)]
 pub struct ConnectorPlatformContext<'a> {
     nats_client: &'a Client,
     platform: &'a str,

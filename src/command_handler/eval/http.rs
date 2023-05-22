@@ -3,9 +3,12 @@ use http::Method;
 use reqwest::Client;
 use serde::de::DeserializeSeed;
 use std::str::FromStr;
-use tracing::debug;
+use tracing::{debug, instrument, Span};
 
+#[instrument(name = "hebi.http.fetch", skip_all)]
 pub async fn request(scope: Scope<'_>, client: Client) -> hebi::Result<hebi::Value<'_>> {
+    let span = Span::current();
+
     let url = scope.param::<Str>(0)?;
     let request_params = scope
         .param::<Table>(1)
@@ -17,6 +20,8 @@ pub async fn request(scope: Scope<'_>, client: Client) -> hebi::Result<hebi::Val
     let method =
         Method::from_str(raw_method.as_str()).map_err(|err| hebi::Error::User(Box::new(err)))?;
 
+    span.record("url", url.as_str());
+    span.record("method", method.as_str());
     debug!("Sending {method} request to {url}");
 
     let response = client

@@ -16,7 +16,7 @@ futures = "0.3.24"
 async-trait = "0.1.57"
 
 tracing = "0.1.36"
-tracing-subscriber = "0.3.15"
+tracing-subscriber = { version = "0.3.15", features = ["env-filter"] }
 
 reqwest = { version = "0.11.12", default-features = false, features = [
     "json",
@@ -69,9 +69,6 @@ irc = { version = "0.15.0", default-features = false, features = [
     "toml_config",
 ] }
 
-prometheus = { version = "0.13.2", features = ["process"] }
-once_cell = "1.15.0"
-
 tonic = { version = "0.8.2", features = ["tls"] }
 prost = "0.11.0"
 
@@ -87,6 +84,9 @@ connector-schema = { git = "https://git.hyron.dev/foobot/foobot-chat-connector",
 hebi = { git = "https://github.com/jprochazk/hebi", features = [
     "serde",
 ], branch = "v2" }
+opentelemetry = { version = "0.18.0", features = ["rt-tokio"] }
+opentelemetry-otlp = "0.11.0"
+tracing-opentelemetry = "0.18.0"
 
 
 [build-dependencies]

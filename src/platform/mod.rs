@@ -12,7 +12,7 @@ use async_trait::async_trait;
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use std::env::{self, VarError};
-use std::fmt::{self, Display};
+use std::fmt::{self, Debug, Display};
 use std::hash::{Hash, Hasher};
 use std::net::IpAddr;
 use std::str::FromStr;
@@ -32,7 +32,7 @@ pub trait ChatPlatform {
 }
 
 #[async_trait]
-pub trait PlatformContext {
+pub trait PlatformContext: Debug {
     async fn get_permissions_internal(&self) -> Permissions;
 
     fn get_channel(&self) -> ChannelIdentifier;
@@ -54,6 +54,16 @@ pub struct ServerPlatformContext {
     pub executing_user: UserIdentifier,
     pub cmd: CommandHandler,
     pub display_name: String,
+}
+
+impl Debug for ServerPlatformContext {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("ServerPlatformContext")
+            .field("target_channel", &self.target_channel)
+            .field("executing_user", &self.executing_user)
+            .field("display_name", &self.display_name)
+            .finish()
+    }
 }
 
 #[async_trait]

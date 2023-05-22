@@ -1,7 +1,6 @@
-use std::{env, sync::Arc};
-
 use async_trait::async_trait;
 use futures::StreamExt;
+use std::{env, fmt::Debug, sync::Arc};
 use twilight_gateway::{Cluster, Event, Intents};
 use twilight_http::Client;
 use twilight_model::{gateway::payload::incoming::MessageCreate, guild::Permissions};
@@ -110,6 +109,16 @@ pub struct DiscordPlatformContext<'a> {
     cmd: &'a CommandHandler,
     prefix: Arc<String>,
     self_mention: Arc<String>,
+}
+
+impl Debug for DiscordPlatformContext<'_> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("DiscordPlatformContext")
+            .field("msg", &self.msg)
+            .field("prefix", &self.prefix)
+            .field("self_mention", &self.self_mention)
+            .finish()
+    }
 }
 
 #[async_trait]

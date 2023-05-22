@@ -86,7 +86,7 @@ impl Local {
     }
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 struct LocalPlatformContext {
     pub addr: SocketAddr,
     pub addr_str: String,

@@ -10,7 +10,7 @@ use tracing::instrument;
 
 const TIMEOUT_SECS: u64 = 10;
 
-#[instrument(skip_all)]
+#[instrument(skip(native_modules))]
 pub async fn eval_hebi(
     source: String,
     native_modules: &[NativeModule],

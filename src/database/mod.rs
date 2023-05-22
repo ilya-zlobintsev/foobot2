@@ -28,7 +28,7 @@ use reqwest::Client;
 use tokio::time;
 
 use diesel_migrations::{embed_migrations, EmbeddedMigrations, MigrationHarness};
-use tracing::error;
+use tracing::{error, instrument};
 use twitch_irc::login::{TokenStorage, UserAccessToken};
 pub const MIGRATIONS: EmbeddedMigrations = embed_migrations!();
 
@@ -263,6 +263,7 @@ impl Database {
         channels::table.count().get_result(&mut conn)
     }
 
+    #[instrument]
     pub fn get_command(
         &self,
         channel_identifier: &ChannelIdentifier,
@@ -461,6 +462,7 @@ impl Database {
         }
     }
 
+    #[instrument]
     pub fn get_or_create_user(
         &self,
         user_identifier: &UserIdentifier,

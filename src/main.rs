@@ -10,8 +10,13 @@ mod rpc;
 use command_handler::{get_admin_channel, CommandHandler};
 use database::Database;
 use dotenv::dotenv;
+use opentelemetry::sdk::Resource;
+use opentelemetry::KeyValue;
+use opentelemetry_otlp::WithExportConfig;
 use platform::local::Local;
 use std::env;
+use tracing::metadata::LevelFilter;
+use tracing_subscriber::{prelude::*, Registry};
 
 use platform::connector::ConnectorPlatform;
 use platform::discord::Discord;
@@ -23,8 +28,7 @@ use platform::ChatPlatform;
 #[tokio::main]
 async fn main() {
     dotenv().unwrap_or_default();
-
-    tracing_subscriber::fmt::init();
+    init_tracing();
 
     let db = Database::connect(env::var("DATABASE_URL").expect("DATABASE_URL missing"))
         .expect("Failed to connect to DB");
@@ -99,4 +103,38 @@ pub fn get_version() -> String {
         env!("GIT_HASH"),
         env!("PROFILE")
     )
+}
+
+fn init_tracing() {
+    let otlp_host = env::var("OTLP_HOST").expect("Could not load OTLP_HOST");
+
+    let tracer = opentelemetry_otlp::new_pipeline()
+        .tracing()
+        .with_exporter(
+            opentelemetry_otlp::new_exporter()
+                .tonic()
+                .with_endpoint(otlp_host),
+        )
+        .with_trace_config(
+            opentelemetry::sdk::trace::config().with_resource(Resource::new(vec![KeyValue::new(
+                "service.name",
+                "foobot2",
+            )])),
+        )
+        .install_batch(opentelemetry::runtime::Tokio)
+        .unwrap();
+
+    let telemetry = tracing_opentelemetry::layer().with_tracer(tracer);
+
+    let fmt_layer = tracing_subscriber::fmt::layer();
+    let filter_layer = tracing_subscriber::EnvFilter::builder()
+        .with_default_directive(LevelFilter::INFO.into())
+        .from_env()
+        .expect("Failed to parse log directive");
+
+    Registry::default()
+        .with(fmt_layer)
+        .with(telemetry)
+        .with(filter_layer)
+        .init()
 }

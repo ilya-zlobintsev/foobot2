@@ -21,18 +21,19 @@ use handlebars::Handlebars;
 use inquiry_helper::*;
 use lastfm_api::LastFMApi;
 use lingva_api::LingvaApi;
-use once_cell::sync::Lazy;
+use opentelemetry::trace::TraceContextExt;
 use owm_api::OwmApi;
-use prometheus::{HistogramOpts, HistogramVec, IntCounterVec, Opts};
 use reqwest::Client;
 use std::collections::HashMap;
 use std::env;
+use std::fmt::Debug;
 use std::str::FromStr;
 use std::sync::Arc;
 use std::time::Duration;
 use tokio::sync::{Mutex, RwLock};
 use tokio::task;
-use tracing::info;
+use tracing::{info, instrument, Span};
+use tracing_opentelemetry::OpenTelemetrySpanExt;
 use twitch_api::TwitchApi;
 
 use self::commands::BuiltinCommand;
@@ -49,25 +50,6 @@ use crate::platform::{minecraft, UserIdentifier};
 use crate::platform::{ChannelIdentifier, Permissions, PlatformContext, ServerPlatformContext};
 
 const DEFAULT_COOLDOWN: u64 = 5;
-
-pub static COMMAND_COUNTER: Lazy<IntCounterVec> = Lazy::new(|| {
-    IntCounterVec::new(
-        Opts::new("command_counter", "Command call counter"),
-        &["command", "channel", "success"],
-    )
-    .expect("Failed to create counter")
-});
-
-pub static COMMAND_PROCESSING_HISTOGRAM: Lazy<HistogramVec> = Lazy::new(|| {
-    HistogramVec::new(
-        HistogramOpts::new(
-            "command_processing_duration",
-            "The time it took to process a command",
-        ),
-        &["command"],
-    )
-    .expect("Failed to create histogram")
-});
 
 #[derive(Clone)]
 pub struct CommandHandler {
@@ -429,6 +411,7 @@ impl CommandHandler {
     }
 
     /// This function expects a raw message that appears to be a command without the leading command prefix.
+    #[instrument(skip(self))]
     async fn handle_command_message<C>(&self, message_text: &str, context: C) -> Option<String>
     where
         C: PlatformContext + Send + Sync,
@@ -442,44 +425,27 @@ impl CommandHandler {
 
             let arguments: Vec<&str> = split.collect();
 
-            let timer = COMMAND_PROCESSING_HISTOGRAM
-                .with_label_values(&[&command])
-                .start_timer();
-            let channel = context.get_channel().to_string();
-
             let command_result = self.run_command(&command, arguments, context).await;
 
-            timer.observe_duration();
-
             match command_result {
-                Ok(result) => {
-                    if result.is_some() {
-                        COMMAND_COUNTER
-                            .with_label_values(&[&command, &channel, "true"])
-                            .inc();
-                    }
-
-                    result
-                }
-                Err(e) => {
-                    COMMAND_COUNTER
-                        .with_label_values(&[&command, &channel, "false"])
-                        .inc();
-
-                    Some(e.to_string())
-                }
+                Ok(result) => result,
+                Err(e) => Some(e.to_string()),
             }
         }
     }
 
     // #[async_recursion]
+    #[instrument(skip(self, platform_ctx))]
     async fn run_command<P: PlatformContext + Send + Sync>(
         &self,
         command: &str,
         args: Vec<&str>,
         platform_ctx: P,
     ) -> Result<Option<String>, CommandError> {
-        tracing::info!("Processing command {} with {:?}", command, args);
+        let span = Span::current();
+        let trace_id = span.context().span().span_context().trace_id();
+
+        tracing::info!("Processing command {command} with {args:?}, trace id: {trace_id}");
         let processing_timestamp = Utc::now();
 
         let user_identifier = platform_ctx.get_user_identifier();
@@ -551,6 +517,7 @@ impl CommandHandler {
         }
     }
 
+    #[instrument(skip(self))]
     pub async fn execute_command<P: PlatformContext>(
         &self,
         command: Command,
@@ -817,7 +784,19 @@ pub struct ExecutionContext<'a, P: PlatformContext> {
     pub blocked_users: &'a [UserIdentifier],
 }
 
+impl<P: PlatformContext> Debug for ExecutionContext<'_, P> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("ExecutionContext")
+            .field("platform_ctx", &self.platform_ctx)
+            .field("user", &self.user)
+            .field("processing_timestamp", &self.processing_timestamp)
+            .field("blocked_users", &self.blocked_users)
+            .finish()
+    }
+}
+
 impl<P: PlatformContext> ExecutionContext<'_, P> {
+    #[instrument]
     async fn get_permissions(&self) -> Result<Permissions, CommandError> {
         if let Ok(Some(admin_user)) = self.db.get_admin_user() {
             if admin_user.id == self.user.id {
@@ -864,6 +843,7 @@ async fn start_supinic_heartbeat() {
     });
 }
 
+#[instrument(skip(template_registry))]
 async fn execute_template_command<P: PlatformContext>(
     template_registry: Arc<Handlebars<'static>>,
     action: String,

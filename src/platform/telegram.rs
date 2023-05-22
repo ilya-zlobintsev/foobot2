@@ -125,6 +125,7 @@ impl ChatPlatform for Telegram {
     }
 }
 
+#[derive(Debug)]
 pub struct TelegramPlatformContext<'a> {
     msg: &'a Message,
     display_name: String,

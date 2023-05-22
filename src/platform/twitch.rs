@@ -4,6 +4,7 @@ use std::sync::Arc;
 use async_trait::async_trait;
 use chrono::{DateTime, Utc};
 use dashmap::DashMap;
+use std::fmt::Debug;
 use std::time::{Duration, Instant};
 use tokio::sync::mpsc::{self, UnboundedSender};
 use tokio::task;
@@ -148,7 +149,7 @@ impl ChatPlatform for Twitch {
     }
 }
 
-pub trait TwitchMessage {
+pub trait TwitchMessage: Debug {
     fn get_badges(&self) -> &Vec<Badge>;
 
     fn get_sender(&self) -> &TwitchUserBasics;
@@ -214,14 +215,14 @@ impl TwitchMessage for WhisperMessage {
     }
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct TwitchExecutionContext<M: TwitchMessage + std::marker::Sync + Clone> {
     msg: M,
     prefixes: Vec<String>,
 }
 
 #[async_trait]
-impl<T: TwitchMessage + std::marker::Sync + Clone> PlatformContext for TwitchExecutionContext<T> {
+impl<T: TwitchMessage + Sync + Clone + Debug> PlatformContext for TwitchExecutionContext<T> {
     async fn get_permissions_internal(&self) -> Permissions {
         let mut permissions = Permissions::Default;
 

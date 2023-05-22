@@ -120,7 +120,7 @@ impl ChatPlatform for Irc {
     }
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 struct IrcPlatformContext<'a> {
     message: &'a Message,
     command_prefix: Arc<String>,
