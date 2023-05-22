@@ -1,11 +1,5 @@
 use hebi::{List, Result, Scope, Str, Value};
 
-pub fn get_list_element(scope: Scope<'_>) -> Result<Option<Value<'_>>> {
-    let list = scope.param::<List>(0)?;
-    let index = scope.param::<i32>(1)?;
-    Ok(list.get(index as usize))
-}
-
 pub fn list_len(scope: Scope<'_>) -> Result<i32> {
     let list = scope.param::<List>(0)?;
     Ok(list.len() as i32)

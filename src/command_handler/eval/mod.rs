@@ -27,7 +27,7 @@ pub async fn eval_hebi(
         }
         let args_value = args_list.into_value(hebi.global()).unwrap();
 
-        hebi.globals().set(hebi.new_string("args"), args_value);
+        hebi.global().set(hebi.new_string("args"), args_value);
     }
 
     for module in native_modules {
@@ -56,7 +56,6 @@ pub fn create_native_modules() -> Vec<NativeModule> {
     modules.push(http);
 
     let utils = NativeModule::builder("utils")
-        .function("get_element", utils::get_list_element)
         .function("len", utils::list_len)
         .function("push", utils::list_push)
         .function("join", utils::join)
