@@ -78,11 +78,19 @@ impl ChatPlatform for ConnectorPlatform {
     }
 }
 
-#[derive(Debug)]
 pub struct ConnectorPlatformContext<'a> {
     nats_client: &'a Client,
     platform: &'a str,
     msg: &'a IncomingMessage,
+}
+
+impl Debug for ConnectorPlatformContext<'_> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("ConnectorPlatformContext")
+            .field("platform", &self.platform)
+            .field("msg", &self.msg)
+            .finish()
+    }
 }
 
 #[async_trait]

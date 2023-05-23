@@ -21,7 +21,6 @@ use tracing_subscriber::{prelude::*, Registry};
 use platform::connector::ConnectorPlatform;
 use platform::discord::Discord;
 use platform::irc::Irc;
-use platform::telegram::Telegram;
 use platform::twitch::Twitch;
 use platform::ChatPlatform;
 
@@ -66,11 +65,6 @@ async fn main() {
         Err(e) => {
             tracing::warn!("Error loading IRC: {:?}", e);
         }
-    }
-
-    match Telegram::init(command_handler.clone()).await {
-        Ok(telegram) => telegram.run().await,
-        Err(e) => tracing::warn!("Error loading Telegram: {:?}", e),
     }
 
     match Local::init(command_handler.clone()).await {
@@ -126,7 +120,7 @@ fn init_tracing() {
 
     let telemetry = tracing_opentelemetry::layer().with_tracer(tracer);
 
-    let fmt_layer = tracing_subscriber::fmt::layer();
+    let fmt_layer = tracing_subscriber::fmt::layer().compact();
     let filter_layer = tracing_subscriber::EnvFilter::builder()
         .with_default_directive(LevelFilter::INFO.into())
         .from_env()

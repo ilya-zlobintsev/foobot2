@@ -53,6 +53,7 @@ impl From<UserIdentifierError> for CommandError {
                 "separator `:`! Must be in the form of `platform:user`".to_string(),
             ),
             UserIdentifierError::InvalidPlatform => Self::InvalidArgument("platform".to_string()),
+            UserIdentifierError::InvalidId => Self::InvalidArgument("invalid user id".to_owned()),
         }
     }
 }

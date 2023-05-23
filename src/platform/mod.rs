@@ -3,7 +3,6 @@ pub mod discord;
 pub mod irc;
 pub mod local;
 pub mod minecraft;
-pub mod telegram;
 pub mod twitch;
 
 use crate::command_handler::CommandHandler;
@@ -160,6 +159,11 @@ impl UserIdentifier {
                 "discord" => Ok(Self::DiscordID(user_id.to_owned())),
                 "matrix" => Ok(Self::MatrixId(user_id.to_owned())),
                 "irc" => Ok(Self::IrcName(user_id.to_owned())),
+                "telegram" => Ok(Self::TelegramId(
+                    user_id
+                        .parse()
+                        .map_err(|_| UserIdentifierError::InvalidId)?,
+                )),
                 _ => {
                     error!("Unrecognized platform {platform}");
                     Err(UserIdentifierError::InvalidPlatform)
@@ -173,6 +177,7 @@ impl UserIdentifier {
 pub enum UserIdentifierError {
     MissingDelimiter,
     InvalidPlatform,
+    InvalidId,
 }
 
 // The optional values are just used for visuals, not for functionality
