@@ -36,3 +36,8 @@ pub fn format_string(scope: Scope<'_>) -> Result<Str<'_>> {
 
     Ok(scope.new_string(input))
 }
+
+pub fn to_int(scope: Scope<'_>) -> Result<i32> {
+    let input = scope.param::<Value>(0)?;
+    input.to_string().parse().map_err(hebi::Error::user)
+}
