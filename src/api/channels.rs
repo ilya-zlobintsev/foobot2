@@ -304,7 +304,11 @@ pub async fn eval(
     cmd: State<CommandHandler>,
     payload: String,
 ) -> Result<String> {
-    let args = args.split(',').map(str::to_owned).collect();
+    let args = args
+        .split(',')
+        .filter(|item| !item.is_empty())
+        .map(str::to_owned)
+        .collect();
 
     let channel = cmd
         .db

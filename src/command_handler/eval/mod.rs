@@ -56,9 +56,6 @@ pub fn create_native_modules() -> Vec<NativeModule> {
     modules.push(http);
 
     let utils = NativeModule::builder("utils")
-        .function("len", utils::list_len)
-        .function("push", utils::list_push)
-        .function("join", utils::join)
         .function("format", utils::format_string)
         .function("to_int", utils::to_int)
         .finish();
