@@ -28,7 +28,7 @@ RUN cargo build --release
 FROM docker.io/debian:bullseye-slim
 
 RUN apt-get update
-RUN apt-get install --assume-yes libmariadb-dev-compat ca-certificates openssl
+RUN apt-get install --assume-yes libmariadb-dev-compat ca-certificates openssl git
 
 WORKDIR /app
 
