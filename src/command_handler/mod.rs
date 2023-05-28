@@ -38,10 +38,12 @@ use twitch_api::TwitchApi;
 
 use self::commands::BuiltinCommand;
 use self::error::CommandError;
+use self::eval::storage::ModuleStorage;
 use self::eval::{create_native_modules, eval_hebi};
 use self::finnhub_api::FinnhubApi;
 use self::platform_handler::PlatformHandler;
 use crate::command_handler::commands::{create_builtin_commands, ExecutableCommand};
+use crate::command_handler::eval::storage::create_module_storage_from_env;
 use crate::command_handler::ukraine_alert::UkraineAlertClient;
 use crate::database::models::{Command, CommandMode, Filter};
 use crate::database::{models::User, Database};
@@ -63,6 +65,7 @@ pub struct CommandHandler {
     mirror_connections: Arc<HashMap<String, ChannelIdentifier>>,       // from and to channel
     pub blocked_users: Arc<Vec<UserIdentifier>>,
     hebi_native_modules: Arc<Vec<NativeModule>>,
+    hebi_module_storage: ModuleStorage,
 }
 
 impl CommandHandler {
@@ -165,6 +168,9 @@ impl CommandHandler {
             minecraft_client: minecraft.map(|m| Arc::new(Mutex::new(m))),
             filters: Arc::new(std::sync::RwLock::new(filters)),
         };
+
+        let hebi_module_storage =
+            create_module_storage_from_env().expect("Could not create hebi module storage");
 
         let lingva_api = LingvaApi::init(lingva_url);
         let ukraine_alert_client = UkraineAlertClient::default();
@@ -271,8 +277,11 @@ impl CommandHandler {
 
         let hebi_native_modules = Arc::new(create_native_modules());
 
-        let builtin_commands =
-            create_builtin_commands(template_registry.clone(), hebi_native_modules.clone());
+        let builtin_commands = create_builtin_commands(
+            template_registry.clone(),
+            hebi_native_modules.clone(),
+            hebi_module_storage.clone(),
+        );
         info!("Loaded builtin commands: {builtin_commands:?}");
 
         let cooldowns = Arc::new(RwLock::new(Vec::new()));
@@ -320,6 +329,7 @@ impl CommandHandler {
             nats_client,
             blocked_users: Arc::new(blocked_users),
             hebi_native_modules,
+            hebi_module_storage,
         }
     }
 
@@ -530,7 +540,15 @@ impl CommandHandler {
                 execute_template_command(self.template_registry.clone(), command.action, ctx, args)
                     .await
             }
-            CommandMode::Hebi => eval_hebi(command.action, &self.hebi_native_modules, &args).await,
+            CommandMode::Hebi => {
+                eval_hebi(
+                    command.action,
+                    &self.hebi_native_modules,
+                    self.hebi_module_storage.clone(),
+                    &args,
+                )
+                .await
+            }
         }
     }
 
@@ -684,7 +702,15 @@ impl CommandHandler {
                 ) // TODO
                 .await?
             }
-            CommandMode::Hebi => eval_hebi(action, &self.hebi_native_modules, &arguments).await?,
+            CommandMode::Hebi => {
+                eval_hebi(
+                    action,
+                    &self.hebi_native_modules,
+                    self.hebi_module_storage.clone(),
+                    &arguments,
+                )
+                .await?
+            }
         }
         .unwrap_or_else(|| "Event triggered with no action".to_string());
 

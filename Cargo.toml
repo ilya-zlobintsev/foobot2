@@ -83,6 +83,8 @@ hebi = { git = "https://github.com/jprochazk/hebi", features = [
 opentelemetry = { version = "0.18.0", features = ["rt-tokio"] }
 opentelemetry-otlp = "0.11.0"
 tracing-opentelemetry = "0.18.0"
+arc-swap = "1.6.0"
+tempfile = "3.5.0"
 
 
 [build-dependencies]

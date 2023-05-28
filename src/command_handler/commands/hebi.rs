@@ -1,9 +1,10 @@
 use super::*;
-use crate::command_handler::eval::eval_hebi;
+use crate::command_handler::eval::{eval_hebi, storage::ModuleStorage};
 use ::hebi::NativeModule;
 
 pub struct DebugHebi {
     native_modules: Arc<Vec<NativeModule>>,
+    module_storage: ModuleStorage,
 }
 
 #[async_trait]
@@ -28,12 +29,21 @@ impl ExecutableCommand for DebugHebi {
     ) -> Result<Option<String>, CommandError> {
         let action = args.join(" ");
 
-        eval_hebi(action, &self.native_modules, &[]).await
+        eval_hebi(
+            action,
+            &self.native_modules,
+            self.module_storage.clone(),
+            &[],
+        )
+        .await
     }
 }
 
 impl DebugHebi {
-    pub fn new(native_modules: Arc<Vec<NativeModule>>) -> Self {
-        Self { native_modules }
+    pub fn new(native_modules: Arc<Vec<NativeModule>>, module_storage: ModuleStorage) -> Self {
+        Self {
+            native_modules,
+            module_storage,
+        }
     }
 }

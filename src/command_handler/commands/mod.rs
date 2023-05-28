@@ -2,15 +2,16 @@ mod cmd;
 mod debug;
 mod hebi;
 mod ping;
+mod reload;
 mod shell;
 mod twitch_eventsub;
 mod whoami;
 
 use self::{
-    cmd::Cmd, debug::Debug, hebi::DebugHebi, ping::Ping, shell::Shell,
+    cmd::Cmd, debug::Debug, hebi::DebugHebi, ping::Ping, reload::Reload, shell::Shell,
     twitch_eventsub::TwitchEventSub, whoami::WhoAmI,
 };
-use super::{CommandError, ExecutionContext};
+use super::{eval::storage::ModuleStorage, CommandError, ExecutionContext};
 use crate::platform::{Permissions, PlatformContext};
 use ::hebi::NativeModule;
 use async_trait::async_trait;
@@ -45,6 +46,7 @@ pub enum BuiltinCommand {
     Shell(Shell),
     TwitchEventSub(TwitchEventSub),
     DebugHebi(DebugHebi),
+    Reload(Reload),
 }
 
 impl std::fmt::Debug for BuiltinCommand {
@@ -56,6 +58,7 @@ impl std::fmt::Debug for BuiltinCommand {
 pub fn create_builtin_commands(
     template_registry: Arc<Handlebars<'static>>,
     native_modules: Arc<Vec<NativeModule>>,
+    module_storage: ModuleStorage,
 ) -> Vec<BuiltinCommand> {
     vec![
         Ping::default().into(),
@@ -64,6 +67,7 @@ pub fn create_builtin_commands(
         WhoAmI.into(),
         Shell.into(),
         TwitchEventSub.into(),
-        DebugHebi::new(native_modules).into(),
+        DebugHebi::new(native_modules, module_storage.clone()).into(),
+        Reload { module_storage }.into(),
     ]
 }

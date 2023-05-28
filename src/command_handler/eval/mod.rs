@@ -1,6 +1,8 @@
 mod http;
+pub mod storage;
 mod utils;
 
+use self::storage::ModuleStorage;
 use super::error::CommandError;
 use hebi::{Hebi, IntoValue, NativeModule};
 use reqwest::Client;
@@ -10,13 +12,14 @@ use tracing::instrument;
 
 const TIMEOUT_SECS: u64 = 10;
 
-#[instrument(skip(native_modules))]
+#[instrument(skip(native_modules, module_storage))]
 pub async fn eval_hebi(
     source: String,
     native_modules: &[NativeModule],
+    module_storage: ModuleStorage,
     args: &[String],
 ) -> Result<Option<String>, CommandError> {
-    let mut hebi = Hebi::new();
+    let mut hebi = Hebi::builder().module_loader(module_storage).finish();
 
     {
         let args_list = hebi.new_list(args.len());
