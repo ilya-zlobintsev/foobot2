@@ -9,6 +9,7 @@ FROM docker.io/rust:slim-bullseye as builder
 RUN apt-get update
 RUN apt-get install --assume-yes libmariadb-dev-compat pkg-config git protobuf-compiler
 
+ENV CARGO_REGISTRIES_CRATES_IO_PROTOCOL=sparse
 WORKDIR /build
 
 # Avoid having to install/build all dependencies by copying
