@@ -342,6 +342,7 @@ pub async fn eval(
         let platform_handler = cmd.platform_handler.read().await;
         let execution_ctx = ExecutionContext {
             db: &cmd.db,
+            channel_id: Some(channel.id),
             platform_handler: &platform_handler,
             platform_ctx,
             user: &user,

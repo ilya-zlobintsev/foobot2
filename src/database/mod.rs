@@ -1,17 +1,7 @@
-pub mod credentials;
-pub mod models;
-mod schema;
-
 use std::env;
 use std::fmt::Display;
 use std::sync::Arc;
 use std::time::Duration;
-
-use self::credentials::Credentials;
-use self::models::*;
-use crate::command_handler::spotify_api::SpotifyApi;
-use crate::database::schema::*;
-use crate::platform::{ChannelIdentifier, UserIdentifier, UserIdentifierError};
 
 use async_trait::async_trait;
 use chrono::{DateTime, Utc};
@@ -22,14 +12,24 @@ use diesel::sql_types::{BigInt, Unsigned};
 use diesel::{sql_query, EqAll, QueryDsl};
 use diesel::{ConnectionError, OptionalExtension};
 use diesel::{ExpressionMethods, RunQueryDsl};
+use diesel_migrations::{embed_migrations, EmbeddedMigrations, MigrationHarness};
 use passwords::PasswordGenerator;
-
 use reqwest::Client;
 use tokio::time;
-
-use diesel_migrations::{embed_migrations, EmbeddedMigrations, MigrationHarness};
 use tracing::{error, instrument};
 use twitch_irc::login::{TokenStorage, UserAccessToken};
+
+use crate::command_handler::spotify_api::SpotifyApi;
+use crate::database::schema::*;
+use crate::platform::{ChannelIdentifier, UserIdentifier, UserIdentifierError};
+
+use self::credentials::Credentials;
+use self::models::*;
+
+pub mod credentials;
+pub mod models;
+mod schema;
+
 pub const MIGRATIONS: EmbeddedMigrations = embed_migrations!();
 
 const BUILTIN_COMMANDS: &[&str] = &[
@@ -853,6 +853,56 @@ impl Database {
         Ok(filters::table
             .filter(filters::channel_id.eq(channel_id))
             .load(&mut conn)?)
+    }
+
+    pub fn get_hebi_data(
+        &self,
+        channel_id: u64,
+        key: &str,
+    ) -> Result<Option<String>, DatabaseError> {
+        let mut conn = self.conn_pool.get().unwrap();
+
+        let value = hebi_data::table
+            .select(hebi_data::value)
+            .filter(hebi_data::channel_id.eq(channel_id))
+            .filter(hebi_data::name.eq(key))
+            .first::<Option<String>>(&mut conn)
+            .optional()?
+            .flatten();
+
+        Ok(value)
+    }
+
+    pub fn set_hebi_data(
+        &self,
+        channel_id: u64,
+        key: &str,
+        value: &str,
+    ) -> Result<(), DatabaseError> {
+        let mut conn = self.conn_pool.get().unwrap();
+
+        diesel::replace_into(hebi_data::table)
+            .values((
+                hebi_data::channel_id.eq(channel_id),
+                hebi_data::name.eq(key),
+                hebi_data::value.eq(value),
+            ))
+            .execute(&mut conn)?;
+
+        Ok(())
+    }
+
+    pub fn remove_hebi_data(&self, channel_id: u64, key: &str) -> Result<(), DatabaseError> {
+        let mut conn = self.conn_pool.get().unwrap();
+
+        diesel::delete(
+            hebi_data::table
+                .filter(hebi_data::channel_id.eq(channel_id))
+                .filter(hebi_data::name.eq(key)),
+        )
+        .execute(&mut conn)?;
+
+        Ok(())
     }
 
     /*pub fn get_filters_in_channel(

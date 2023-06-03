@@ -23,17 +23,22 @@ impl ExecutableCommand for DebugHebi {
 
     async fn execute<'a, P: PlatformContext + Send + Sync>(
         &self,
-        _: &ExecutionContext<'a, P>,
+        ctx: &ExecutionContext<'a, P>,
         _trigger_name: &str,
         args: Vec<&str>,
     ) -> Result<Option<String>, CommandError> {
         let action = args.join(" ");
 
+        let db = ctx.db.clone();
+        let hebi_ctx = ctx.try_into()?;
+
         eval_hebi(
             action,
             &self.native_modules,
             self.module_storage.clone(),
+            db,
             &[],
+            hebi_ctx,
         )
         .await
     }

@@ -91,6 +91,11 @@ pub async fn eventsub_callback(
                                 display_name: user.display_name,
                             };
 
+                            let channel = cmd
+                                .db
+                                .get_channel(&context.target_channel)
+                                .expect("DB error");
+
                             cmd.handle_server_message(
                                 redeem.action,
                                 redeem.mode,
@@ -99,6 +104,7 @@ pub async fn eventsub_callback(
                                     .split_whitespace()
                                     .map(|s| s.to_string())
                                     .collect(),
+                                channel.map(|channel| channel.id),
                             )
                             .await
                             .expect("Failed to handle event");

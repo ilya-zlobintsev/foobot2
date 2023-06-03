@@ -38,6 +38,7 @@ use twitch_api::TwitchApi;
 
 use self::commands::BuiltinCommand;
 use self::error::CommandError;
+use self::eval::context::HebiContext;
 use self::eval::storage::ModuleStorage;
 use self::eval::{create_native_modules, eval_hebi};
 use self::finnhub_api::FinnhubApi;
@@ -275,7 +276,7 @@ impl CommandHandler {
 
         let template_registry = Arc::new(template_registry);
 
-        let hebi_native_modules = Arc::new(create_native_modules());
+        let hebi_native_modules = Arc::new(create_native_modules(db.clone()));
 
         let builtin_commands = create_builtin_commands(
             template_registry.clone(),
@@ -469,8 +470,9 @@ impl CommandHandler {
             .contains(&(user.id, command.to_string()))
         {
             let platform_handler = self.platform_handler.read().await;
-            let execution_ctx = ExecutionContext {
+            let mut execution_ctx = ExecutionContext {
                 db: &self.db,
+                channel_id: None,
                 platform_handler: &platform_handler,
                 platform_ctx,
                 user: &user,
@@ -501,6 +503,7 @@ impl CommandHandler {
             {
                 // TODO custom permissions
 
+                execution_ctx.channel_id = Some(command.channel_id);
                 let cooldown = command.cooldown.unwrap_or(DEFAULT_COOLDOWN);
 
                 let output = self
@@ -541,11 +544,15 @@ impl CommandHandler {
                     .await
             }
             CommandMode::Hebi => {
+                let hebi_ctx = HebiContext::try_from(ctx)?;
+
                 eval_hebi(
                     command.action,
                     &self.hebi_native_modules,
                     self.hebi_module_storage.clone(),
+                    self.db.clone(),
                     &args,
+                    hebi_ctx,
                 )
                 .await
             }
@@ -678,6 +685,7 @@ impl CommandHandler {
         mode: CommandMode,
         platform_ctx: ServerPlatformContext,
         arguments: Vec<String>,
+        channel_id: Option<u64>,
     ) -> anyhow::Result<()> {
         let processing_timestamp = Utc::now();
         let user = self.db.get_or_create_user(&platform_ctx.executing_user)?;
@@ -685,6 +693,7 @@ impl CommandHandler {
         let platform_handler = self.platform_handler.read().await;
         let execution_ctx = ExecutionContext {
             db: &self.db,
+            channel_id,
             platform_handler: &platform_handler,
             platform_ctx,
             user: &user,
@@ -703,11 +712,14 @@ impl CommandHandler {
                 .await?
             }
             CommandMode::Hebi => {
+                let hebi_ctx = HebiContext::try_from(&execution_ctx)?;
                 eval_hebi(
                     action,
                     &self.hebi_native_modules,
                     self.hebi_module_storage.clone(),
+                    self.db.clone(),
                     &arguments,
+                    hebi_ctx,
                 )
                 .await?
             }
@@ -806,6 +818,7 @@ pub struct ExecutionContext<'a, P: PlatformContext> {
     pub db: &'a Database,
     pub platform_handler: &'a PlatformHandler,
     pub platform_ctx: P,
+    pub channel_id: Option<u64>,
     pub user: &'a User,
     pub processing_timestamp: DateTime<Utc>,
     pub blocked_users: &'a [UserIdentifier],

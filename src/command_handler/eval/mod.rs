@@ -1,9 +1,12 @@
+pub mod context;
+mod db;
 mod http;
 pub mod storage;
 mod utils;
 
-use self::storage::ModuleStorage;
+use self::{context::HebiContext, storage::ModuleStorage};
 use super::error::CommandError;
+use crate::database::Database;
 use hebi::{Hebi, IntoValue, NativeModule};
 use reqwest::Client;
 use std::time::Duration;
@@ -17,7 +20,9 @@ pub async fn eval_hebi(
     source: String,
     native_modules: &[NativeModule],
     module_storage: ModuleStorage,
+    db: Database,
     args: &[String],
+    ctx: HebiContext,
 ) -> Result<Option<String>, CommandError> {
     let mut hebi = Hebi::builder().module_loader(module_storage).finish();
 
@@ -37,6 +42,29 @@ pub async fn eval_hebi(
         hebi.register(module);
     }
 
+    let db_module = NativeModule::builder("db")
+        .function("get", {
+            let db = db.clone();
+            let ctx = ctx.clone();
+            move |scope| db::get(scope, db.clone(), ctx.clone())
+        })
+        .function("set", {
+            let db = db.clone();
+            let ctx = ctx.clone();
+            move |scope| db::set(scope, db.clone(), ctx.clone())
+        })
+        .function("remove", {
+            let db = db.clone();
+            let ctx = ctx.clone();
+            move |scope| db::remove(scope, db.clone(), ctx.clone())
+        })
+        .finish();
+
+    hebi.register(&db_module);
+
+    hebi.global()
+        .set(hebi.new_string("context"), hebi.new_instance(ctx).unwrap());
+
     let eval_future = hebi.eval_async(&source);
 
     match timeout(Duration::from_secs(TIMEOUT_SECS), eval_future).await {
@@ -46,7 +74,7 @@ pub async fn eval_hebi(
     }
 }
 
-pub fn create_native_modules() -> Vec<NativeModule> {
+pub fn create_native_modules(_: Database) -> Vec<NativeModule> {
     let mut modules = Vec::new();
 
     let http_client = Client::new();
@@ -63,6 +91,16 @@ pub fn create_native_modules() -> Vec<NativeModule> {
         .function("to_int", utils::to_int)
         .finish();
     modules.push(utils);
+
+    let context_module = NativeModule::builder("context")
+        .class::<HebiContext>("Context", |class| {
+            class
+                .field("channel_id", |_, this| this.channel_id as i32)
+                .finish()
+        })
+        .finish();
+
+    modules.push(context_module);
 
     modules
 }

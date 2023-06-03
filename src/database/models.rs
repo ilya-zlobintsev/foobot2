@@ -167,6 +167,14 @@ pub struct Filter {
     pub replacement: Option<String>,
 }
 
+#[derive(Queryable, Insertable)]
+#[diesel(table_name = hebi_data)]
+pub struct HebiData {
+    pub channel_id: u64,
+    pub name: String,
+    pub value: Option<String>,
+}
+
 #[cfg(test)]
 mod tests {
     use crate::platform::ChannelIdentifier;
