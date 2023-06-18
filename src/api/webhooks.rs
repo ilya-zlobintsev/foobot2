@@ -10,6 +10,7 @@ use http::{request::Parts, StatusCode};
 use sha2::Sha256;
 use std::str::FromStr;
 use tokio::task;
+use tracing::error;
 
 use crate::{
     command_handler::twitch_api::eventsub::{events::*, *},
@@ -96,18 +97,21 @@ pub async fn eventsub_callback(
                                 .get_channel(&context.target_channel)
                                 .expect("DB error");
 
-                            cmd.handle_server_message(
-                                redeem.action,
-                                redeem.mode,
-                                context,
-                                arguments
-                                    .split_whitespace()
-                                    .map(|s| s.to_string())
-                                    .collect(),
-                                channel.map(|channel| channel.id),
-                            )
-                            .await
-                            .expect("Failed to handle event");
+                            if let Err(err) = cmd
+                                .handle_server_message(
+                                    redeem.action,
+                                    redeem.mode,
+                                    context,
+                                    arguments
+                                        .split_whitespace()
+                                        .map(|s| s.to_string())
+                                        .collect(),
+                                    channel.map(|channel| channel.id),
+                                )
+                                .await
+                            {
+                                error!("Could not handle event: {err}");
+                            }
                         } else {
                             tracing::warn!("Unregistered EventSub notification (no cleanup?)");
                         }
