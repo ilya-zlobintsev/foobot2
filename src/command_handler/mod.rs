@@ -12,12 +12,12 @@ pub mod spotify_api;
 pub mod twitch_api;
 mod ukraine_alert;
 
-use ::hebi::NativeModule;
 use anyhow::{anyhow, Context};
 use chrono::{DateTime, Utc};
 use dashmap::DashMap;
 use discord_api::DiscordApi;
 use handlebars::Handlebars;
+use hebi::prelude::NativeModule;
 use inquiry_helper::*;
 use lastfm_api::LastFMApi;
 use lingva_api::LingvaApi;

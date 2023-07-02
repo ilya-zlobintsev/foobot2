@@ -7,7 +7,7 @@ mod utils;
 use self::{context::HebiContext, storage::ModuleStorage};
 use super::error::CommandError;
 use crate::database::Database;
-use hebi::{Hebi, IntoValue, NativeModule};
+use hebi::prelude::*;
 use reqwest::Client;
 use std::time::Duration;
 use tokio::time::timeout;
@@ -89,6 +89,7 @@ pub fn create_native_modules(_: Database) -> Vec<NativeModule> {
     let utils = NativeModule::builder("utils")
         .function("format", utils::format_string)
         .function("to_int", utils::to_int)
+        .async_function("sleep", utils::sleep)
         .finish();
     modules.push(utils);
 

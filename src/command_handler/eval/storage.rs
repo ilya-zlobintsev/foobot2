@@ -1,6 +1,6 @@
 use anyhow::anyhow;
 use arc_swap::ArcSwap;
-use hebi::ModuleLoader;
+use hebi::prelude::*;
 use std::{collections::HashMap, env, fs, path::Path, process::Command, sync::Arc};
 use tempfile::{tempdir, TempDir};
 use tracing::info;
@@ -67,10 +67,10 @@ impl ModuleStorage {
 }
 
 impl ModuleLoader for ModuleStorage {
-    fn load(&self, path: &str) -> hebi::Result<hebi::Cow<'static, str>> {
+    fn load(&self, path: &str) -> hebi::Result<Cow<'static, str>> {
         let modules = self.modules.load();
         match modules.get(path) {
-            Some(code) => Ok(hebi::Cow::owned(code.clone())),
+            Some(code) => Ok(Cow::owned(code.clone())),
             None => Err(hebi::Error::User(format!("Module {path} not found").into())),
         }
     }

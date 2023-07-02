@@ -13,7 +13,7 @@ use self::{
 };
 use super::{eval::storage::ModuleStorage, CommandError, ExecutionContext};
 use crate::platform::{Permissions, PlatformContext};
-use ::hebi::NativeModule;
+use ::hebi::prelude::NativeModule;
 use async_trait::async_trait;
 use enum_dispatch::enum_dispatch;
 use handlebars::Handlebars;

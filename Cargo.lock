@@ -1012,7 +1012,7 @@ checksum = "8a9ee70c43aaf417c914396645a0fa852624801b24ebb7ae78fe8272889ac888"
 [[package]]
 name = "hebi"
 version = "0.3.1"
-source = "git+https://github.com/jprochazk/hebi?branch=v2#3887213369b7a692ddd8cc157c6d6744acd47f4f"
+source = "git+https://github.com/jprochazk/hebi?branch=v2#92296ac0fbc35fa40078f17151ac41836efe0504"
 dependencies = [
  "beef",
  "futures-util",

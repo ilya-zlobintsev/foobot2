@@ -1,6 +1,6 @@
 use super::*;
 use crate::command_handler::eval::{eval_hebi, storage::ModuleStorage};
-use ::hebi::NativeModule;
+use ::hebi::prelude::NativeModule;
 
 pub struct DebugHebi {
     native_modules: Arc<Vec<NativeModule>>,

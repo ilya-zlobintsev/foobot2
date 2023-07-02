@@ -1,12 +1,12 @@
-use hebi::{public::Table, IntoValue, Scope, Str};
+use ::serde::de::DeserializeSeed;
+use hebi::prelude::*;
 use http::Method;
 use reqwest::Client;
-use serde::de::DeserializeSeed;
 use std::str::FromStr;
 use tracing::{debug, instrument, Span};
 
 #[instrument(name = "hebi.http.fetch", skip_all)]
-pub async fn request(scope: Scope<'_>, client: Client) -> hebi::Result<hebi::Value<'_>> {
+pub async fn request(scope: Scope<'_>, client: Client) -> hebi::Result<Value<'_>> {
     let span = Span::current();
 
     let url = scope.param::<Str>(0)?;
@@ -39,7 +39,7 @@ pub async fn request(scope: Scope<'_>, client: Client) -> hebi::Result<hebi::Val
         "plain" | "text" => scope.new_string(text).into_value(scope.global()),
         "json" => {
             let mut json_deserializer = serde_json::Deserializer::from_str(&text);
-            let hebi_deserializer = hebi::ValueDeserializer::new(scope.global());
+            let hebi_deserializer = ValueDeserializer::new(scope.global());
             let value = hebi_deserializer
                 .deserialize(&mut json_deserializer)
                 .map_err(|err| hebi::Error::User(format!("Deserialization error: {err}").into()))?;

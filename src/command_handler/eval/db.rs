@@ -1,10 +1,10 @@
 use super::context::HebiContext;
 use crate::database::Database;
-use hebi::{IntoValue, Scope};
+use hebi::prelude::*;
 use tracing::{error, instrument};
 
 #[instrument(name = "hebi.db.get", skip_all)]
-pub fn get(scope: Scope<'_>, db: Database, ctx: HebiContext) -> hebi::Result<hebi::Value<'_>> {
+pub fn get(scope: Scope<'_>, db: Database, ctx: HebiContext) -> hebi::Result<Value<'_>> {
     let key = scope.param::<String>(0)?;
     let value = db.get_hebi_data(ctx.channel_id, &key).map_err(|err| {
         error!("DB error: {err}");
