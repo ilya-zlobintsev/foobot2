@@ -1,5 +1,6 @@
 mod cmd;
 mod debug;
+mod geohub;
 mod hebi;
 mod ping;
 mod reload;
@@ -8,8 +9,8 @@ mod twitch_eventsub;
 mod whoami;
 
 use self::{
-    cmd::Cmd, debug::Debug, hebi::DebugHebi, ping::Ping, reload::Reload, shell::Shell,
-    twitch_eventsub::TwitchEventSub, whoami::WhoAmI,
+    cmd::Cmd, debug::Debug, geohub::GeoHub, hebi::DebugHebi, ping::Ping, reload::Reload,
+    shell::Shell, twitch_eventsub::TwitchEventSub, whoami::WhoAmI,
 };
 use super::{eval::storage::ModuleStorage, CommandError, ExecutionContext};
 use crate::platform::{Permissions, PlatformContext};
@@ -26,7 +27,9 @@ pub trait ExecutableCommand {
 
     fn get_cooldown(&self) -> u64;
 
-    fn get_permissions(&self) -> Permissions;
+    fn get_permissions(&self) -> Permissions {
+        Permissions::Default
+    }
 
     async fn execute<'a, P: PlatformContext + Send + Sync>(
         &self,
@@ -47,6 +50,7 @@ pub enum BuiltinCommand {
     TwitchEventSub(TwitchEventSub),
     DebugHebi(DebugHebi),
     Reload(Reload),
+    GeoHub(GeoHub),
 }
 
 impl std::fmt::Debug for BuiltinCommand {
@@ -69,5 +73,6 @@ pub fn create_builtin_commands(
         TwitchEventSub.into(),
         DebugHebi::new(native_modules, module_storage.clone()).into(),
         Reload { module_storage }.into(),
+        GeoHub::default().into(),
     ]
 }
