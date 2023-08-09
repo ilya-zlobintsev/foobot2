@@ -77,9 +77,11 @@ pub async fn start_listener(
                             .iter()
                             .any(|entry| entry.user_id == new_entry.user_id)
                         {
+                            let entry_name = new_entry.user_name.to_lowercase();
+
                             if let Some(link) = links
                                 .iter()
-                                .find(|link| link.geohub_name == new_entry.user_name)
+                                .find(|link| link.geohub_name.to_lowercase() == entry_name)
                             {
                                 let channel = db
                                     .get_channel_by_id(link.channel_id)
