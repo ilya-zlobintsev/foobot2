@@ -15,6 +15,7 @@ use opentelemetry::KeyValue;
 use opentelemetry_otlp::WithExportConfig;
 use platform::local::Local;
 use std::env;
+use std::time::Duration;
 use tracing::metadata::LevelFilter;
 use tracing_subscriber::{prelude::*, Registry};
 
@@ -84,6 +85,15 @@ async fn main() {
             tracing::warn!("Failed to send startup message: {}", e);
         }
     }
+
+    command_handler::geohub::start_listener(
+        command_handler.db.clone(),
+        command_handler.platform_handler.clone(),
+        Duration::from_secs(60),
+        Default::default(),
+    )
+    .await
+    .expect("Could not start GeoHub loop");
 
     rpc::start_server(command_handler.clone());
 
