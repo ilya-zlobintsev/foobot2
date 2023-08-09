@@ -3,6 +3,7 @@ pub mod discord_api;
 pub mod error;
 mod eval;
 pub mod finnhub_api;
+mod geohub;
 pub mod inquiry_helper;
 pub mod lastfm_api;
 pub mod lingva_api;
@@ -316,6 +317,15 @@ impl CommandHandler {
                     .collect()
             })
             .unwrap_or_default();
+
+        geohub::start_listener(
+            db.clone(),
+            platform_handler.clone(),
+            Duration::from_secs(60),
+            Default::default(),
+        )
+        .await
+        .expect("Could not start GeoHub loop");
 
         start_supinic_heartbeat().await;
 

@@ -1,14 +1,12 @@
 mod args;
-mod client;
 
-use self::{
-    args::{Command, LeaderboardCommand},
-    client::GeohubClient,
-};
-
+use self::args::{Command, LeaderboardCommand};
 use super::ExecutableCommand;
 use crate::{
-    command_handler::{commands::geohub::args::CommandArgs, error::CommandError, ExecutionContext},
+    command_handler::{
+        commands::geohub::args::CommandArgs, error::CommandError, geohub::GeohubClient,
+        ExecutionContext,
+    },
     database::models::GeohubLink,
     platform::PlatformContext,
 };
@@ -64,7 +62,6 @@ impl ExecutableCommand for GeoHub {
 
                 let users_output = scores
                     .into_iter()
-                    .take(10)
                     .map(|entry| format!("{}: {}", entry.user_name, entry.total_points))
                     .collect::<Vec<String>>()
                     .join(", ");

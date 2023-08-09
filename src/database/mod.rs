@@ -922,6 +922,12 @@ impl Database {
         Ok(values)
     }
 
+    pub fn get_geohub_links(&self) -> Result<Vec<GeohubLink>, DatabaseError> {
+        let mut conn = self.conn_pool.get().unwrap();
+        let values = geohub_link::table.load(&mut conn)?;
+        Ok(values)
+    }
+
     /*pub fn get_filters_in_channel(
         &self,
         channel_identifier: &ChannelIdentifier,
