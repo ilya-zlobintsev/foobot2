@@ -470,9 +470,10 @@ impl CommandHandler {
             .contains(&(user.id, command.to_string()))
         {
             let platform_handler = self.platform_handler.read().await;
+            let channel = self.db.get_or_create_channel(&platform_ctx.get_channel())?;
             let mut execution_ctx = ExecutionContext {
                 db: &self.db,
-                channel_id: None,
+                channel_id: channel.map(|channel| channel.id),
                 platform_handler: &platform_handler,
                 platform_ctx,
                 user: &user,

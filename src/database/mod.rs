@@ -905,6 +905,23 @@ impl Database {
         Ok(())
     }
 
+    pub fn create_geohub_link(&self, link: GeohubLink) -> Result<(), DatabaseError> {
+        let mut conn = self.conn_pool.get().unwrap();
+        diesel::insert_into(geohub_link::table)
+            .values(link)
+            .execute(&mut conn)?;
+        Ok(())
+    }
+
+    pub fn get_geohub_link_names(&self, channel_id: u64) -> Result<Vec<String>, DatabaseError> {
+        let mut conn = self.conn_pool.get().unwrap();
+        let values = geohub_link::table
+            .select(geohub_link::geohub_name)
+            .filter(geohub_link::channel_id.eq(channel_id))
+            .load(&mut conn)?;
+        Ok(values)
+    }
+
     /*pub fn get_filters_in_channel(
         &self,
         channel_identifier: &ChannelIdentifier,

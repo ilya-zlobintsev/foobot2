@@ -60,6 +60,15 @@ diesel::table! {
 }
 
 diesel::table! {
+    geohub_link (user_id, channel_id) {
+        user_id -> Unsigned<Bigint>,
+        channel_id -> Unsigned<Bigint>,
+        #[max_length = 255]
+        geohub_name -> Varchar,
+    }
+}
+
+diesel::table! {
     hebi_data (channel_id, name) {
         channel_id -> Unsigned<Bigint>,
         #[max_length = 255]
@@ -116,6 +125,8 @@ diesel::table! {
 
 diesel::joinable!(commands -> channels (channel_id));
 diesel::joinable!(filters -> channels (channel_id));
+diesel::joinable!(geohub_link -> channels (channel_id));
+diesel::joinable!(geohub_link -> users (user_id));
 diesel::joinable!(hebi_data -> channels (channel_id));
 diesel::joinable!(prefixes -> channels (channel_id));
 diesel::joinable!(user_data -> users (user_id));
@@ -127,6 +138,7 @@ diesel::allow_tables_to_appear_in_same_query!(
     commands,
     eventsub_triggers,
     filters,
+    geohub_link,
     hebi_data,
     mirror_connections,
     prefixes,

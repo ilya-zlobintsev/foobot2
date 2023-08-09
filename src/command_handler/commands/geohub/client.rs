@@ -1,5 +1,7 @@
+use anyhow::anyhow;
 use reqwest::Client;
 use serde::Deserialize;
+use tracing::{instrument, warn};
 
 const BASE_URL: &str = "https://geohub.vercel.app";
 // https://geohub.vercel.app/api/scores/challenges/daily/leaderboard?limit=200
@@ -10,6 +12,7 @@ pub struct GeohubClient {
 }
 
 impl GeohubClient {
+    #[instrument]
     pub async fn get_leaderboard(&self, limit: u32) -> anyhow::Result<DailyLeaderboard> {
         let url = format!("{BASE_URL}/api/scores/challenges/daily/leaderboard");
         let response = self
@@ -17,10 +20,15 @@ impl GeohubClient {
             .get(url)
             .query(&[("limit", limit.to_string())])
             .send()
-            .await?
-            .json()
             .await?;
-        Ok(response)
+
+        if !response.status().is_success() {
+            let status = response.status();
+            warn!("{}", response.text().await?);
+            return Err(anyhow!("API error: {status}"));
+        }
+
+        Ok(response.json().await?)
     }
 }
 

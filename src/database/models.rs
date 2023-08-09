@@ -175,6 +175,14 @@ pub struct HebiData {
     pub value: Option<String>,
 }
 
+#[derive(Queryable, Insertable)]
+#[diesel(table_name = geohub_link)]
+pub struct GeohubLink {
+    pub user_id: u64,
+    pub channel_id: u64,
+    pub geohub_name: String,
+}
+
 #[cfg(test)]
 mod tests {
     use crate::platform::ChannelIdentifier;

@@ -12,6 +12,9 @@ pub struct CommandArgs {
 pub enum Command {
     #[command(subcommand)]
     Leaderboard(LeaderboardCommand),
+    Link {
+        username: String,
+    },
 }
 
 // #[derive(Parser)]
