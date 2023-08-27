@@ -1,4 +1,4 @@
-use std::{sync::Arc, time::Duration};
+use std::{collections::HashSet, sync::Arc, time::Duration};
 
 use anyhow::anyhow;
 use reqwest::Client;
@@ -48,6 +48,8 @@ pub struct DailyLeaderboard {
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct LeaderboardEntry {
+    #[serde(rename = "_id")]
+    pub id: String,
     pub total_time: u32,
     pub total_points: u32,
     pub user_id: String,
@@ -62,6 +64,8 @@ pub async fn start_listener(
 ) -> anyhow::Result<()> {
     let mut last_leaderboard = client.get_leaderboard(200).await?;
 
+    let mut sent_notifications = HashSet::new();
+
     tokio::spawn(async move {
         loop {
             tokio::time::sleep(interval).await;
@@ -71,6 +75,11 @@ pub async fn start_listener(
             match client.get_leaderboard(200).await {
                 Ok(new_leaderboard) => {
                     for new_entry in &new_leaderboard.today {
+                        if sent_notifications.contains(&new_entry.id) {
+                            warn!("Skipipng duplicate notification {new_entry:?}");
+                            continue;
+                        }
+
                         // A new entry
                         if !last_leaderboard
                             .today
@@ -89,13 +98,18 @@ pub async fn start_listener(
                                     .expect("Linked to an invalid channel");
 
                                 let message = format!("{} has completed the GeoHub daily challenge with the score of {} points!", new_entry.user_name, new_entry.total_points);
-                                if let Err(err) = platform_handler
+                                match platform_handler
                                     .read()
                                     .await
                                     .send_to_channel(channel.get_identifier(), message)
                                     .await
                                 {
-                                    error!("Could not send notification: {err}");
+                                    Ok(()) => {
+                                        sent_notifications.insert(new_entry.id.clone());
+                                    }
+                                    Err(err) => {
+                                        error!("Could not send notification: {err}");
+                                    }
                                 }
                             }
                         }
